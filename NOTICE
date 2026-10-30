@@ -1,0 +1,6 @@
+本项目基于以下开源软件：
+- URY (https://github.com/ury-erp/ury) © Tridz Technologies Pvt. Ltd — GNU AGPL v3
+- ERPNext (https://github.com/frappe/erpnext) © Frappe Technologies — GNU GPL v3
+- Frappe HR (https://github.com/frappe/hrms) © Frappe Technologies — GNU GPL v3
+- Frappe Framework (https://github.com/frappe/frappe) © Frappe Technologies — MIT
+本项目的修改部分同样以 GNU AGPL v3 发布。

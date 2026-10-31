@@ -713,3 +713,18 @@ class TestSubmitChecklistSEC10(FrappeTestCase):
                 checklist_type="Opening",
                 items=items
             )
+
+
+class TestLeafDefault(FrappeTestCase):
+    def test_group_default_falls_back_to_leaf(self):
+        from ury.ury_pos.api import _leaf_default
+
+        group = _leaf_default("Customer Group", "All Customer Groups", preferred="Individual")
+        self.assertEqual(frappe.db.get_value("Customer Group", group, "is_group"), 0)
+        territory = _leaf_default("Territory", "All Territories")
+        self.assertEqual(frappe.db.get_value("Territory", territory, "is_group"), 0)
+
+    def test_leaf_value_is_kept(self):
+        from ury.ury_pos.api import _leaf_default
+
+        self.assertEqual(_leaf_default("Customer Group", "Commercial", preferred="Individual"), "Commercial")

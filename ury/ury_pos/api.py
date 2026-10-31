@@ -923,17 +923,32 @@ def getAggregatorMOP(aggregator):
             {"mode_of_payment": modeOfPayment, "opening_amount": float(0)}
     )
     return modeOfPaymentsList
+def _leaf_default(doctype, value, preferred=None):
+    """ERPNext rejects group nodes as a Customer's group/territory, but the
+    Selling Settings defaults ship as the root group ("All Customer Groups").
+    Fall back to a leaf node when the resolved value is a group."""
+    if value and not frappe.db.get_value(doctype, value, "is_group"):
+        return value
+    if preferred and frappe.db.exists(doctype, {"name": preferred, "is_group": 0}):
+        return preferred
+    leaves = frappe.get_all(doctype, filters={"is_group": 0}, order_by="lft", limit=1, pluck="name")
+    return leaves[0] if leaves else value
+
+
 @frappe.whitelist()
 def create_customer(customer_name, mobile_number=None, customer_group=None, territory=None):
-    customer_group = (
+    customer_group = _leaf_default(
+        "Customer Group",
         customer_group
         or frappe.db.get_single_value("Selling Settings", "customer_group")
-        or "All Customer Groups"
+        or "All Customer Groups",
+        preferred="Individual",
     )
-    territory = (
+    territory = _leaf_default(
+        "Territory",
         territory
         or frappe.db.get_single_value("Selling Settings", "territory")
-        or "All Territories"
+        or "All Territories",
     )
     if not frappe.has_permission("Customer", "create"):
         frappe.throw("Not permitted to create customers", frappe.PermissionError)

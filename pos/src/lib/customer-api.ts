@@ -1,5 +1,6 @@
 import { DOCTYPES } from '../data/doctypes';
 import { db, call } from '@ury/core';
+import { t } from '../i18n';
 
 export interface Customer {
   name: string;
@@ -75,7 +76,7 @@ export async function addCustomer(
     const response = await call.post('ury.ury_pos.api.create_customer', customerData);
     const msg = response.message;
     if (!msg || msg.status !== "success") {
-      throw new Error("Failed to create Customer,API Response error");
+      throw new Error(msg?.message || t('customer.failed_create'));
     }
     return {
       data: {

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePOSStore } from '../store/pos-store';
 import { formatCurrency, call } from '@ury/core';
 import HufLogo from '../components/HufLogo';
+import { t } from '../i18n';
 
 // Helper function to format relative time
 function getRelativeTime(creationDate: string): string {
@@ -14,19 +15,21 @@ function getRelativeTime(creationDate: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins} min ago`;
-  if (diffHours < 24) return `${diffHours} hr ago`;
-  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffMins < 1) return t('dashboard.just_now');
+  if (diffMins < 60) return t('dashboard.min_ago', { count: diffMins });
+  if (diffHours < 24) return t('dashboard.hr_ago', { count: diffHours });
+  return t(diffDays > 1 ? 'dashboard.days_ago_other' : 'dashboard.days_ago_one', { count: diffDays });
 }
 
 // Helper to format ETA minutes into readable time
 function formatETA(minutes: number | null): string {
-  if (minutes === null) return 'Holds';
-  if (minutes <= 90) return `~${minutes} min`;
+  if (minutes === null) return t('dashboard.eta_holds');
+  if (minutes <= 90) return t('dashboard.eta_min', { minutes });
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `~${hours} hr ${mins > 0 ? `${mins} min` : ''}`.trim();
+  return mins > 0
+    ? t('dashboard.eta_hr_min', { hours, minutes: mins })
+    : t('dashboard.eta_hr', { hours });
 }
 
 export default function Dashboard() {
@@ -69,32 +72,32 @@ export default function Dashboard() {
         const statsData = statsRes.message;
         setStats([
           {
-            label: "Today's Sales",
+            label: t('dashboard.todays_sales'),
             value: formatCurrency(statsData.todays_sales),
             icon: TrendingUp,
             color: 'text-green-600'
           },
           {
-            label: 'Orders Today',
+            label: t('dashboard.orders_today'),
             value: String(statsData.orders_today),
             icon: ShoppingCart,
             color: 'text-blue-600'
           },
           {
-            label: 'Avg. Order Value',
+            label: t('dashboard.avg_order_value'),
             value: formatCurrency(statsData.avg_order_value),
             icon: Clock,
             color: 'text-purple-600'
           },
           {
-            label: 'Active Tables',
+            label: t('dashboard.active_tables'),
             value: `${statsData.active_tables} / ${statsData.total_tables}`,
             icon: Users,
             color: 'text-orange-600'
           }
         ]);
       } catch (err) {
-        setStatsError('Failed to load stats');
+        setStatsError(t('dashboard.stats_load_failed'));
         console.error('Error fetching stats:', err);
       } finally {
         setStatsLoading(false);
@@ -110,7 +113,7 @@ export default function Dashboard() {
         const serviceData = Array.isArray(serviceRes.message) ? serviceRes.message : [];
         setServiceLine(serviceData);
       } catch (err) {
-        setServiceLineError('Failed to load service line');
+        setServiceLineError(t('dashboard.service_line_load_failed'));
         console.error('Error fetching service line:', err);
       } finally {
         setServiceLineLoading(false);
@@ -130,7 +133,7 @@ export default function Dashboard() {
         });
         setBaseline(baselineRes.message);
       } catch (err) {
-        setMetricsError('Failed to load metrics');
+        setMetricsError(t('dashboard.metrics_load_failed'));
         console.error('Error fetching metrics:', err);
       } finally {
         setMetricsLoading(false);
@@ -146,7 +149,7 @@ export default function Dashboard() {
         const floorData = Array.isArray(floorRes.message) ? floorRes.message : [];
         setFloorLoad(floorData);
       } catch (err) {
-        setFloorLoadError('Failed to load floor load');
+        setFloorLoadError(t('dashboard.floor_load_load_failed'));
         console.error('Error fetching floor load:', err);
       } finally {
         setFloorLoadLoading(false);
@@ -162,7 +165,7 @@ export default function Dashboard() {
         const runningData = Array.isArray(runningRes.message) ? runningRes.message : [];
         setRunningLow(runningData);
       } catch (err) {
-        setRunningLowError('Failed to load running low items');
+        setRunningLowError(t('dashboard.running_low_load_failed'));
         console.error('Error fetching running low:', err);
       } finally {
         setRunningLowLoading(false);
@@ -188,7 +191,7 @@ export default function Dashboard() {
           setNeedsAttention([]);
         }
       } catch (err) {
-        setNeedsAttentionError('Failed to load needs attention');
+        setNeedsAttentionError(t('dashboard.needs_attention_load_failed'));
         console.error('Error fetching needs attention:', err);
       } finally {
         setNeedsAttentionLoading(false);
@@ -216,7 +219,7 @@ export default function Dashboard() {
         }));
         setNotifications(processedNotifications);
       } catch (err) {
-        setNotificationsError('Failed to load notifications');
+        setNotificationsError(t('dashboard.notifications_load_failed'));
         console.error('Error fetching notifications:', err);
       } finally {
         setNotificationsLoading(false);
@@ -227,7 +230,8 @@ export default function Dashboard() {
   }, [posProfile?.branch]);
 
   // Calculate max minutes for service line bar height
-  const maxMinutes = Math.max(90, ...serviceLine.filter(t => t.minutes !== null).map((t: any) => t.minutes), 1);
+  const maxMinutes = Math.max(90, ...serviceLine.filter(row => row.minutes !== null).map((row) => row.minutes), 1);
+  const overTimeCount = serviceLine.filter((row) => row.stage === 'over').length;
   const maxTableCount = Math.max(...floorLoad.map((f: any) => f.table_count), 1);
 
   return (
@@ -236,9 +240,9 @@ export default function Dashboard() {
       <section className="w-full">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {statsError ? (
-            <div className="col-span-full text-red-600 text-sm">Failed to load stats</div>
+            <div className="col-span-full text-red-600 text-sm">{t('dashboard.stats_load_failed')}</div>
           ) : statsLoading ? (
-            <div className="col-span-full text-gray-600 text-sm">Loading...</div>
+            <div className="col-span-full text-gray-600 text-sm">{t('common.loading')}</div>
           ) : (
             stats.map((stat, index) => {
               const IconComponent = stat.icon;
@@ -263,36 +267,36 @@ export default function Dashboard() {
       <div>
         <Card className="bg-white border border-gray-200">
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Line</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.service_line')}</h3>
             {serviceLineError ? (
-              <p className="text-red-600 text-sm">Failed to load service line</p>
+              <p className="text-red-600 text-sm">{t('dashboard.service_line_load_failed')}</p>
             ) : serviceLineLoading ? (
-              <p className="text-gray-600 text-sm">Loading...</p>
+              <p className="text-gray-600 text-sm">{t('common.loading')}</p>
             ) : serviceLine.length === 0 ? (
-              <p className="text-gray-600 text-sm">No tables currently seated.</p>
+              <p className="text-gray-600 text-sm">{t('dashboard.no_tables_seated')}</p>
             ) : (
               <div>
                 {/* Legend */}
                 <div className="flex flex-wrap gap-4 mb-4 text-xs text-gray-600">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-gray-300 rounded"></div>
-                    <span>Open</span>
+                    <span>{t('dashboard.legend_open')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-300 rounded"></div>
-                    <span>Seated</span>
+                    <span>{t('dashboard.legend_seated')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                    <span>Fired</span>
+                    <span>{t('dashboard.legend_fired')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-700 rounded"></div>
-                    <span>Served</span>
+                    <span>{t('dashboard.legend_served')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-red-600 rounded"></div>
-                    <span>Over time</span>
+                    <span>{t('dashboard.legend_over_time')}</span>
                   </div>
                 </div>
 
@@ -324,9 +328,9 @@ export default function Dashboard() {
                 </div>
 
                 {/* Summary */}
-                {serviceLine.filter((t: any) => t.stage === 'over').length > 0 && (
+                {overTimeCount > 0 && (
                   <div className="mt-3 text-sm text-red-600">
-                    {serviceLine.filter((t: any) => t.stage === 'over').length} table{serviceLine.filter((t: any) => t.stage === 'over').length !== 1 ? 's' : ''} running over time
+                    {t(overTimeCount !== 1 ? 'dashboard.tables_over_time_other' : 'dashboard.tables_over_time_one', { count: overTimeCount })}
                   </div>
                 )}
               </div>
@@ -344,15 +348,15 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Needs Attention</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t('dashboard.needs_attention')}</h3>
               </div>
               <div className="space-y-3">
                 {needsAttentionError ? (
-                  <p className="text-red-600 text-sm">Failed to load</p>
+                  <p className="text-red-600 text-sm">{t('dashboard.load_failed')}</p>
                 ) : needsAttentionLoading ? (
-                  <p className="text-gray-600 text-sm">Loading...</p>
+                  <p className="text-gray-600 text-sm">{t('common.loading')}</p>
                 ) : needsAttention.length === 0 ? (
-                  <p className="text-gray-600 text-sm">Nothing needs attention right now.</p>
+                  <p className="text-gray-600 text-sm">{t('dashboard.nothing_needs_attention')}</p>
                 ) : (
                   needsAttention.map((item) => {
                     const ItemIcon = item.icon;
@@ -376,54 +380,54 @@ export default function Dashboard() {
           {/* Tonight vs Baseline */}
           <Card className="bg-white border border-gray-200">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Tonight vs Baseline</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.tonight_vs_baseline')}</h3>
               {metricsError ? (
-                <p className="text-red-600 text-sm">Failed to load metrics</p>
+                <p className="text-red-600 text-sm">{t('dashboard.metrics_load_failed')}</p>
               ) : metricsLoading ? (
-                <p className="text-gray-600 text-sm">Loading...</p>
+                <p className="text-gray-600 text-sm">{t('common.loading')}</p>
               ) : !shiftMetrics || !baseline ? (
-                <p className="text-gray-600 text-sm">No data available</p>
+                <p className="text-gray-600 text-sm">{t('dashboard.no_data')}</p>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   {/* Sales */}
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Sales</p>
+                    <p className="text-xs text-gray-600 mb-1">{t('dashboard.sales')}</p>
                     <p className="text-lg font-bold text-gray-900">{formatCurrency(shiftMetrics.sales)}</p>
                     {baseline.sample_days > 0 && (
                       <p className="text-xs mt-1">
                         <span className={shiftMetrics.sales >= baseline.median_sales ? 'text-green-600' : 'text-red-600'}>
                           {shiftMetrics.sales >= baseline.median_sales ? '+' : ''}{((shiftMetrics.sales - baseline.median_sales) / baseline.median_sales * 100).toFixed(0)}%
                         </span>
-                        <span className="text-gray-600"> vs {formatCurrency(baseline.median_sales)}</span>
+                        <span className="text-gray-600"> {t('dashboard.vs_baseline', { value: formatCurrency(baseline.median_sales) })}</span>
                       </p>
                     )}
                   </div>
 
                   {/* Covers */}
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Covers</p>
+                    <p className="text-xs text-gray-600 mb-1">{t('dashboard.covers')}</p>
                     <p className="text-lg font-bold text-gray-900">{shiftMetrics.covers}</p>
                     {baseline.sample_days > 0 && (
                       <p className="text-xs mt-1">
                         <span className={shiftMetrics.covers >= baseline.median_covers ? 'text-green-600' : 'text-red-600'}>
                           {shiftMetrics.covers >= baseline.median_covers ? '+' : ''}{shiftMetrics.covers - baseline.median_covers}
                         </span>
-                        <span className="text-gray-600"> vs {baseline.median_covers}</span>
+                        <span className="text-gray-600"> {t('dashboard.vs_baseline', { value: baseline.median_covers })}</span>
                       </p>
                     )}
                   </div>
 
                   {/* Avg per Cover */}
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Avg per Cover</p>
+                    <p className="text-xs text-gray-600 mb-1">{t('dashboard.avg_per_cover')}</p>
                     <p className="text-lg font-bold text-gray-900">{formatCurrency(shiftMetrics.avg_per_cover)}</p>
                   </div>
 
                   {/* Avg Ticket Time */}
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Avg Ticket Time</p>
+                    <p className="text-xs text-gray-600 mb-1">{t('dashboard.avg_ticket_time')}</p>
                     <p className="text-lg font-bold text-gray-900">
-                      {shiftMetrics.avg_ticket_minutes !== null ? `${shiftMetrics.avg_ticket_minutes} min` : '—'}
+                      {shiftMetrics.avg_ticket_minutes !== null ? t('dashboard.minutes_short', { minutes: shiftMetrics.avg_ticket_minutes }) : '—'}
                     </p>
                   </div>
                 </div>
@@ -434,13 +438,13 @@ export default function Dashboard() {
           {/* Running Low Section */}
           <Card className="bg-white border border-gray-200">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Running Low</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.running_low')}</h3>
               {runningLowError ? (
-                <p className="text-red-600 text-sm">Failed to load</p>
+                <p className="text-red-600 text-sm">{t('dashboard.load_failed')}</p>
               ) : runningLowLoading ? (
-                <p className="text-gray-600 text-sm">Loading...</p>
+                <p className="text-gray-600 text-sm">{t('common.loading')}</p>
               ) : runningLow.length === 0 ? (
-                <p className="text-gray-600 text-sm">No items selling fast enough to forecast yet.</p>
+                <p className="text-gray-600 text-sm">{t('dashboard.no_forecast_items')}</p>
               ) : (
                 <div className="space-y-3">
                   {runningLow.map((item, idx) => (
@@ -457,7 +461,7 @@ export default function Dashboard() {
                           />
                         </div>
                         {item.data_quality_issue && (
-                          <p className="text-xs text-gray-500 mt-1">(stock data needs review)</p>
+                          <p className="text-xs text-gray-500 mt-1">{t('dashboard.stock_data_review')}</p>
                         )}
                       </div>
                     </div>
@@ -473,20 +477,20 @@ export default function Dashboard() {
           {/* Floor Load Section */}
           <Card className="bg-white border border-gray-200">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Floor Load</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.floor_load')}</h3>
               {floorLoadError ? (
-                <p className="text-red-600 text-sm">Failed to load</p>
+                <p className="text-red-600 text-sm">{t('dashboard.load_failed')}</p>
               ) : floorLoadLoading ? (
-                <p className="text-gray-600 text-sm">Loading...</p>
+                <p className="text-gray-600 text-sm">{t('common.loading')}</p>
               ) : floorLoad.length === 0 ? (
-                <p className="text-gray-600 text-sm">No tables currently assigned.</p>
+                <p className="text-gray-600 text-sm">{t('dashboard.no_tables_assigned')}</p>
               ) : (
                 <div className="space-y-3">
                   {floorLoad.map((waiter, idx) => (
                     <div key={idx}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-medium text-gray-700">{waiter.waiter}</span>
-                        <span className="text-xs text-gray-600">{waiter.table_count} table{waiter.table_count !== 1 ? 's' : ''}</span>
+                        <span className="text-xs text-gray-600">{t(waiter.table_count !== 1 ? 'dashboard.table_count_other' : 'dashboard.table_count_one', { count: waiter.table_count })}</span>
                       </div>
                       <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
@@ -505,13 +509,13 @@ export default function Dashboard() {
           <Card className="bg-white border border-gray-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between gap-2 mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Shift Brief</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t('dashboard.shift_brief')}</h3>
                 <span className="inline-flex items-center justify-center px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded">
                   <HufLogo className="h-3.5 w-auto" />
                 </span>
               </div>
               <p className="text-sm text-gray-600">
-                AI-written shift summaries are not yet connected. This panel will show HUF&apos;s shift observations once integrated.
+                {t('dashboard.shift_brief_placeholder')}
               </p>
             </CardContent>
           </Card>
@@ -521,15 +525,15 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Bell className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Recent Notifications</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t('dashboard.recent_notifications')}</h3>
               </div>
               <div className="space-y-2">
                 {notificationsError ? (
-                  <p className="text-red-600 text-sm">Failed to load</p>
+                  <p className="text-red-600 text-sm">{t('dashboard.load_failed')}</p>
                 ) : notificationsLoading ? (
-                  <p className="text-gray-600 text-sm">Loading...</p>
+                  <p className="text-gray-600 text-sm">{t('common.loading')}</p>
                 ) : notifications.length === 0 ? (
-                  <p className="text-gray-600 text-sm">No recent notifications.</p>
+                  <p className="text-gray-600 text-sm">{t('dashboard.no_notifications')}</p>
                 ) : (
                   notifications.map((notification) => (
                     <div key={notification.id} className="flex items-start justify-between py-2 border-b border-gray-100 last:border-b-0">

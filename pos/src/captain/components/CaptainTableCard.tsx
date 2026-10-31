@@ -2,6 +2,7 @@ import { Lock, User, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { Badge } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
+import { t } from '../../i18n';
 import type { Table } from '../../lib/table-api';
 import type { ActiveTableOrder } from '../lib/captain-table-api';
 
@@ -23,11 +24,13 @@ const elapsedLabel = (isoTimestamp: string | null): string | null => {
   if (Number.isNaN(started)) return null;
 
   const minutes = Math.max(0, Math.round((Date.now() - started) / 60000));
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1) return t('captain.elapsed_just_now');
+  if (minutes < 60) return t('captain.elapsed_minutes', { minutes });
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+  return remainder
+    ? t('captain.elapsed_hours_minutes', { hours, minutes: remainder })
+    : t('captain.elapsed_hours', { hours });
 };
 
 /**
@@ -63,14 +66,14 @@ const CaptainTableCard = ({
         : 'border-amber-400 bg-amber-50 text-amber-900';
 
   const statusLabel = isBilled
-    ? 'Billed'
+    ? t('captain.status_billed')
     : ownership === 'mine'
-      ? 'Mine'
+      ? t('captain.status_mine')
       : ownership === 'free'
-        ? 'Free'
+        ? t('captain.status_free')
         : ownerName
           ? ownerName
-          : 'Occupied';
+          : t('captain.status_occupied');
 
   const statusBadgeVariant = isBilled
     ? 'secondary'
@@ -93,13 +96,13 @@ const CaptainTableCard = ({
         <span className="truncate text-lg font-bold" title={table.name}>
           {table.name}
         </span>
-        {isBilled && <Lock className="h-4 w-4 shrink-0" aria-label="Billed / locked" />}
+        {isBilled && <Lock className="h-4 w-4 shrink-0" aria-label={t('captain.billed_locked')} />}
       </div>
 
       {hasMergePartners && (
         <span
           className="mt-0.5 truncate text-xs font-medium opacity-80"
-          title={`Merged with ${mergePartners!.join(', ')}`}
+          title={t('captain.merged_with', { tables: mergePartners!.join(', ') })}
         >
           + {mergePartners!.join(', ')}
         </span>

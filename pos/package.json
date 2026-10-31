@@ -8,6 +8,7 @@
     "build": "vite build --base=/assets/ury/pos/ && yarn copy-html-entry",
     "copy-html-entry": "cp ../ury/public/pos/index.html ../ury/www/pos.html",
     "lint": "eslint .",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

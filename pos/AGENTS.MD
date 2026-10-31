@@ -105,9 +105,11 @@ pos/
 │       ├── loader.ts
 │       ├── resolve-language.ts
 │       └── locales/
-│           ├── en.json
-│           └── fr.json
+│           ├── en.json       # source of truth
+│           ├── ja.json / zh.json / ko.json   # staff menu languages
+│           └── fr.json / ar.json             # kept, not offered in the menu
 │
+├── scripts/check-i18n.mjs    # `yarn i18n:check` — key diff of every locale vs en.json
 ├── public/                   # Static assets (favicon, logos)
 ├── index.html                # HTML entry point
 ├── vite.config.ts
@@ -210,22 +212,22 @@ import { initI18n } from './i18n';
 initI18n().then(() => ReactDOM.createRoot(...).render(...));
 ```
 
-`initI18n()` calls `resolveLanguage()` which checks (in priority order):
-1. `window.frappe.boot.lang` — Frappe/ERPNext system language
-2. `localStorage.getItem('ury_language')` — manual override
-3. `'en'` — default fallback
+`initI18n()` calls `resolveLanguage()`, which uses `window.frappe.boot.lang` (the logged-in user's `User.language`) if it has a locale file, otherwise `'en'`. There is no localStorage override: the language is stored per user on the server.
+
+**Switching language:** `components/LanguageMenu.tsx` (in the Header user menu and the Captain Tables title bar) calls `ury.ury.api.language.set_staff_language`, which updates only the current user's `User.language` and clears their cache, then reloads the page so `frappe.boot.lang` picks it up. The menu lists `MENU_LANGUAGES` (`ja`, `zh`, `ko`, `en`); the server accepts the same four.
 
 ### File locations
 
 ```
 src/i18n/
-├── config.ts           — DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES map
+├── config.ts           — DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, MENU_LANGUAGES (menu subset)
 ├── loader.ts           — dynamic import() with per-language cache
-├── resolve-language.ts — priority-based language resolution
+├── resolve-language.ts — language from frappe.boot.lang, else en
 ├── index.ts            — t(), initI18n(), getActiveLanguage()
 └── locales/
     ├── en.json         — English (source of truth)
-    └── fr.json         — French
+    ├── ja.json / zh.json / ko.json
+    └── fr.json / ar.json
 ```
 
 ### Key namespaces in locale files
@@ -243,16 +245,19 @@ src/i18n/
 | `comment` | Comment dialog |
 | `errors` | All error messages |
 | `success` | All success/info messages |
+| `captain` | Captain (waiter) screens under `src/captain/` |
+| `dashboard` | `pages/Dashboard.tsx` |
+| `settings` | `pages/Settings.tsx` |
+| `language` | Language menu |
+
+No plural support: use `_one` / `_other` key pairs and pick by count (see `dashboard.table_count_*`).
 
 ### Adding a new language
 
 1. Create `src/i18n/locales/<lang-code>.json` copying the structure of `en.json`.
-2. Translate all values (do not change keys).
-3. Add the language to `SUPPORTED_LANGUAGES` in `config.ts`:
-   ```typescript
-   export const SUPPORTED_LANGUAGES = { en: 'English', fr: 'Français', de: 'Deutsch' };
-   ```
-4. The loader will dynamically import the file on demand. No other changes needed.
+2. Translate all values (do not change keys or `{{placeholders}}`).
+3. Add the language to `SUPPORTED_LANGUAGES` in `config.ts`. To offer it in the staff menu, also add it to `MENU_LANGUAGES` and to `STAFF_LANGUAGES` in `ury/ury/api/language.py`.
+4. Run `yarn i18n:check` (add the code to `STRICT_DEFAULT` in `scripts/check-i18n.mjs` if it must match `en.json` exactly). The loader imports the file on demand.
 
 ---
 
@@ -280,7 +285,7 @@ src/i18n/
 ## 9. Guidelines for AI Agents
 
 ### Safe to modify
-- Adding new `t()` keys: add to `en.json` and `fr.json` simultaneously, then use in component.
+- Adding new `t()` keys: add to `en.json`, `ja.json`, `zh.json` and `ko.json` simultaneously (`yarn i18n:check` must pass), then use in component. `fr`/`ar` are not kept in sync.
 - UI text changes: always go through `t()`, never hardcode.
 - Adding new components: follow the existing pattern — named export, TypeScript props interface, Zustand for data.
 - Adding new API wrappers: add to the appropriate `lib/*-api.ts` file.
@@ -290,7 +295,7 @@ src/i18n/
 1. Define new state in the appropriate store slice.
 2. Add API call in `lib/`.
 3. Create or modify component.
-4. Add translation keys to both `en.json` and `fr.json`.
+4. Add translation keys to `en.json`, `ja.json`, `zh.json` and `ko.json`.
 5. No need to modify `main.tsx`, `App.tsx`, or `vite.config.ts` for typical features.
 
 ### What NOT to break

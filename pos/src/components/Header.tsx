@@ -16,6 +16,7 @@ import { usePOSStore } from '../store/pos-store';
 import type { RootState } from '../store/root-store';
 import { logout } from '@ury/core';
 import { showToast } from '@ury/ui';
+import LanguageMenu from './LanguageMenu';
 
 const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -180,7 +181,7 @@ const Header = () => {
                     onClick={() => window.location.href = '/ury/dashboard'}
                   >
                     <Monitor className="w-4 h-4 me-3" />
-                    Switch to Dashboard
+                    {t('header.switch_to_dashboard')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -190,6 +191,7 @@ const Header = () => {
                     <Monitor className="w-4 h-4 me-3" />
                     {t('header.switch_to_desk')}
                   </Button>
+                  <LanguageMenu inline />
                   <Button
                     variant="ghost"
                     className="flex justify-start items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"

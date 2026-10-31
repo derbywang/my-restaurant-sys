@@ -80,7 +80,7 @@
 | `src/i18n/resolve-language.ts` | 以 `frappe.boot.lang` 为准；不再读 localStorage 的语言（拿不到 boot 时用 `en`） |
 | `src/components/LanguageMenu.tsx` | 新增：显示 4 种语言 → 调用 `ury.ury.api.language.set_staff_language` → 成功后 `window.location.reload()` |
 | `src/components/Header.tsx` | 在用户菜单（Close Shift / Switch To Desk / Logout 那里）中加入“语言” |
-| `src/captain/components/CaptainMenu.tsx` | 服务员端菜单中也加入“语言” |
+| `src/captain/pages/CaptainTables.tsx` | 服务员端首页（桌台一览）的标题栏右侧加入“语言”（`CaptainMenu.tsx` 是菜品浏览器，不是用户菜单） |
 | `src/captain/**`（7 个文件）、`src/pages/Dashboard.tsx`、`src/pages/Settings.tsx` | 写死的英文改为 `t('…')`，同时在 `en.json` 中补上键 |
 
 金额和日期的格式由 Frappe 的 System Settings 决定，不随界面语言改变。

@@ -1,23 +1,17 @@
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from './config';
 
 /**
- * Resolves the active language using the following priority:
- * 1. frappe.boot.lang (Frappe site config / user preference)
- * 2. localStorage key 'ury_language'
- * 3. DEFAULT_LANGUAGE ('en')
+ * Resolves the active language from `frappe.boot.lang` (the logged-in user's
+ * User.language, set by `set_staff_language`). Falls back to DEFAULT_LANGUAGE
+ * ('en') when boot is unavailable or the language has no locale file.
+ *
+ * No client-side override is read: the language is stored per user on the
+ * server, so it follows the account across devices.
  */
 export function resolveLanguage(): string {
-  // 1. Frappe boot object
-  const frappeLang: string | undefined =
-    (window as any)?.frappe?.boot?.lang;
+  const frappeLang = (window as { frappe?: { boot?: { lang?: string } } }).frappe?.boot?.lang;
   if (frappeLang && SUPPORTED_LANGUAGES[frappeLang]) {
     return frappeLang;
-  }
-
-  // 2. Local storage override
-  const storedLang = localStorage.getItem('ury_language');
-  if (storedLang && SUPPORTED_LANGUAGES[storedLang]) {
-    return storedLang;
   }
 
   return DEFAULT_LANGUAGE;

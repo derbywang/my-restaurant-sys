@@ -8,6 +8,7 @@
     "build": "vite build --base=/assets/ury/ury/ && yarn copy-html-entry",
     "copy-html-entry": "cp ../ury/public/ury/index.html ../ury/www/ury.html",
     "lint": "eslint .",
+    "i18n:check": "node ../scripts/check-i18n.mjs frontend",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },

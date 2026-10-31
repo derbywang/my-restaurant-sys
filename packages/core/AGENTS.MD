@@ -20,7 +20,9 @@ packages/core/src/
 ├── frappe/
 │   ├── client.ts       ← createFrappeClient() factory + call/db/auth singletons
 │   ├── auth.ts         ← getLoggedUser(), getUserRoles(email), logout()
-│   └── roles.ts        ← isUserRestrictedFromTableOrders(), canCaptainTransfer(), derivePOSCapabilities()
+│   ├── roles.ts        ← isUserRestrictedFromTableOrders(), canCaptainTransfer(), derivePOSCapabilities()
+│   └── language.ts     ← setStaffLanguage(lang): set_staff_language + page reload
+├── i18n/               ← t(), tOr(), initI18n(), resolveLanguage(), SUPPORTED/MENU_LANGUAGES (locale files stay in each app)
 ├── storage.ts          ← storage: localStorage wrapper (+ POS-profile helpers)
 ├── format.ts           ← formatCurrency(), formatInvoiceTime()
 └── print/
@@ -54,6 +56,25 @@ All three swallow errors (log + safe fallback) — callers branch on the return 
 - `derivePOSCapabilities(user, posProfile)` — composes the above into a full `POSCapabilities` object (table orders, remove-sent-items, item images, billing/discount/cancel intent, KOT reprint, captain transfer, POS open/close, print-bill) purely from POS Profile fields + role. It's a client-side UX hint, not the security boundary — per-invoice/per-table ownership and billed-state checks are NOT modeled here (they belong in the Phase-2 backend `get_table_order_context()` endpoint).
 
 All take the shared `User` and `PosProfileCombined` types from `types.ts` (structural — apps may pass their own compatible shapes).
+
+### i18n (`i18n/`)
+Framework-agnostic translation engine shared by `pos/` and `frontend/`. The **locale files stay in each app**; the app passes loaders in:
+
+```ts
+// <app>/src/i18n/index.ts
+import { initI18n as initShared } from '@ury/core';
+export { t, tOr, getActiveLanguage, MENU_LANGUAGES } from '@ury/core';
+export const initI18n = (lang?: string) =>
+  initShared({ locales: import.meta.glob('./locales/*.json'), lang });
+```
+
+- `initI18n({ locales, lang? })` — loads the language from `resolveLanguage()` (`frappe.boot.lang`, else `en`) plus `en` as the fallback bundle. Call and await it before rendering.
+- `t(key, params?)` — dot-notation key with `{{placeholder}}` interpolation; falls back active locale → `en` → the key.
+- `tOr(key, fallback)` — translation if present, else the raw value (for backend data such as order types / statuses).
+- `MENU_LANGUAGES` (ja / zh / ko / en) must match `STAFF_LANGUAGES` in `ury/ury/api/language.py`.
+- `setStaffLanguage(lang)` — saves the language of the logged-in user via `set_staff_language` and reloads the page; rejects on failure.
+- Translations are looked up at call time, so do **not** call `t()` at module top level (i18n is not ready yet): store the key and call `t()` in render.
+- Check locale files with the repo-root `yarn i18n:check`.
 
 ### Storage (`storage.ts`)
 `storage` object over `localStorage`: generic `setItem`/`getItem`/`removeItem` plus `savePosProfileFull`/`getPosProfileFull` (JSON round-trip under the `pos_profile` key).

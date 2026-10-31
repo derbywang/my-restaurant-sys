@@ -16,6 +16,7 @@
     "ury-frontend-build": "cd frontend && yarn build",
     "ury-self-order-build": "cd self-order && yarn build",
     "postinstall": "yarn ury-pos-install && yarn ury-mosaic-install",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "build": "yarn ury-pos-build && yarn ury-mosaic-build && yarn ury-posv2-build && yarn ury-frontend-build && yarn ury-self-order-build"
   },
   "devDependencies": {

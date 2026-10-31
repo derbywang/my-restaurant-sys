@@ -100,16 +100,12 @@ pos/
 │   │   └── menu-data.ts      # Static menu structure types
 │   │
 │   └── i18n/                 # Internationalisation system (see §7)
-│       ├── index.ts
-│       ├── config.ts
-│       ├── loader.ts
-│       ├── resolve-language.ts
+│       ├── index.ts          # thin wrapper over the engine in @ury/core
 │       └── locales/
 │           ├── en.json       # source of truth
 │           ├── ja.json / zh.json / ko.json   # staff menu languages
 │           └── fr.json / ar.json             # kept, not offered in the menu
 │
-├── scripts/check-i18n.mjs    # `yarn i18n:check` — key diff of every locale vs en.json
 ├── public/                   # Static assets (favicon, logos)
 ├── index.html                # HTML entry point
 ├── vite.config.ts
@@ -198,7 +194,7 @@ const msg = JSON.parse(messages[0]).message;
 
 ### How it works
 
-Translations live in `src/i18n/locales/*.json`. A lightweight custom engine (no external library) provides:
+Translations live in `src/i18n/locales/*.json`. The engine is shared and lives in `@ury/core` (`packages/core/src/i18n`; see `../packages/core/AGENTS.MD`); this app only keeps its locale files and a thin `src/i18n/index.ts` that calls `initI18n({ locales: import.meta.glob('./locales/*.json') })` and re-exports `t` etc. The engine provides:
 
 - `t(key)` — resolves a dot-notation key against the active locale map.
 - `t(key, params)` — interpolates `{{placeholder}}` tokens.
@@ -212,18 +208,15 @@ import { initI18n } from './i18n';
 initI18n().then(() => ReactDOM.createRoot(...).render(...));
 ```
 
-`initI18n()` calls `resolveLanguage()`, which uses `window.frappe.boot.lang` (the logged-in user's `User.language`) if it has a locale file, otherwise `'en'`. There is no localStorage override: the language is stored per user on the server.
+`initI18n()` calls `resolveLanguage()` (from `@ury/core`), which uses `window.frappe.boot.lang` (the logged-in user's `User.language`) if it has a locale file, otherwise `'en'`. There is no localStorage override: the language is stored per user on the server.
 
-**Switching language:** `components/LanguageMenu.tsx` (in the Header user menu and the Captain Tables title bar) calls `ury.ury.api.language.set_staff_language`, which updates only the current user's `User.language` and clears their cache, then reloads the page so `frappe.boot.lang` picks it up. The menu lists `MENU_LANGUAGES` (`ja`, `zh`, `ko`, `en`); the server accepts the same four.
+**Switching language:** `components/LanguageMenu.tsx` (in the Header user menu and the Captain Tables title bar; a thin wrapper over `LanguageMenu` from `@ury/ui`) calls `setStaffLanguage` from `@ury/core` → `ury.ury.api.language.set_staff_language`, which updates only the current user's `User.language` and clears their cache, then reloads the page so `frappe.boot.lang` picks it up. The menu lists `MENU_LANGUAGES` (`ja`, `zh`, `ko`, `en`); the server accepts the same four.
 
 ### File locations
 
 ```
 src/i18n/
-├── config.ts           — DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, MENU_LANGUAGES (menu subset)
-├── loader.ts           — dynamic import() with per-language cache
-├── resolve-language.ts — language from frappe.boot.lang, else en
-├── index.ts            — t(), initI18n(), getActiveLanguage()
+├── index.ts            — initI18n() (passes the locale files to the shared engine); re-exports t(), tOr(), getActiveLanguage(), MENU_LANGUAGES …
 └── locales/
     ├── en.json         — English (source of truth)
     ├── ja.json / zh.json / ko.json
@@ -256,8 +249,8 @@ No plural support: use `_one` / `_other` key pairs and pick by count (see `dashb
 
 1. Create `src/i18n/locales/<lang-code>.json` copying the structure of `en.json`.
 2. Translate all values (do not change keys or `{{placeholders}}`).
-3. Add the language to `SUPPORTED_LANGUAGES` in `config.ts`. To offer it in the staff menu, also add it to `MENU_LANGUAGES` and to `STAFF_LANGUAGES` in `ury/ury/api/language.py`.
-4. Run `yarn i18n:check` (add the code to `STRICT_DEFAULT` in `scripts/check-i18n.mjs` if it must match `en.json` exactly). The loader imports the file on demand.
+3. Add the language to `SUPPORTED_LANGUAGES` in `packages/core/src/i18n/config.ts`. To offer it in the staff menu, also add it to `MENU_LANGUAGES` (same file) and to `STAFF_LANGUAGES` in `ury/ury/api/language.py`.
+4. Run `yarn i18n:check` (add the code to `STRICT_DEFAULT` in the repo-root `scripts/check-i18n.mjs` if it must match `en.json` exactly; it checks `pos` and `frontend`). The loader imports the file on demand.
 
 ---
 

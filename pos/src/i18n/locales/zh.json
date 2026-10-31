@@ -37,7 +37,7 @@
     "special_items": "招牌菜"
   },
   "pos_sidebar": {
-    "categories": "分类",
+    "categories": "菜品分类",
     "all_items": "全部菜品"
   },
   "cart": {
@@ -116,12 +116,12 @@
     "subtitle": "开始新的班次以接受点单",
     "session_details": "班次详情",
     "company": "公司",
-    "pos_profile": "POS 配置",
+    "pos_profile": "收银配置",
     "cashier": "收银员",
     "branch": "门店",
     "restaurant": "餐厅",
     "session_start": "班次开始",
-    "select_profile": "选择 POS 配置",
+    "select_profile": "选择收银配置",
     "opening_balance": "开班备用金",
     "mode_of_payment": "支付方式",
     "opening_amount": "开班金额",
@@ -129,7 +129,7 @@
     "open_session": "开班",
     "opening": "正在开班...",
     "loading": "正在加载开班数据...",
-    "no_profiles": "此门店没有您可用的 POS 配置，请联系店长。",
+    "no_profiles": "此门店没有您可用的收银配置，请联系店长。",
     "no_payment_modes": "此终端未配置任何支付方式，请联系店长。",
     "no_permission": "您没有开班权限，请联系店长。",
     "previous_day_not_closed": "昨日的班次从未交班。请联系店长先完成交班，再开始今天的班次。",
@@ -215,8 +215,8 @@
     "save_button": "保存备注"
   },
   "errors": {
-    "pos_profile_not_found": "未找到 POS 配置",
-    "pos_profile_not_loaded": "POS 配置尚未加载",
+    "pos_profile_not_found": "未找到收银配置",
+    "pos_profile_not_loaded": "收银配置尚未加载",
     "user_not_logged_in": "用户未登录",
     "failed_load_rooms": "加载区域失败",
     "failed_load_tables": "加载桌台失败",
@@ -466,7 +466,7 @@
     "tables_unable_to_load": "无法加载桌台",
     "no_rooms": "您的账号没有可用的区域。",
     "no_tables_in_room": "此区域没有桌台。",
-    "pos_profile_not_found": "未找到 POS 配置。",
+    "pos_profile_not_found": "未找到收银配置。",
     "not_logged_in": "您尚未登录。",
     "no_modify_permission": "您没有修改此订单的权限。",
     "add_item_first": "发送订单前请至少添加一项菜品。",

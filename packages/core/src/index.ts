@@ -9,3 +9,17 @@ export { formatCurrency, formatCompactCurrency, formatInvoiceTime, flt } from '.
 export { initPrinting, loadQzPrinter, disconnectQzPrinter, printWithQz } from './print/qz';
 export { validateFieldValue } from './utils/validateField';
 export type { ValidationMessages } from './utils/validateField';
+export { setStaffLanguage } from './frappe/language';
+export {
+  initI18n,
+  t,
+  tOr,
+  getActiveLanguage,
+  getActiveDirection,
+  applyDocumentLocale,
+  resolveLanguage,
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+  MENU_LANGUAGES,
+} from './i18n';
+export type { LocaleLoaders } from './i18n';

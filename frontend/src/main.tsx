@@ -4,12 +4,15 @@ import { BrowserRouter } from 'react-router-dom'
 import { ToastProvider } from '@ury/ui'
 import './index.css'
 import App from './App.tsx'
+import { initI18n } from './i18n'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter basename="/ury">
-      <App />
-      <ToastProvider />
-    </BrowserRouter>
-  </StrictMode>,
-)
+initI18n().then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <BrowserRouter basename="/ury">
+        <App />
+        <ToastProvider />
+      </BrowserRouter>
+    </StrictMode>,
+  )
+})

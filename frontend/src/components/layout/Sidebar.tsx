@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../store/useAuth';
 import { reportsRegistry, groupReports } from '../../pages/Reports/reportsRegistry';
+import { t } from '../../i18n';
 import { SidebarContainer, SidebarActiveIndicator, sidebarItemVariants, cn } from '@ury/ui';
 import {
   LayoutDashboard,
@@ -21,25 +22,26 @@ import {
 } from 'lucide-react';
 
 interface NavItem {
-  label: string;
+  /** Locale key, resolved with t() at render time (i18n is not ready when this module loads). */
+  labelKey: string;
   path: string;
   icon: React.ElementType;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'Menu', path: '/menu', icon: UtensilsCrossed },
-  { label: 'Table', path: '/table', icon: Grid3X3 },
-  { label: 'Room', path: '/room', icon: Map },
-  { label: 'Branch', path: '/branch', icon: Building2 },
+  { labelKey: 'layout.sidebar.dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { labelKey: 'layout.sidebar.menu', path: '/menu', icon: UtensilsCrossed },
+  { labelKey: 'layout.sidebar.table', path: '/table', icon: Grid3X3 },
+  { labelKey: 'layout.sidebar.room', path: '/room', icon: Map },
+  { labelKey: 'layout.sidebar.branch', path: '/branch', icon: Building2 },
 ];
 
 const SETTINGS_ITEMS: NavItem[] = [
-  { label: 'POS Profile', path: '/pos-profile', icon: SlidersHorizontal },
-  { label: 'User', path: '/user', icon: Users },
-  { label: 'Aggregators', path: '/aggregator', icon: Store },
-  { label: 'Daily P&L Settings', path: '/report-settings', icon: FileText },
-  { label: 'Production Unit', path: '/production-unit', icon: Grid }
+  { labelKey: 'layout.sidebar.pos_profile', path: '/pos-profile', icon: SlidersHorizontal },
+  { labelKey: 'layout.sidebar.user', path: '/user', icon: Users },
+  { labelKey: 'layout.sidebar.aggregators', path: '/aggregator', icon: Store },
+  { labelKey: 'layout.sidebar.report_settings', path: '/report-settings', icon: FileText },
+  { labelKey: 'layout.sidebar.production_unit', path: '/production-unit', icon: Grid }
 ];
 
 const reportGroups = groupReports(reportsRegistry);
@@ -53,7 +55,7 @@ const ReportsPanel: React.FC = () => (
     >
       <div className="flex items-center gap-3 ms-1">
         <ArrowLeft className="w-4 h-4 text-gray-500 shrink-0" />
-        <span>Back</span>
+        <span>{t('layout.sidebar.back')}</span>
       </div>
     </Link>
 
@@ -114,7 +116,7 @@ const MainPanel: React.FC<{ isManager: boolean }> = ({ isManager }) => {
               {isActive && <SidebarActiveIndicator />}
               <div className="flex items-center gap-3 ms-1">
                 <BarChart3 className="w-4 h-4 text-gray-500 shrink-0" />
-                <span>Reports</span>
+                <span>{t('layout.sidebar.reports')}</span>
               </div>
             </>
           )}
@@ -134,7 +136,7 @@ const MainPanel: React.FC<{ isManager: boolean }> = ({ isManager }) => {
                 {isActive && <SidebarActiveIndicator />}
                 <div className="flex items-center gap-3 ms-1">
                   <Icon className="w-4 h-4 text-gray-500 shrink-0" />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </div>
               </>
             )}
@@ -150,7 +152,7 @@ const MainPanel: React.FC<{ isManager: boolean }> = ({ isManager }) => {
           {isSettingsPath && <SidebarActiveIndicator />}
           <div className="flex items-center gap-3 ms-1">
             <Settings className="w-4 h-4 text-gray-500 shrink-0" />
-            <span>Settings</span>
+            <span>{t('layout.sidebar.settings')}</span>
           </div>
           <ChevronDown
             className={cn(
@@ -177,7 +179,7 @@ const MainPanel: React.FC<{ isManager: boolean }> = ({ isManager }) => {
                       {isActive && <SidebarActiveIndicator />}
                       <div className="flex items-center gap-2.5 ms-1">
                         <Icon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                        <span>{item.label}</span>
+                        <span>{t(item.labelKey)}</span>
                       </div>
                     </>
                   )}

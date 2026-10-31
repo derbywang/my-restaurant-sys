@@ -101,7 +101,11 @@
 
 ### 4.4 URY 管理后台（`frontend/`）— 阶段 3
 
-1. 把 `pos/src/i18n` 中与具体应用无关的部分（`t()`、加载语言包、判断语言）移到 `packages/core/src/i18n`，供 pos / frontend / self-order 共用；各应用只保留自己的语言包。
+1. 把 `pos/src/i18n` 中与具体应用无关的部分（`t()`、判断语言、`MENU_LANGUAGES`）移到 `packages/core/src/i18n`，供 pos / frontend / self-order 共用；各应用只保留自己的语言包。（3a 已完成）
+   - 语言包由各应用传入：`initI18n({ locales: import.meta.glob('./locales/*.json') })`，核心包不引用应用目录下的文件。
+   - `@ury/core` 还提供 `setStaffLanguage(lang)`（调用 `set_staff_language` 后刷新页面）和 `tOr(key, 原值)`（有译文用译文，没有就显示原值，用于订单类型、订单状态这类来自后端的固定选项）。
+   - 语言菜单是 `@ury/ui` 的纯展示组件 `LanguageMenu`（`@ury/ui` 不依赖 `@ury/core`）；pos / frontend 各有一个封装，传入语言列表和 `setStaffLanguage`。
+   - `yarn i18n:check`（`scripts/check-i18n.mjs`）同时检查 `pos` 和 `frontend` 的语言包。
 2. 68 个文件中约 290 处写死的英文改为 `t('…')`，按页面分组命名键：`dashboard.*`、`menu.*`、`table.*`、`reports.*`、`setup.*` 等。
 3. 报表的列名由后端翻译（见 4.6）。
 4. 在顶部用户菜单中加入“语言”。
@@ -188,7 +192,7 @@ def set_session_language(session, lang): ...      # 更新 URY Ordering Session.
 |---|---|---|
 | 1 | 员工端：收银端 / 服务员端 | 4.1 全部、`language.py`、ja / zh / ko 语言包 |
 | 2 | 员工端：登录页 / ERPNext 后台 | 4.2、4.3 |
-| 3 | 员工端：管理后台 / 后端提示 | 4.4、4.6，把翻译机制移到 `@ury/core` |
+| 3 | 员工端：管理后台 / 后端提示 | 4.4、4.6，把翻译机制移到 `@ury/core`。分步：3a 共享机制 + 外框 + 首页仪表盘；3b、3c 其余页面；3d 后端返回的文字 |
 | 4 | 厨房屏幕 / 打印 | 4.5、第 7 章 |
 | 5 | 顾客端（和补全自助点餐一起） | 第 5、6 章 |
 
@@ -218,3 +222,45 @@ def set_session_language(session, lang): ...      # 更新 URY Ordering Session.
 - 员工端是否显示菜品的多语言名称（默认不显示；有需要时可在 POS 配置中增加开关）。
 - 顾客账单用门店语言还是顾客选择的语言打印（默认门店语言）。
 - 合并 URY 官方更新时的冲突：可以考虑把语言包和“抽取写死文字”的修改作为 Pull Request 提交给 URY 官方。
+
+## 12. 用语表
+
+所有界面（pos、frontend、mosaic、self-order 的员工端文字）统一按此表翻译。新增用语时先加到这里。
+
+| 英文 | 中文 | 日文 | 韩文 |
+|---|---|---|---|
+| Branch | 门店 | 店舗 | 지점 |
+| Room | 区域 | フロア | 구역 |
+| Table | 桌台 | テーブル | 테이블 |
+| Menu / Course | 菜单 / 菜品分类 | メニュー / カテゴリ | 메뉴 / 카테고리 |
+| POS Profile | 收银配置 | レジ設定 | POS 설정 |
+| Production Unit | 出品厨房 | キッチン | 주방 |
+| Aggregators | 外卖平台 | 配達プラットフォーム | 배달 플랫폼 |
+| Daily P&L | 每日损益 | 日次損益 | 일일 손익 |
+| Daily P&L Settings | 损益设置 | 損益設定 | 손익 설정 |
+| Mosaic / KDS | 厨房显示屏 | キッチンディスプレイ | 주방 디스플레이 |
+| Reports | 报表 | レポート | 보고서 |
+| Users | 员工账号 | スタッフ | 직원 |
+
+阶段 1 已确定的用语（保持一致）：
+
+| 英文 | 中文 | 日文 | 韩文 |
+|---|---|---|---|
+| Payment（付款） | 结账 / 收款 | 会計 | 결제 |
+| Close shift / POS closing | 交班 | レジ締め | POS 마감 |
+| Draft（订单状态） | 待收款 | 会計待ち | 결제 대기 |
+| Unbilled | 未出账单 | 伝票未発行 | 계산서 미발행 |
+| Consolidated | 已汇总 | 集計済み | 집계됨 |
+| Adjustment（尾数差额） | 尾数调整 | 端数調整 | 끝전 조정 |
+| Grand Total（与 Net Total 同时出现时） | 总计 | 税込合計 | 총합계 |
+| Net Total | 不含税合计 | 税抜合計 | 순합계 |
+| Total（只有一个合计时） | 合计 | 合計 | 합계 |
+| KOT | 厨房单 | 厨房伝票 | 주방 전표 |
+| Captain | 服务员 | 担当 | 담당 |
+
+日文的 Grand Total：结账、交班等和 Net Total（税抜合計）同时出现的地方用「税込合計」；只有一个合计的地方（如首页的交易列表）用「合計」。
+
+韩文的 `매장` 只用于“堂食”（`order_types.dine_in` 的「매장 식사」等），门店（Branch）一律用「지점」。
+
+品牌名（URY POS、URY MOSAIC 等）作为产品名使用时，MOSAIC 部分按上表翻译为"厨房显示屏"等。
+

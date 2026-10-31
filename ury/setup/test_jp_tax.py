@@ -1,7 +1,6 @@
 import frappe
 from erpnext.controllers.taxes_and_totals import calculate_taxes_and_totals
 from erpnext.stock.get_item_details import get_item_tax_template
-from frappe.tests.utils import FrappeTestCase
 from unittest.mock import patch
 
 from ury.setup.jp_tax import (
@@ -13,20 +12,16 @@ from ury.setup.jp_tax import (
 	has_tax_group,
 	ungrouped_menu_item_groups,
 )
+from ury.setup.test_site import ALCOHOL_ITEM, COMPANY, FOOD_GROUP, FOOD_ITEM, URYTestCase
 from ury.ury.api.item_group import get_menu_item_groups
 from ury.ury.hooks.ury_item import warn_item_group_without_tax
 
-COMPANY = "三友寿司"
-
-
-class TestJPTaxStructure(FrappeTestCase):
-	"""Runs against the dev site inside a transaction that is rolled back; nothing is committed."""
+class TestJPTaxStructure(URYTestCase):
+	"""Runs on the test site inside a transaction that is rolled back."""
 
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		if not frappe.db.exists("Company", {"name": COMPANY, "country": "Japan"}):
-			raise cls.skipTest(cls, "needs the Japanese demo company")
 		cls.result = apply_jp_tax_setup()
 		cls.abbr = frappe.db.get_value("Company", COMPANY, "abbr")
 
@@ -75,7 +70,7 @@ class TestJPTaxStructure(FrappeTestCase):
 			self.assertEqual((doc.is_group, doc.parent_item_group), (1, "All Item Groups"))
 			self.assertEqual(len(doc.taxes), len(GROUP_TAXES[group]))
 			self.assertTrue(all(row.valid_from for row in doc.taxes))
-		self.assertEqual(frappe.db.get_value("Item Group", "Consumable", "parent_item_group"), "食品")
+		self.assertEqual(frappe.db.get_value("Item Group", FOOD_GROUP, "parent_item_group"), "食品")
 
 	def test_menu_items_stay_in_their_leaf_groups_below_a_tax_group(self):
 		# the kitchen routes by the leaf group of the item, so the items must not move
@@ -123,8 +118,8 @@ class TestJPTaxStructure(FrappeTestCase):
 		return get_item_tax_template(args, frappe.get_cached_doc("Item", item), {})
 
 	def test_item_inherits_the_tax_of_its_group_by_tax_category(self):
-		self.assertIn("標準10%", self._tax_template_for("Burger", "店内飲食", "2026-11-01"))
-		self.assertIn("軽減8%", self._tax_template_for("Burger", "テイクアウト", "2026-11-01"))
+		self.assertIn("標準10%", self._tax_template_for(FOOD_ITEM, "店内飲食", "2026-11-01"))
+		self.assertIn("軽減8%", self._tax_template_for(FOOD_ITEM, "テイクアウト", "2026-11-01"))
 
 	def test_a_dated_one_percent_row_leaves_dine_in_untouched(self):
 		frappe.db.savepoint("dated_row")
@@ -142,10 +137,10 @@ class TestJPTaxStructure(FrappeTestCase):
 		group.save(ignore_permissions=True)
 		frappe.clear_document_cache("Item Group", "食品")
 
-		self.assertIn("軽減8%", self._tax_template_for("Burger", "テイクアウト", "2027-03-31"))
-		self.assertIn("軽減1%", self._tax_template_for("Burger", "テイクアウト", "2027-05-01"))
+		self.assertIn("軽減8%", self._tax_template_for(FOOD_ITEM, "テイクアウト", "2027-03-31"))
+		self.assertIn("軽減1%", self._tax_template_for(FOOD_ITEM, "テイクアウト", "2027-05-01"))
 		# every dine-in row has a valid_from too, so it still resolves after the 1% row is in force
-		self.assertIn("標準10%", self._tax_template_for("Burger", "店内飲食", "2027-05-01"))
+		self.assertIn("標準10%", self._tax_template_for(FOOD_ITEM, "店内飲食", "2027-05-01"))
 
 	def _invoice(self, rows, tax_category):
 		doc = frappe.new_doc("POS Invoice")
@@ -180,17 +175,17 @@ class TestJPTaxStructure(FrappeTestCase):
 		return doc
 
 	def test_j1_dine_in_is_ten_percent(self):
-		doc = self._invoice([("Burger", 1000), ("Wings", 500)], "店内飲食")
+		doc = self._invoice([(FOOD_ITEM, 1000), (ALCOHOL_ITEM, 500)], "店内飲食")
 		self.assertEqual([t.tax_amount for t in doc.taxes], [150, 0, 0])
 		self.assertEqual(doc.grand_total, 1650)
 
-	def test_j2_take_away_food_is_eight_percent(self):
-		doc = self._invoice([("Burger", 1000), ("Wings", 500)], "テイクアウト")
-		self.assertEqual([t.tax_amount for t in doc.taxes], [0, 120, 0])
-		self.assertEqual(doc.grand_total, 1620)
+	def test_j2_take_away_food_is_eight_percent_and_beer_stays_ten(self):
+		doc = self._invoice([(FOOD_ITEM, 1000), (ALCOHOL_ITEM, 500)], "テイクアウト")
+		self.assertEqual([t.tax_amount for t in doc.taxes], [50, 80, 0])
+		self.assertEqual(doc.grand_total, 1630)
 
 
-class TestMenuItemGroups(FrappeTestCase):
+class TestMenuItemGroups(URYTestCase):
 	def test_only_leaf_groups_below_the_tax_groups_are_offered(self):
 		with patch("ury.ury.api.item_group.is_japan_site", return_value=True):
 			groups = get_menu_item_groups()
@@ -198,7 +193,7 @@ class TestMenuItemGroups(FrappeTestCase):
 		self.assertTrue(all(not frappe.db.get_value("Item Group", g["name"], "is_group") for g in groups))
 
 	def test_warning_for_a_menu_item_outside_the_tax_groups(self):
-		item = frappe._dict(item_group="Products", item_code="Burger", taxes=[])
+		item = frappe._dict(item_group="Products", item_code=FOOD_ITEM, taxes=[])
 		with (
 			patch("ury.ury.hooks.ury_item.is_japan_site", return_value=True),
 			patch("ury.ury.hooks.ury_item.has_tax_group", return_value=False),
@@ -208,7 +203,7 @@ class TestMenuItemGroups(FrappeTestCase):
 		msgprint.assert_called_once()
 
 	def test_no_warning_when_the_group_is_under_a_tax_group(self):
-		item = frappe._dict(item_group="Consumable", item_code="Burger", taxes=[])
+		item = frappe._dict(item_group=FOOD_GROUP, item_code=FOOD_ITEM, taxes=[])
 		with (
 			patch("ury.ury.hooks.ury_item.is_japan_site", return_value=True),
 			patch("ury.ury.hooks.ury_item.has_tax_group", return_value=True),

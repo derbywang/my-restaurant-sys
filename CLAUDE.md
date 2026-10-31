@@ -17,3 +17,4 @@
 - **不要用“先执行再回滚”的方式试运行。** URY 的钩子里有 `frappe.db.commit()`（例如取消 POS Invoice 时的 `release_merge_cluster_tables`），回滚不一定有效；试运行也可能真的改了数据。要预览影响，只读代码和查询数据，或者只在测试里使用事务（测试结束时回滚）。
 - **取消、删除、修改单据和站点数据之前，必须先列出清单（哪些单据、哪些字段、会连带改动什么），并得到确认。** 这包括补丁以外的手工修改、`bench execute` 写数据、批量更新。
 - **不要在 `ury.localhost`（开发站点）上运行 `bench run-tests`。** ERPNext 的测试前置钩子 `before_tests`（`erpnext/setup/utils.py`）每次都会：删除**全部** Item Price（`delete from tabItem Price`）、把 Selling Settings 的 `customer_group` / `territory` 重置为根分组、把 Stock Settings 的 `auto_insert_price_list_rate_if_missing` 设为 0；hrms 的钩子还会创建 Holiday List `Salary Slip Test Holiday List`。这会让菜单价格消失、订单无法提交（`No item price found`）。开发站点的 `allow_tests` 已设为 `False`，不要改回 `true`。所有测试在测试站点 `ury-test.localhost` 上运行（该站点才开启 `allow_tests`）。
+- **测试的运行方法**见 `docs/testing/test-site.md`：`bench --site ury-test.localhost run-tests --module <模块>`。涉及点单、收款、交班的测试继承 `ury.setup.test_site.URYFlowTestCase`，其余继承 `URYTestCase`；常量（公司、商品、用户）从 `ury.setup.test_site` 导入，不要写死站点上的名字。

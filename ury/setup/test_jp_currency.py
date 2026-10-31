@@ -1,21 +1,17 @@
 import frappe
 from erpnext.controllers.taxes_and_totals import calculate_taxes_and_totals
-from frappe.tests.utils import FrappeTestCase
 from frappe.utils import fmt_money
 
-from ury.setup.jp_currency import NUMBER_FORMAT, apply_jpy_format, is_jpy_site
+from ury.setup.jp_currency import NUMBER_FORMAT, apply_jpy_format
+from ury.setup.test_site import COMPANY, FOOD_ITEM, URYTestCase
 
-COMPANY = "三友寿司"
 
-
-class TestJPYFormat(FrappeTestCase):
-	"""Runs against the dev site inside a transaction that is rolled back."""
+class TestJPYFormat(URYTestCase):
+	"""Runs on the test site inside a transaction that is rolled back."""
 
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		if not is_jpy_site():
-			raise cls.skipTest(cls, "needs a Japanese company with JPY")
 		cls.result = apply_jpy_format()
 
 	@classmethod
@@ -58,8 +54,6 @@ class TestJPYFormat(FrappeTestCase):
 	def test_taxes_and_totals_are_whole_yen(self):
 		"""J3: ERPNext's default tax on 333 + 333 at 8% was 53.28 (grand total 719.28)."""
 		template = frappe.db.get_value("Item Tax Template", {"title": "軽減8%", "company": COMPANY})
-		if not template:
-			self.skipTest("needs the T2 tax structure")
 		doc = frappe.new_doc("POS Invoice")
 		doc.update(
 			{
@@ -73,7 +67,7 @@ class TestJPYFormat(FrappeTestCase):
 			}
 		)
 		doc.append_taxes_from_master()
-		for item in ("Burger", "Wings"):
+		for item in (FOOD_ITEM, FOOD_ITEM):
 			doc.append(
 				"items",
 				{"item_code": item, "item_name": item, "qty": 1, "rate": 333, "price_list_rate": 333,

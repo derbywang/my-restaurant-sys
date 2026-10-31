@@ -8,6 +8,7 @@ import { dashboardService } from '../../services/dashboard';
 import SideDrawer from '../../components/layout/SideDrawer';
 import { SearchableSelect } from '../../components/common/SearchableSelect';
 import { MenuBulkUpload } from '../../components/common/MenuBulkUpload';
+import { t } from '../../i18n';
 
 interface URYMenuRecord {
   name: string;
@@ -71,7 +72,13 @@ export const MenuPage: React.FC = () => {
     target_menu: '',
     special_dish: false,
     disabled: false,
+    item_group: '',
   });
+
+  // Item groups a new menu item may be created in (leaf groups under the tax groups)
+  const [menuItemGroups, setMenuItemGroups] = useState<{ name: string; parent: string | null }[]>([]);
+  const [bulkItemGroup, setBulkItemGroup] = useState('');
+  const itemGroupOptions = menuItemGroups.map(g => ({ value: g.name, label: g.parent ? `${g.parent} / ${g.name}` : g.name }));
 
   // Add new menu form state
   const [newMenu, setNewMenu] = useState({
@@ -176,10 +183,20 @@ export const MenuPage: React.FC = () => {
     }
   };
 
+  const fetchMenuItemGroups = async () => {
+    try {
+      const res = await call.get('ury.ury.api.item_group.get_menu_item_groups');
+      setMenuItemGroups(res?.message || []);
+    } catch {
+      setMenuItemGroups([]);
+    }
+  };
+
   useEffect(() => {
     fetchMenus();
     fetchBranches();
     fetchAllItems();
+    fetchMenuItemGroups();
   }, [activeBranchId]);
 
   useEffect(() => {
@@ -202,6 +219,7 @@ export const MenuPage: React.FC = () => {
       target_menu: selectedMenu === 'all' ? (menus[0]?.name || '') : selectedMenu,
       special_dish: false,
       disabled: false,
+      item_group: '',
     });
     setDrawerMode('add-item');
   };
@@ -230,6 +248,7 @@ export const MenuPage: React.FC = () => {
       target_menu: selectedMenu === 'all' ? (menus[0]?.name || '') : selectedMenu,
       special_dish: !!item.special_dish,
       disabled: !!item.disabled,
+      item_group: '',
     });
     setDrawerMode('edit-item');
   };
@@ -379,6 +398,10 @@ export const MenuPage: React.FC = () => {
     e.preventDefault();
     if (!newItem.item_name || !newItem.rate) return;
     if (creatingItemForRowIndex === null && !newItem.target_menu) return;
+    if (!editingItem && !newItem.item_group) {
+      showToast.error(t('menu.item_group_required'));
+      return;
+    }
 
     // Ensure image is a valid URL and not raw base64 data
     const sanitizedImage = newItem.image ? newItem.image.trim() : '';
@@ -444,7 +467,7 @@ export const MenuPage: React.FC = () => {
             doctype: 'Item',
             item_code: newItem.item_name,
             item_name: newItem.item_name,
-            item_group: 'All Item Groups',
+            item_group: newItem.item_group,
             stock_uom: 'Nos',
             standard_rate: parseFloat(newItem.rate),
             is_sales_item: 1,
@@ -552,6 +575,10 @@ export const MenuPage: React.FC = () => {
   };
 
   const handleBulkUploadParsed = async (parsedRows: { name: string; course: string; price: number }[]) => {
+    if (!bulkItemGroup) {
+      showToast.error(t('menu.item_group_required'));
+      return;
+    }
     showToast.info('Processing uploaded items...');
     const resolvedRows: MenuItemRow[] = [];
     let updatedAllItems = [...allItems];
@@ -599,7 +626,7 @@ export const MenuPage: React.FC = () => {
               doctype: 'Item',
               item_code: row.name,
               item_name: row.name,
-              item_group: 'All Item Groups',
+              item_group: bulkItemGroup,
               stock_uom: 'Nos',
               standard_rate: row.price || 0,
               is_sales_item: 1,
@@ -1002,6 +1029,22 @@ export const MenuPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Item group (new items only): sets the consumption tax and the kitchen */}
+          {!editingItem && (
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1.5">{t('menu.item_group')} <span className="text-red-500">*</span></label>
+              <SearchableSelect
+                id="item-group"
+                value={newItem.item_group}
+                onChange={(_, value) => setNewItem({ ...newItem, item_group: value })}
+                options={itemGroupOptions}
+                placeholder={t('menu.item_group_placeholder')}
+                strict
+              />
+              <p className="mt-1 text-xs text-gray-500">{t('menu.item_group_hint')}</p>
+            </div>
+          )}
+
           {/* Course field */}
           <div>
             <label className="block font-semibold text-gray-700 mb-1.5">Course</label>
@@ -1146,6 +1189,7 @@ export const MenuPage: React.FC = () => {
                               target_menu: '',
                               special_dish: false,
                               disabled: false,
+                              item_group: '',
                             });
                             setDrawerMode('add-item');
                           } else {
@@ -1218,7 +1262,19 @@ export const MenuPage: React.FC = () => {
           </div>
 
           {/* Bulk Upload Section */}
-          <div className="pt-4 border-t border-gray-100">
+          <div className="pt-4 border-t border-gray-100 space-y-3">
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1.5">{t('menu.bulk_item_group')}</label>
+              <SearchableSelect
+                id="bulk-item-group"
+                value={bulkItemGroup}
+                onChange={(_, value) => setBulkItemGroup(value)}
+                options={itemGroupOptions}
+                placeholder={t('menu.item_group_placeholder')}
+                strict
+              />
+              <p className="mt-1 text-xs text-gray-500">{t('menu.item_group_hint')}</p>
+            </div>
             <MenuBulkUpload
               onItemsParsed={handleBulkUploadParsed}
               title="Bulk Upload (Optional)"

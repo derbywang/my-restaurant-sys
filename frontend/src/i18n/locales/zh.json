@@ -169,6 +169,13 @@
       "role_kitchen": "厨房显示屏用户"
     }
   },
+  "menu": {
+    "item_group": "商品分组",
+    "item_group_placeholder": "选择商品分组",
+    "item_group_hint": "用于确定消费税，以及由哪个后厨出品。",
+    "item_group_required": "请选择商品分组。",
+    "bulk_item_group": "新商品的商品分组"
+  },
   "order_types": {
     "dine_in": "堂食",
     "take_away": "外带",

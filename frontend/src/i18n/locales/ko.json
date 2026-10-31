@@ -169,6 +169,13 @@
       "role_kitchen": "주방 디스플레이 사용자"
     }
   },
+  "menu": {
+    "item_group": "상품 그룹",
+    "item_group_placeholder": "상품 그룹 선택",
+    "item_group_hint": "소비세와 담당 주방을 결정합니다.",
+    "item_group_required": "상품 그룹을 선택하세요.",
+    "bulk_item_group": "신규 상품의 상품 그룹"
+  },
   "order_types": {
     "dine_in": "매장 식사",
     "take_away": "포장",

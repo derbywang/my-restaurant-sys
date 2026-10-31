@@ -1,9 +1,32 @@
 import frappe
+from frappe import _
+
+from ury.setup.jp_tax import has_tax_group, is_japan_site
 
 
 def validate(doc,method):
     update_menu_item(doc,method)
     update_variants_add_on(doc, method)
+    warn_item_group_without_tax(doc, method)
+
+
+def warn_item_group_without_tax(doc, event):
+    """On Japanese sites, menu items must sit under 食品 / 酒類 / 非食品: that is where
+    the consumption tax is set. Otherwise the item silently gets the default 10%."""
+    if not doc.item_group or not is_japan_site():
+        return
+    if not frappe.db.exists("URY Menu Item", {"item": doc.item_code}):
+        return
+    if doc.get("taxes") or has_tax_group(doc.item_group):
+        return
+
+    frappe.msgprint(
+        _("Item group {0} is not under 食品 / 酒類 / 非食品, so no consumption tax rate is set for {1}. It will be taxed at the default 10%.").format(
+            frappe.bold(doc.item_group), frappe.bold(doc.item_code)
+        ),
+        title=_("Consumption tax"),
+        indicator="orange",
+    )
     
     
 def update_menu_item(doc, event):

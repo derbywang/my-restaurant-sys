@@ -12,6 +12,10 @@ def after_install():
 
         apply_staff_language_settings()
 
+        from ury.setup.jp_tax import apply_jp_tax_setup
+
+        apply_jp_tax_setup()
+
         click.secho("Thank you for installing URY App!", fg="green")
 
         

@@ -169,6 +169,13 @@
       "role_kitchen": "Kitchen Display User"
     }
   },
+  "menu": {
+    "item_group": "Item Group",
+    "item_group_placeholder": "Select an item group",
+    "item_group_hint": "Sets the consumption tax and which kitchen prepares the item.",
+    "item_group_required": "Select an item group.",
+    "bulk_item_group": "Item group for new items"
+  },
   "order_types": {
     "dine_in": "Dine In",
     "take_away": "Take Away",

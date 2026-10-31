@@ -169,6 +169,13 @@
       "role_kitchen": "キッチンディスプレイ利用者"
     }
   },
+  "menu": {
+    "item_group": "商品グループ",
+    "item_group_placeholder": "商品グループを選択",
+    "item_group_hint": "消費税と、どの厨房が調理するかを決めます。",
+    "item_group_required": "商品グループを選択してください。",
+    "bulk_item_group": "新規商品の商品グループ"
+  },
   "order_types": {
     "dine_in": "店内",
     "take_away": "持ち帰り",

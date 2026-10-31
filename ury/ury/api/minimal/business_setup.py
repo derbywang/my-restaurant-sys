@@ -1,6 +1,19 @@
 import frappe
 from frappe import _
 
+def _default_menu_item_group():
+    """Item group for items created by the wizard. On Japanese sites it must sit
+    under 食品 so the consumption tax applies (the leaf groups keep driving the kitchen)."""
+    from ury.ury.api.item_group import get_menu_item_groups
+    from ury.setup.jp_tax import is_japan_site
+
+    if is_japan_site():
+        for group in get_menu_item_groups():
+            if group["parent"] == "食品":
+                return group["name"]
+    return frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+
+
 def _site_default_currency():
     """Currency for a company created here: the global default if set,
     otherwise the currency of the country chosen in the setup wizard
@@ -275,7 +288,7 @@ def submit_configure_data(data):
     frappe.publish_realtime("ury_configure_progress", {"step": 2, "status": "loading"}, user=user)
 
     menu_items_table = []
-    item_group = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+    item_group = _default_menu_item_group()
     
     if not frappe.db.exists("UOM", "Unit"):
         frappe.get_doc({"doctype": "UOM", "uom_name": "Unit", "must_be_whole_number": 0}).insert(ignore_permissions=True)

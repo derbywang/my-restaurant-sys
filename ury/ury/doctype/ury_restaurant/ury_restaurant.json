@@ -16,6 +16,8 @@
   "address",
   "branch",
   "default_tax_template",
+  "dine_in_tax_category",
+  "takeaway_tax_category",
   "menu_info_section",
   "active_menu",
   "room_wise_menu",
@@ -69,6 +71,20 @@
    "fieldtype": "Link",
    "label": "Default Tax Template",
    "options": "Sales Taxes and Charges Template"
+  },
+  {
+   "description": "Tax Category set on Dine In orders. Leave empty to leave the tax category alone.",
+   "fieldname": "dine_in_tax_category",
+   "fieldtype": "Link",
+   "label": "Dine In Tax Category",
+   "options": "Tax Category"
+  },
+  {
+   "description": "Tax Category set on Take Away, Delivery, Phone In and Aggregators orders.",
+   "fieldname": "takeaway_tax_category",
+   "fieldtype": "Link",
+   "label": "Take Away Tax Category",
+   "options": "Tax Category"
   },
   {
    "fieldname": "address",

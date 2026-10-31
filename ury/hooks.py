@@ -173,6 +173,7 @@ before_uninstall = "ury.uninstall.uninstall"
 doc_events = {
     "POS Invoice": {
         "before_insert": "ury.ury.hooks.ury_pos_invoice.before_insert",
+        "before_validate": "ury.ury.hooks.ury_pos_invoice.before_validate",
         "validate": "ury.ury.hooks.ury_pos_invoice.validate",
         "after_insert":"ury.ury.api.ury_kot_order_number.set_order_number",
         "before_submit": "ury.ury.hooks.ury_pos_invoice.before_submit",

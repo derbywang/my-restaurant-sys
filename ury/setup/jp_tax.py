@@ -227,6 +227,13 @@ def _ensure_group_taxes(item_templates):
             doc.save(ignore_permissions=True)
 
 
+# Order type -> tax category is configured per restaurant (URY Restaurant).
+RESTAURANT_TAX_CATEGORIES = {
+    "dine_in_tax_category": "店内飲食",
+    "takeaway_tax_category": "テイクアウト",
+}
+
+
 def _switch_restaurants(company, template):
     """Point the restaurants of `company` at the new template and disable the old ones.
 
@@ -245,6 +252,9 @@ def _switch_restaurants(company, template):
             disabled.append(old)
             drafts[old] = frappe.db.count("POS Invoice", {"docstatus": 0, "taxes_and_charges": old})
         frappe.db.set_value("URY Restaurant", restaurant.name, "default_tax_template", template)
+        for fieldname, category in RESTAURANT_TAX_CATEGORIES.items():
+            if not frappe.db.get_value("URY Restaurant", restaurant.name, fieldname):
+                frappe.db.set_value("URY Restaurant", restaurant.name, fieldname, category)
     return disabled, drafts
 
 

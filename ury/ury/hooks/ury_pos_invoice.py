@@ -10,6 +10,12 @@ def before_insert(doc, method):
     restrict_existing_order(doc, method)
 
 
+def before_validate(doc, method):
+    # Must run before ERPNext's own validate: that is where the per-item tax
+    # template is picked, using the tax category of the document.
+    set_tax_category(doc, method)
+
+
 def validate(doc, method):
     validate_invoice(doc, method)
     validate_customer(doc, method)
@@ -24,6 +30,39 @@ def before_submit(doc, method):
 
 def on_trash(doc, method):
     table_status_delete(doc, method)
+
+
+def tax_category_for_order(doc):
+    """Tax Category for the order type, from the restaurant's settings.
+
+    None when the restaurant has no category configured (sites without
+    order-type based tax are left alone) or the order type is not set.
+    """
+    if not doc.order_type or not doc.restaurant:
+        return None
+    dine_in, takeaway = frappe.db.get_value(
+        "URY Restaurant", doc.restaurant, ["dine_in_tax_category", "takeaway_tax_category"]
+    ) or (None, None)
+    return (dine_in if doc.order_type == "Dine In" else takeaway) or None
+
+
+def set_tax_category(doc, method):
+    """Set tax_category from the order type, and make the items pick their tax again.
+
+    ERPNext keeps an item's existing item_tax_template as long as it is valid for the
+    item at all, whatever the tax category (get_item_details._get_item_tax_template),
+    so the templates must be cleared for the new category to take effect.
+    """
+    if doc.get("is_return"):
+        return
+    category = tax_category_for_order(doc)
+    if not category or doc.tax_category == category:
+        return
+
+    doc.tax_category = category
+    for item in doc.get("items"):
+        item.item_tax_template = None
+        item.item_tax_rate = None
 
 
 def validate_invoice(doc, method):

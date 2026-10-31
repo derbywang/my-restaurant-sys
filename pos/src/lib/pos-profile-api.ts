@@ -87,15 +87,6 @@ export interface PosProfileCombined extends PosProfileFull {
   custom_daily_pos_close?: number;
 }
 
-export interface Currency {
-  name: string;
-  symbol: string;
-  fraction: string;
-  fraction_units: number;
-  smallest_currency_fraction_value: number;
-  number_format: string;
-}
-
 export interface PosProfileFullResponse {
   message: PosProfileFull;
 }
@@ -138,9 +129,4 @@ export async function getCombinedPosProfile(): Promise<PosProfileCombined> {
   };
 
   return combinedProfile;
-}
-
-export async function getCurrencyInfo(currencyCode: string): Promise<Currency> {
-  const doc = await db.getDoc(DOCTYPES.CURRENCY, currencyCode);
-  return doc;
 }

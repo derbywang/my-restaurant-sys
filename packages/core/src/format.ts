@@ -1,10 +1,43 @@
-import { storage } from './storage';
+import { getCurrency } from './currency';
+import { getActiveLanguage } from './i18n';
 
-export function formatCurrency(amount: number): string {
-  const symbol = storage.getItem('currencySymbol') || '₹';
-  const roundedAmount = flt(amount, 2);
-  const formattedVal = typeof roundedAmount === 'number' && !isNaN(roundedAmount) ? roundedAmount.toLocaleString('en-IN') : roundedAmount;
-  return `${symbol} ${formattedVal}`;
+const formatters = new Map<string, Intl.NumberFormat>();
+
+function numberFormat(compact: boolean, currency: string | undefined): Intl.NumberFormat {
+  const locale = getActiveLanguage();
+  const key = `${locale}|${currency ?? ''}|${compact}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    // With a currency, the minor-unit digits come from the currency itself
+    // (JPY: none, USD: two); only the plain-number fallback needs a cap.
+    const options: Intl.NumberFormatOptions = compact
+      ? { notation: 'compact', maximumFractionDigits: 1 }
+      : currency
+        ? {}
+        : { maximumFractionDigits: 2 };
+    try {
+      formatter = new Intl.NumberFormat(
+        locale,
+        currency ? { ...options, style: 'currency', currency, currencyDisplay: 'narrowSymbol' } : options
+      );
+    } catch {
+      // unknown currency code: show the plain number instead of failing
+      formatter = new Intl.NumberFormat(locale, options);
+    }
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+const finite = (amount: number): number => (typeof amount === 'number' && Number.isFinite(amount) ? amount : 0);
+
+/**
+ * Formats an amount in the server's currency (see `getCurrency`) using the
+ * active UI language, e.g. "¥1,235" (JPY has no minor unit), "$1,234.50".
+ * Without a known currency only the number is formatted.
+ */
+export function formatCurrency(amount: number, currency?: string): string {
+  return numberFormat(false, typeof currency === 'string' ? currency : getCurrency()).format(finite(amount));
 }
 
 export function flt(v: number | string | null | undefined, decimals: number = 2): number {
@@ -23,25 +56,11 @@ export function flt(v: number | string | null | undefined, decimals: number = 2)
 }
 
 /**
- * Formats a number as compact Indian-style currency for chart axes/labels,
- * e.g. 600000 -> "₹6L", 12500000 -> "₹1.25Cr", 8200 -> "₹8.2k".
+ * Compact currency for chart axes/labels, following the UI language:
+ * 600000 -> "¥600K" (en) / "￥60万" (ja), 8200 -> "¥8.2K" (en).
  */
-export function formatCompactCurrency(amount: number): string {
-  const symbol = storage.getItem('currencySymbol') || '₹';
-  if (typeof amount !== 'number' || isNaN(amount)) return `${symbol} ${amount}`;
-
-  const sign = amount < 0 ? '-' : '';
-  const abs = Math.abs(amount);
-
-  const trim = (value: number) => {
-    const rounded = Math.round(value * 100) / 100;
-    return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-  };
-
-  if (abs >= 1_00_00_000) return `${sign}${symbol}${trim(abs / 1_00_00_000)}Cr`;
-  if (abs >= 1_00_000) return `${sign}${symbol}${trim(abs / 1_00_000)}L`;
-  if (abs >= 1_000) return `${sign}${symbol}${trim(abs / 1_000)}k`;
-  return `${sign}${symbol}${trim(abs)}`;
+export function formatCompactCurrency(amount: number, currency?: string): string {
+  return numberFormat(true, typeof currency === 'string' ? currency : getCurrency()).format(finite(amount));
 }
 
 export const formatInvoiceTime = (timestamp: string | null) => {

@@ -1,6 +1,23 @@
 import frappe
 from frappe import _
 
+def _site_default_currency():
+    """Currency for a company created here: the global default if set,
+    otherwise the currency of the country chosen in the setup wizard
+    (System Settings). Never guessed."""
+    from frappe.geo.country_info import get_country_info
+
+    currency = frappe.defaults.get_global_default("currency")
+    if not currency:
+        country = frappe.defaults.get_global_default("country") or frappe.db.get_single_value(
+            "System Settings", "country"
+        )
+        currency = get_country_info(country).get("currency") if country else None
+    if not currency:
+        frappe.throw(_("Set the country in System Settings or a default currency in Global Defaults first."))
+    return currency
+
+
 @frappe.whitelist()
 def get_business_setup():
     if frappe.session.user == "Guest":
@@ -130,7 +147,7 @@ def submit_configure_data(data):
             comp_doc = frappe.get_doc({
                 "doctype": "Company",
                 "company_name": default_company,
-                "default_currency": "INR"
+                "default_currency": _site_default_currency()
             })
             comp_doc.insert(ignore_permissions=True)
             

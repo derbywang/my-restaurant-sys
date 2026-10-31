@@ -24,7 +24,8 @@ packages/core/src/
 │   └── language.ts     ← setStaffLanguage(lang): set_staff_language + page reload
 ├── i18n/               ← t(), tOr(), initI18n(), resolveLanguage(), SUPPORTED/MENU_LANGUAGES (locale files stay in each app)
 ├── storage.ts          ← storage: localStorage wrapper (+ POS-profile helpers)
-├── format.ts           ← formatCurrency(), formatInvoiceTime()
+├── currency.ts         ← getCurrency(), setCurrency()
+├── format.ts           ← formatCurrency(), formatCompactCurrency(), formatInvoiceTime()
 └── print/
     └── qz.ts           ← initPrinting(), loadQzPrinter(), printWithQz(), disconnectQzPrinter()
 ```
@@ -80,7 +81,9 @@ export const initI18n = (lang?: string) =>
 `storage` object over `localStorage`: generic `setItem`/`getItem`/`removeItem` plus `savePosProfileFull`/`getPosProfileFull` (JSON round-trip under the `pos_profile` key).
 
 ### Formatting (`format.ts`)
-- `formatCurrency(amount)` — prefixes the symbol stored under the `currencySymbol` localStorage key (apps must seed it, e.g. after loading the POS profile).
+- `getCurrency()` — ISO code of the server's currency: `setCurrency()` override → `frappe.boot.sysdefaults.currency` → the default company's `default_currency` in `frappe.boot.docs`. `undefined` on pages without boot data (guests) — then amounts are formatted as plain numbers, never with an assumed currency.
+- `setCurrency(code)` — optional override, e.g. pos sets the POS Profile's currency; self-order will set it from its API.
+- `formatCurrency(amount)` / `formatCompactCurrency(amount)` — `Intl.NumberFormat` with the currency code and the active UI language (`narrowSymbol`): JPY has no minor unit, USD has two; compact follows the language (ja "￥60万", en "¥600K"). Nothing is read from localStorage.
 - `formatInvoiceTime(timestamp)` — locale time for ISO datetimes, handles bare `HH:MM:SS` strings, returns `'No bill activity yet'` for null.
 
 ### QZ-Tray printing (`print/qz.ts`)

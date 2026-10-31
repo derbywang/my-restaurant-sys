@@ -1,6 +1,7 @@
 import React from 'react';
 import { useConfigure } from '../../../context/ConfigureContext';
 import { Input, Button } from '@ury/ui';
+import { getCurrency } from '@ury/core';
 import { Plus, Trash2 } from 'lucide-react';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { Switch } from '../../ui/switch';
@@ -28,7 +29,7 @@ export function MenuSection() {
     updateTaxConfig,
   } = useConfigure();
 
-  const currencyLabel = (window as any).frappe?.boot?.sysdefaults?.currency;
+  const currencyLabel = getCurrency();
   const priceColumnLabel = currencyLabel ? `Price (${currencyLabel})` : 'Price';
 
   const handleAdd = () => {

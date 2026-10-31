@@ -83,7 +83,8 @@
 | `src/captain/pages/CaptainTables.tsx` | 服务员端首页（桌台一览）的标题栏右侧加入“语言”（`CaptainMenu.tsx` 是菜品浏览器，不是用户菜单） |
 | `src/captain/**`（7 个文件）、`src/pages/Dashboard.tsx`、`src/pages/Settings.tsx` | 写死的英文改为 `t('…')`，同时在 `en.json` 中补上键 |
 
-金额和日期的格式由 Frappe 的 System Settings 决定，不随界面语言改变。
+金额：币种以服务器为准（`frappe.boot.sysdefaults.currency`，其次是默认公司的币种；pos 另用 POS 配置的币种），用 `Intl.NumberFormat`（币种代码 + 当前界面语言）格式化，由 `@ury/core` 的 `formatCurrency` / `formatCompactCurrency` 统一实现；JPY 这类没有小数的币种自动不显示小数，紧凑写法随语言变化（ja「60万」、en「600K」）。
+日期的格式暂不随界面语言改变。
 
 ### 4.2 登录页 — 阶段 2
 

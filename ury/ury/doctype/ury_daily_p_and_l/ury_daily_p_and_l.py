@@ -550,7 +550,12 @@ class URYDailyPandL(Document):
 	
 	@frappe.whitelist()
 	def get_proft_loss_details(self):
+		import erpnext
+
 		return frappe.render_template(
 			"ury/doctype/ury_daily_p_and_l/profit_loss_details.html",
-			{"data": self, "currency": "INR"},
+			{
+				"data": self,
+				"currency": erpnext.get_default_currency() or frappe.defaults.get_global_default("currency"),
+			},
 		)

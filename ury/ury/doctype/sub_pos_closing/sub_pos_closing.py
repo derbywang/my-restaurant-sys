@@ -14,15 +14,7 @@ from frappe.utils import  get_datetime,now
 class SubPOSClosing(Document):
     def validate(self):
         owner = None
-        branch = frappe.db.get_value("POS Profile", self.pos_profile, "branch")
-
-        draft_invoices = frappe.get_all(
-            "POS Invoice",
-            fields=["name"],
-            filters={"branch": branch, "status": "Draft", "docstatus": "0","cashier":self.user},
-        )
-        if draft_invoices:
-            frappe.throw("Submit/Delete Draft Invoices")
+        self.validate_no_open_orders()
 
         date_time = now()
         if isinstance(date_time, str):
@@ -67,6 +59,24 @@ class SubPOSClosing(Document):
         else:
             pass
     
+    def validate_no_open_orders(self):
+        """The sub cashier cannot close the shift while orders that are clearly theirs are
+        open: assigned to them (`cashier`), or without an assigned cashier and created by
+        them. Orders of the other cashiers' tables are not checked (they are still being
+        served); the main cashier's closing checks the whole POS."""
+        from ury.ury.hooks.ury_pos_closing_entry import OPEN_ORDER_FIELDS, throw_if_open_orders
+
+        base = {"pos_profile": self.pos_profile, "docstatus": 0}
+        kwargs = {"fields": OPEN_ORDER_FIELDS, "order_by": "creation asc", "limit_page_length": 0}
+        assigned = frappe.get_all("POS Invoice", filters={**base, "cashier": self.user}, **kwargs)
+        unassigned = frappe.get_all(
+            "POS Invoice", filters={**base, "cashier": ["in", ["", None]], "owner": self.user}, **kwargs
+        )
+        throw_if_open_orders(
+            assigned + unassigned,
+            _("There are {0} open order(s) of yours on this POS. Settle or cancel them before closing the shift: {1}"),
+        )
+
     def on_submit(self):
         opening_entry = frappe.get_doc("POS Opening Entry", self.pos_opening_entry)
         opening_entry.custom_sub_pos_close_entry = self.name

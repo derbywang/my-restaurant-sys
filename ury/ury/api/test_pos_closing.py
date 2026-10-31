@@ -21,6 +21,7 @@ from ury.setup.test_site import (
 	open_pos,
 	pay_order,
 	place_order,
+	print_bill,
 )
 from ury.ury.api.pos_closing import unconsolidated_invoices
 
@@ -275,3 +276,43 @@ class TestMultipleCashierClosing(URYFlowTestCase):
 		cash = next(row for row in closing.payment_reconciliation if row.mode_of_payment == "Cash")
 		self.assertEqual(cash.closing_amount, sub_closing.payment_reconciliation[0].closing_amount)
 		self.assertEqual(cash.difference, -paid_main.grand_total)
+
+
+class TestSubCashierOpenOrders(URYFlowTestCase):
+	def setUp(self):
+		super().setUp()
+		enable_multiple_cashier(main=CASHIER)
+		self.addCleanup(disable_multiple_cashier)
+		open_pos(CASHIER)
+		self.sub_opening = open_pos(CASHIER2)
+
+	def test_an_open_order_of_the_sub_cashier_blocks_the_closing(self):
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			close_sub_shift(self.sub_opening)
+		self.assertIn(order, str(ctx.exception))
+
+	def test_a_billed_but_unpaid_order_also_blocks(self):
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		print_bill(order)
+		with self.assertRaises(frappe.ValidationError):
+			close_sub_shift(self.sub_opening)
+
+	def test_an_order_without_cashier_created_by_the_sub_cashier_blocks(self):
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		frappe.db.set_value("POS Invoice", order, "cashier", None)
+		with self.assertRaises(frappe.ValidationError):
+			close_sub_shift(self.sub_opening)
+
+	def test_the_sub_cashier_can_close_once_the_order_is_paid(self):
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		pay_order(order, user=CASHIER2)
+		self.assertEqual(close_sub_shift(self.sub_opening).docstatus, 1)
+
+	def test_open_orders_of_the_other_cashier_do_not_block(self):
+		place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		pay_order(order, user=CASHIER2)
+		self.assertEqual(close_sub_shift(self.sub_opening).docstatus, 1)
+		# the main cashier's closing is the last safeguard
+		self.assertEqual(frappe.db.count("POS Invoice", {"docstatus": 0}), 1)

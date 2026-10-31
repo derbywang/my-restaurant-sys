@@ -32,6 +32,9 @@ def validate_closing_covers_all_invoices(doc, method):
     )
 
 
+OPEN_ORDER_FIELDS = ["name", "restaurant_table", "order_type", "invoice_printed", "grand_total", "currency"]
+
+
 def validate_no_open_orders(doc, method):
     """交班前检查：这个收银台（POS Profile）还有未结订单时，禁止交班。
 
@@ -41,10 +44,15 @@ def validate_no_open_orders(doc, method):
     open_orders = frappe.get_all(
         "POS Invoice",
         filters={"pos_profile": doc.pos_profile, "docstatus": 0},
-        fields=["name", "restaurant_table", "order_type", "invoice_printed", "grand_total", "currency"],
+        fields=OPEN_ORDER_FIELDS,
         order_by="creation asc",
         limit_page_length=0,
     )
+    throw_if_open_orders(open_orders, _("There are {0} open order(s) on this POS. Settle or cancel them before closing the shift: {1}"))
+
+
+def throw_if_open_orders(open_orders, message):
+    """`message` takes the number of orders and their list."""
     if not open_orders:
         return
 
@@ -57,12 +65,7 @@ def validate_no_open_orders(doc, method):
     if len(open_orders) > 10:
         lines.append(_("... and {0} more").format(len(open_orders) - 10))
 
-    frappe.throw(
-        _("There are {0} open order(s) on this POS. Settle or cancel them before closing the shift: {1}").format(
-            len(open_orders), "; ".join(lines)
-        ),
-        title=_("Open Orders"),
-    )
+    frappe.throw(message.format(len(open_orders), "; ".join(lines)), title=_("Open Orders"))
 
 
 def sub_pos_close_check(doc,method):

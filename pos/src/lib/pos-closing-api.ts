@@ -46,6 +46,10 @@ export interface POSClosingPayment {
  */
 export interface POSClosingInvoice {
   name: string;
+  posting_date?: string;
+  customer?: string;
+  is_return?: number;
+  return_against?: string | null;
   grand_total: number;
   net_total: number;
   total_qty: number;
@@ -233,14 +237,14 @@ export async function getSubCashierPosInvoices(
 
 /**
  * Main-cashier / single-cashier path: returns the full POS Invoice dicts
- * (with taxes and payments) for a cashier within a time window.
- * Wraps erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry.get_pos_invoices(start, end, pos_profile, user).
- *
- * This is the standard ERPNext whitelisted method referenced as
- * `get_invoices` in the task brief; the actual method name is
- * `get_pos_invoices` and it returns the same POSClosingInvoice[] shape as
- * the Sub POS Closing variant above (not a separate
- * {invoices, payments, taxes} object).
+ * (with taxes and payments) that this closing consolidates: every submitted,
+ * unconsolidated invoice of the POS Profile posted up to `end`, whoever created
+ * it and however long ago (`start` and `user` are accepted for compatibility and
+ * ignored by the server).
+ * Wraps ury.ury.api.pos_closing.get_pos_invoices(start, end, pos_profile, user),
+ * the URY replacement of ERPNext's pos_closing_entry.get_pos_invoices (which only
+ * returns the invoices created by `user`, so e.g. a captain's orders were never
+ * consolidated). Same POSClosingInvoice[] shape as the Sub POS Closing variant.
  */
 export async function getMainCashierPosInvoices(
   start: string,
@@ -250,7 +254,7 @@ export async function getMainCashierPosInvoices(
 ): Promise<POSClosingInvoice[]> {
   try {
     const response = await call.get<{ message: POSClosingInvoice[] }>(
-      'erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry.get_pos_invoices',
+      'ury.ury.api.pos_closing.get_pos_invoices',
       { start, end, pos_profile: posProfile, user }
     );
 
@@ -277,6 +281,41 @@ export async function submitSubPosClosing(
   name: string
 ): Promise<{ name: string }> {
   return db.updateDoc('Sub POS Closing', name, { docstatus: 1 });
+}
+
+/**
+ * The `pos_transactions` rows of a POS Closing Entry: the invoices it consolidates.
+ * ERPNext consolidates exactly these rows when the entry is submitted; without them
+ * nothing is consolidated (and the server now rejects such an entry).
+ */
+export function buildClosingTransactions(invoices: POSClosingInvoice[]) {
+  return invoices.map((invoice) => ({
+    pos_invoice: invoice.name,
+    posting_date: invoice.posting_date,
+    grand_total: invoice.grand_total,
+    customer: invoice.customer,
+    is_return: invoice.is_return ?? 0,
+    return_against: invoice.return_against ?? null,
+  }));
+}
+
+/**
+ * The `taxes` rows of a POS Closing Entry: the tax of the invoices by account and rate
+ * (what ERPNext's own closing entry shows).
+ */
+export function buildClosingTaxes(invoices: POSClosingInvoice[]) {
+  const taxes: { account_head: string; rate: number; amount: number }[] = [];
+  invoices.forEach((invoice) => {
+    (invoice.taxes || []).forEach((tax) => {
+      const existing = taxes.find((row) => row.account_head === tax.account_head && row.rate === tax.rate);
+      if (existing) {
+        existing.amount += Number(tax.tax_amount) || 0;
+      } else {
+        taxes.push({ account_head: tax.account_head, rate: tax.rate, amount: Number(tax.tax_amount) || 0 });
+      }
+    });
+  });
+  return taxes;
 }
 
 /**

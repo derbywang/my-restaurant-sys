@@ -37,9 +37,9 @@ bench --site ury-test.localhost execute ury.setup.test_site.setup_test_site
 ## 测试里怎么用
 
 - `URYTestCase`：在回滚的事务里运行的测试（税额计算、设置、模拟）。会检查站点标记，并重新生成被 `before_tests` 删掉的菜单价格。
-- `URYFlowTestCase`：走真实的点单 / 收款 / 交班流程的测试。这些流程会 commit，不能依赖回滚，所以 `setUpClass` 先调用 `reset_transactions()` 清空交易数据，每个测试自己用独立的桌台。
-- 流程函数（走生产代码）：`open_pos`、`place_order`（`sync_order`）、`print_bill`、`pay_order`（`make_invoice`）、`close_shift`（ERPNext 的 `make_closing_entry_from_opening`；`keep_transactions=False` 模拟收银端过去的错误）。
-- `enable_multiple_cashier(main)` / `disable_multiple_cashier()`：把测试收银台切换成多收银员模式（`custom_enable_multiple_cashier`，并设置主收银员）。
+- `URYFlowTestCase`：走真实的点单 / 收款 / 交班流程的测试。这些流程会 commit，不能依赖回滚，所以**每个测试**开始前（`setUp`）都调用 `reset_transactions()` 清空交易数据。
+- 流程函数（走生产代码）：`open_pos`、`place_order`（`sync_order`，默认带 `room`）、`print_bill`、`pay_order`（`make_invoice`）、`close_shift`（和收银端交班对话框一样：用 `ury.ury.api.pos_closing.get_pos_invoices` 取账单，带着 `pos_transactions` 和 `taxes` 创建草稿再提交；`keep_transactions=False` 模拟收银端过去不带明细的错误，`only=[...]` 只带一部分，`extra=[...]` 额外加入账单）、`close_sub_shift`（副收银员的 Sub POS Closing）。
+- `enable_multiple_cashier(main)` / `disable_multiple_cashier()`：把测试收银台切换成多收银员模式（`custom_enable_multiple_cashier`，并设置主收银员；第二个收银员负责区域 `メインホール`，URY 据此把订单分给他）。两个函数都会 commit（流程本身会 commit，回滚会把开关留在错误的状态），测试结束要调用 `disable_multiple_cashier()`。
 - `reset_transactions()`：清空 POS / 销售 / 厨房单据（`TRUNCATE` 单据表；子表按 `parenttype` 删除，因为有些子表和主数据共用）。**只在测试站点上执行。**
 
 ## 运行测试

@@ -5,9 +5,31 @@ def before_save(doc, method):
     sub_pos_close_check(doc, method)
 
 def validate(doc, method):
+    validate_closing_covers_all_invoices(doc, method)
     validate_no_open_orders(doc, method)
     calculate_closing_amount(doc, method)
     validate_cashier(doc, method)
+
+
+def validate_closing_covers_all_invoices(doc, method):
+    """The closing must list every unconsolidated invoice of the POS Profile posted up
+    to the closing time (ury.ury.api.pos_closing). Otherwise the invoices that are
+    missing would silently never be consolidated into a Sales Invoice: a closing without
+    invoice details used to be submitted without any error."""
+    from ury.ury.api.pos_closing import unconsolidated_invoices
+
+    expected = unconsolidated_invoices(doc.pos_profile, doc.period_end_date)
+    listed = {row.pos_invoice for row in doc.get("pos_transactions") or []}
+    missing = [name for name in expected if name not in listed]
+    if not missing:
+        return
+
+    shown = ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else "")
+    frappe.throw(
+        _("The closing is missing {0} submitted invoice(s) that are not consolidated yet: {1}. "
+          "They would never be consolidated. Reload the closing and try again.").format(len(missing), shown),
+        title=_("Invoices missing from the closing"),
+    )
 
 
 def validate_no_open_orders(doc, method):

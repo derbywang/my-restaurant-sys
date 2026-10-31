@@ -24,6 +24,8 @@ import {
   submitSubPosClosing,
   createPosClosingEntry,
   submitPosClosingEntry,
+  buildClosingTransactions,
+  buildClosingTaxes,
   type OpenPosOpeningEntry,
   type POSClosingInvoice,
   type ClosingPaymentSummary,
@@ -174,6 +176,9 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
   const [isSubCashier, setIsSubCashier] = useState(false);
   const [periodEndDate, setPeriodEndDate] = useState<Date>(new Date());
   const [invoiceCount, setInvoiceCount] = useState(0);
+  // The invoices this closing consolidates (main / single cashier). The POS Closing Entry
+  // must list them in `pos_transactions`: ERPNext consolidates exactly those rows.
+  const [closingInvoices, setClosingInvoices] = useState<POSClosingInvoice[]>([]);
   const [totals, setTotals] = useState<AggregatedTotals>({ grandTotal: 0, netTotal: 0, totalQty: 0 });
   const [rows, setRows] = useState<ClosingPaymentSummary[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -257,6 +262,7 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
       ]);
 
       setInvoiceCount(invoices.length);
+      setClosingInvoices(subCashier ? [] : invoices);
       const { totals: aggregatedTotals, expectedByMode } = aggregateInvoices(invoices);
       setTotals(aggregatedTotals);
       setRows(buildRows(openingDoc?.balance_details ?? [], expectedByMode));
@@ -389,6 +395,8 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
             period_end_date: formatDateTime(periodEndDate),
             posting_date: formatDate(periodEndDate),
             posting_time: formatTime(periodEndDate),
+            pos_transactions: buildClosingTransactions(closingInvoices),
+            taxes: buildClosingTaxes(closingInvoices),
             payment_reconciliation: paymentReconciliation,
             grand_total: totals.grandTotal,
             net_total: totals.netTotal,

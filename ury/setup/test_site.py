@@ -38,6 +38,7 @@ TABLES = ("T-01", "T-02", "T-03")
 MENU = "Default Menu"
 PRICE_LIST = MENU  # URY Menu creates a price list with its own name
 CUSTOMER = "テスト顧客"
+CUSTOMER2 = "テスト顧客2"
 
 FOOD_ITEM = "テスト寿司"
 FOOD_PRICE = 1000  # tax-exclusive
@@ -129,17 +130,18 @@ def _ensure_company():
 
 
 def _ensure_customer():
-    if frappe.db.exists("Customer", CUSTOMER):
-        return
-    frappe.get_doc(
-        {
-            "doctype": "Customer",
-            "customer_name": CUSTOMER,
-            "customer_type": "Individual",
-            "customer_group": "Individual",
-            "territory": "Japan",
-        }
-    ).insert(ignore_permissions=True)
+    for name in (CUSTOMER, CUSTOMER2):
+        if frappe.db.exists("Customer", name):
+            continue
+        frappe.get_doc(
+            {
+                "doctype": "Customer",
+                "customer_name": name,
+                "customer_type": "Individual",
+                "customer_group": "Individual",
+                "territory": "Japan",
+            }
+        ).insert(ignore_permissions=True)
 
 
 def _configure_restaurant():
@@ -212,6 +214,14 @@ def ensure_prices():
     return missing
 
 
+def _set_room(user, room):
+    branch = frappe.get_doc("Branch", BRANCH)
+    for row in branch.user:
+        if row.user == user:
+            row.room = room
+    branch.save(ignore_permissions=True)
+
+
 def enable_multiple_cashier(main=CASHIER):
     """Switch the test POS Profile to multiple-cashier mode with `main` as main cashier."""
     profile = frappe.get_doc("POS Profile", POS_PROFILE)
@@ -222,6 +232,11 @@ def enable_multiple_cashier(main=CASHIER):
         profile.append("applicable_for_users", {"user": main, "custom_main_cashier": 1})
     profile.save(ignore_permissions=True)
     frappe.clear_document_cache("POS Profile", POS_PROFILE)
+    # URY gives an order to the cashier whose open shift covers its room: the second
+    # cashier covers the dining room, the main cashier takes the rest
+    _set_room(CASHIER2, ROOM)
+    # the flows commit, so a rollback at the end of a test class must not undo the switch
+    frappe.db.commit()
     return profile
 
 
@@ -231,7 +246,9 @@ def disable_multiple_cashier():
     for row in profile.applicable_for_users:
         row.custom_main_cashier = 0
     profile.save(ignore_permissions=True)
+    _set_room(CASHIER2, None)
     frappe.clear_document_cache("POS Profile", POS_PROFILE)
+    frappe.db.commit()
     return profile
 
 
@@ -315,7 +332,7 @@ def open_pos(user=CASHIER):
     return opening
 
 
-def place_order(user, items, table=None, order_type="Dine In", invoice=None, customer=CUSTOMER, no_of_pax=1):
+def place_order(user, items, table=None, order_type="Dine In", invoice=None, customer=CUSTOMER, no_of_pax=1, room=ROOM):
     """Take (or update) an order through `sync_order`. `items` is [(item_code, qty), ...];
     prices are set by the server from the menu. Returns the draft POS Invoice name."""
     require_test_site()
@@ -337,6 +354,7 @@ def place_order(user, items, table=None, order_type="Dine In", invoice=None, cus
             table=table,
             invoice=invoice,
             order_type=order_type,
+            room=room,
         )
     if not result or result.get("status") == "Failure" or not result.get("name"):
         frappe.throw(f"sync_order did not create the order: {result}")
@@ -379,23 +397,114 @@ def pay_order(invoice, user=CASHIER, discount=None):
     return frappe.get_doc("POS Invoice", invoice)
 
 
-def close_shift(opening, keep_transactions=True):
-    """Close the shift the way ERPNext's own desk does (`make_closing_entry_from_opening`):
-    the closing entry lists the unconsolidated invoices of the cashier. With
-    keep_transactions=False the list is dropped, which is what the URY POS used to send."""
-    require_test_site()
-    from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import (
-        make_closing_entry_from_opening,
-    )
+def _closing_rows(opening, invoices):
+    """What the URY POS closing dialog computes from the invoices it lists: totals, the
+    tax by account and rate, and the expected amount per payment mode."""
+    totals = {"grand_total": 0, "net_total": 0, "total_quantity": 0}
+    taxes, expected = [], {}
+    for invoice in invoices:
+        totals["grand_total"] += invoice.grand_total
+        totals["net_total"] += invoice.net_total
+        totals["total_quantity"] += invoice.total_qty
+        for tax in invoice.taxes:
+            row = next((t for t in taxes if t["account_head"] == tax.account_head and t["rate"] == tax.rate), None)
+            if row:
+                row["amount"] += tax.tax_amount
+            else:
+                taxes.append({"account_head": tax.account_head, "rate": tax.rate, "amount": tax.tax_amount})
+        for payment in invoice.payments:
+            amount = payment.amount
+            if payment.account == invoice.account_for_change_amount:
+                amount -= invoice.change_amount or 0
+            expected[payment.mode_of_payment] = expected.get(payment.mode_of_payment, 0) + amount
 
+    modes = {d.mode_of_payment: d.opening_amount for d in opening.balance_details}
+    payments = [
+        {
+            "mode_of_payment": mode,
+            "opening_amount": modes.get(mode, 0),
+            "expected_amount": expected.get(mode, 0) + modes.get(mode, 0),
+            "closing_amount": expected.get(mode, 0) + modes.get(mode, 0),
+        }
+        for mode in sorted(set(modes) | set(expected))
+    ]
+    return totals, taxes, payments
+
+
+def close_shift(opening, keep_transactions=True, only=None, extra=()):
+    """Close the shift the way the URY POS dialog does: list the invoices with
+    `ury.ury.api.pos_closing.get_pos_invoices`, create the POS Closing Entry as a draft
+    with them as `pos_transactions`, then submit it.
+
+    keep_transactions=False sends no invoice list (what the POS used to do), `only`
+    restricts the list to the given invoice names, `extra` adds names that were not listed.
+    """
+    require_test_site()
+    from ury.ury.api.pos_closing import get_pos_invoices
+
+    end = now_datetime()
     with as_user(opening.user):
-        closing = make_closing_entry_from_opening(opening)
-        closing.posting_date = getdate()
-        closing.posting_time = now_datetime().strftime("%H:%M:%S")
-        if not keep_transactions:
-            closing.set("pos_transactions", [])
-        for row in closing.payment_reconciliation:
-            row.closing_amount = row.expected_amount
+        invoices = get_pos_invoices(opening.period_start_date, end, POS_PROFILE, opening.user)
+        if only is not None:
+            invoices = [inv for inv in invoices if inv.name in only]
+        totals, taxes, payments = _closing_rows(opening, invoices)
+
+        transactions = [
+            {
+                "pos_invoice": inv.name,
+                "posting_date": inv.posting_date,
+                "grand_total": inv.grand_total,
+                "customer": inv.customer,
+                "is_return": inv.is_return,
+                "return_against": inv.return_against,
+            }
+            for inv in invoices
+        ] + [{"pos_invoice": name} for name in extra]
+
+        closing = frappe.get_doc(
+            {
+                "doctype": "POS Closing Entry",
+                "company": COMPANY,
+                "pos_profile": POS_PROFILE,
+                "pos_opening_entry": opening.name,
+                "user": opening.user,
+                "period_start_date": opening.period_start_date,
+                "period_end_date": end,
+                "posting_date": getdate(end),
+                "posting_time": end.strftime("%H:%M:%S"),
+                "pos_transactions": transactions if keep_transactions else [],
+                "taxes": taxes,
+                "payment_reconciliation": payments,
+                **totals,
+            }
+        )
+        closing.insert(ignore_permissions=True)
+        closing.submit()
+    return closing
+
+
+def close_sub_shift(opening):
+    """A sub cashier closes the shift (Sub POS Closing), as the POS dialog does."""
+    require_test_site()
+    from ury.ury.doctype.sub_pos_closing.sub_pos_closing import get_pos_invoices
+
+    end = now_datetime()
+    with as_user(opening.user):
+        invoices = get_pos_invoices(opening.period_start_date, end, POS_PROFILE, opening.user)
+        totals, _taxes, payments = _closing_rows(opening, invoices)
+        closing = frappe.get_doc(
+            {
+                "doctype": "Sub POS Closing",
+                "company": COMPANY,
+                "pos_profile": POS_PROFILE,
+                "pos_opening_entry": opening.name,
+                "user": opening.user,
+                "period_start_date": opening.period_start_date,
+                "period_end_date": end,
+                "payment_reconciliation": [dict(row, difference=0) for row in payments],
+                **totals,
+            }
+        )
         closing.insert(ignore_permissions=True)
         closing.submit()
     return closing
@@ -420,11 +529,9 @@ class URYFlowTestCase(URYTestCase):
     """For tests that go through the real order / payment / closing flows.
 
     Those flows commit (URY's hooks call frappe.db.commit()), so nothing is rolled
-    back: the transactions of earlier tests are deleted first and every test uses its
-    own table.
+    back: the transactions of earlier tests are deleted before every test.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    def setUp(self):
+        super().setUp()
         reset_transactions()

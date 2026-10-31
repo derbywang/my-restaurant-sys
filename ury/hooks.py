@@ -162,9 +162,9 @@ before_uninstall = "ury.uninstall.uninstall"
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	"POS Closing Entry": "ury.overrides.pos_closing_entry.URYPOSClosingEntry",
+}
 
 # Document Events
 # ---------------
@@ -237,7 +237,9 @@ scheduler_events = {
 # ------------------------------
 #
 override_whitelisted_methods = {
-	"erpnext.setup.demo.clear_demo_data": "ury.setup.demo.clear_demo_data"
+	"erpnext.setup.demo.clear_demo_data": "ury.setup.demo.clear_demo_data",
+	# the desk's POS Closing Entry form lists the invoices with this method
+	"erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry.get_pos_invoices": "ury.ury.api.pos_closing.get_pos_invoices",
 }
 #
 # each overriding function accepts a `data` argument;

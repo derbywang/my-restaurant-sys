@@ -1,11 +1,46 @@
 import frappe
+from frappe import _
 
 def before_save(doc, method):
     sub_pos_close_check(doc, method)
 
 def validate(doc, method):
+    validate_no_open_orders(doc, method)
     calculate_closing_amount(doc, method)
     validate_cashier(doc, method)
+
+
+def validate_no_open_orders(doc, method):
+    """交班前检查：这个收银台（POS Profile）还有未结订单时，禁止交班。
+
+    URY 的订单就是草稿状态（docstatus=0）的 POS Invoice，
+    包括“未出账单（Unbilled）”和“已打印账单、待收款（Draft）”两种。
+    """
+    open_orders = frappe.get_all(
+        "POS Invoice",
+        filters={"pos_profile": doc.pos_profile, "docstatus": 0},
+        fields=["name", "restaurant_table", "order_type", "invoice_printed", "grand_total", "currency"],
+        order_by="creation asc",
+        limit_page_length=0,
+    )
+    if not open_orders:
+        return
+
+    lines = []
+    for inv in open_orders[:10]:
+        place = inv.restaurant_table or inv.order_type or "-"
+        state = _("Billed, awaiting payment") if inv.invoice_printed else _("Unbilled")
+        amount = frappe.utils.fmt_money(inv.grand_total, currency=inv.currency)
+        lines.append(f"{inv.name} ({place}, {state}, {amount})")
+    if len(open_orders) > 10:
+        lines.append(_("... and {0} more").format(len(open_orders) - 10))
+
+    frappe.throw(
+        _("There are {0} open order(s) on this POS. Settle or cancel them before closing the shift: {1}").format(
+            len(open_orders), "; ".join(lines)
+        ),
+        title=_("Open Orders"),
+    )
 
 
 def sub_pos_close_check(doc,method):

@@ -87,13 +87,16 @@
 
 ### 4.2 登录页 — 阶段 2
 
-- 设置：`/app/website-settings` → 勾选 **Show Language Picker**。只启用 Language 主数据中的 ja / zh / ko / en。
-- 代码：在 `ury/ury/controllers/setup_redirect.py` 的 `on_session_creation` 中增加：如果 Cookie `preferred_language` 属于允许的语言，并且和当前用户的语言不同，就更新 `User.language`。
+- 设置：不手动改，做成迁移补丁 `ury/patches/v2_0/staff_language_settings.py`：Website Settings 的 **Show Language Picker** = 1；Language 中只启用 ja / zh / ko / en，其余停用。System Settings 的默认语言由各门店自己决定，不放进补丁。
+  安装 app 时 Frappe 会把 `patches.txt` 里的补丁直接标记为“已执行”而不运行，所以 `ury/install.py` 的 `after_install` 也要调用同一个函数。
+- 代码：在 `ury/ury/ury/controllers/setup_redirect.py` 的 `on_session_creation` 中增加：如果 Cookie `preferred_language` 属于允许的语言，并且和当前用户的语言不同，就更新 `User.language`。允许的语言来自 `ury/ury/api/language.py` 的 `STAFF_LANGUAGE_CODES`（只定义一份）。
+  同步之后 **删除** 这个 Cookie（Frappe 自己不会清除它），使选择只对紧接着的那次登录生效；否则在共用设备上，下一个登录的员工会继承上一个人在登录页选的语言（违反 R4）。
 
 ### 4.3 ERPNext 后台（`/app`）— 阶段 2
 
 - 按 User.language 显示。System Settings 的默认语言设为 `ja`。
-- 在后台的用户菜单中加入“语言”切换（客户端脚本，或放在 URY 已注入的 `public/js` 里），调用 `set_staff_language`。
+- 在后台的用户菜单中加入“语言”：`ury/public/js/staff_language.js`（经 `hooks.py` 的 `app_include_js` 注入），在页面加载时往 `frappe.boot.navbar_settings.settings_dropdown` 插入一项 Action（Frappe 的菜单模板把 `action` 当作 JS 表达式执行），位置在 “Log out” 之前的分隔线上方；按 action 去重，不会重复添加。点击后弹出语言选择，调用 `set_staff_language`，成功后刷新页面。
+  不用 Navbar Settings 的数据行：那是站点数据，要再写补丁处理已有站点，标准项也不能删除。
 - 韩文缺失的翻译，在 `/app/translation` 中补充（优先补日常使用的画面），然后用 fixtures 导出。
 
 ### 4.4 URY 管理后台（`frontend/`）— 阶段 3

@@ -1,5 +1,7 @@
 import frappe
 
+from ury.ury.api.language import STAFF_LANGUAGE_CODES
+
 # Paths that must keep working during setup (wizard SPA, APIs, static files, login).
 _SKIP_PREFIXES = ("ury", "api", "assets", "files", "private", "login")
 
@@ -75,10 +77,36 @@ def website_path_resolver(path):
     return resolve_path(path)
 
 
-def on_session_creation(login_manager=None):
-    """Hint login toward the wizard. LoginManager.set_user_info may overwrite
-    home_page afterwards; website_path_resolver is the real intercept.
+def _sync_login_language(login_manager=None):
+    """Apply the language picked on the login page to the user who just logged in.
+
+    The login page picker writes the `preferred_language` cookie, which Frappe
+    only honours for Guests. Copy it to User.language when it is one of the
+    staff languages, then drop it so it applies to this login only: otherwise,
+    on a shared device, the next person to log in would inherit it.
     """
+    user = getattr(login_manager, "user", None) or frappe.session.user
+    if not user or user == "Guest" or not getattr(frappe.local, "request", None):
+        return
+
+    lang = frappe.request.cookies.get("preferred_language")
+    if not lang:
+        return
+
+    if lang in STAFF_LANGUAGE_CODES and lang != frappe.db.get_value("User", user, "language"):
+        frappe.db.set_value("User", user, "language", lang)
+        frappe.clear_cache(user=user)
+
+    frappe.local.cookie_manager.delete_cookie("preferred_language")
+
+
+def on_session_creation(login_manager=None):
+    """Apply the login-page language, then hint login toward the wizard.
+    LoginManager.set_user_info may overwrite home_page afterwards;
+    website_path_resolver is the real intercept.
+    """
+    _sync_login_language(login_manager)
+
     if is_ury_setup_complete():
         return
     frappe.local.response["message"] = "Logged In"

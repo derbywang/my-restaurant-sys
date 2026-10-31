@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -176,3 +176,78 @@ class TestBootAndSessionHooks(FrappeTestCase):
 		extend_bootinfo(bootinfo)
 		self.assertIs(bootinfo.ury_setup_complete, True)
 		self.assertNotIn("ury_setup_wizard_target", bootinfo)
+
+
+class TestLoginLanguageSync(FrappeTestCase):
+	"""on_session_creation copies the login page's preferred_language cookie to User.language."""
+
+	def setUp(self):
+		# Tests run on the dev site: remember and restore the real user's language.
+		self.user = "Administrator"
+		self._original = frappe.db.get_value("User", self.user, "language")
+		self.addCleanup(self._restore)
+
+	def _restore(self):
+		frappe.db.set_value("User", self.user, "language", self._original)
+		frappe.db.commit()
+
+	def _login(self, cookie, user=None):
+		request = MagicMock()
+		request.cookies = {"preferred_language": cookie} if cookie else {}
+		cookie_manager = MagicMock()
+		with (
+			patch.object(frappe.local, "request", request, create=True),
+			patch.object(frappe.local, "cookie_manager", cookie_manager, create=True),
+			patch("ury.ury.controllers.setup_redirect.is_ury_setup_complete", return_value=True),
+		):
+			on_session_creation(MagicMock(user=user or self.user))
+		return cookie_manager
+
+	def test_allowed_cookie_updates_user_language_and_is_consumed(self):
+		frappe.db.set_value("User", self.user, "language", "en")
+		cookie_manager = self._login("ko")
+		self.assertEqual(frappe.db.get_value("User", self.user, "language"), "ko")
+		cookie_manager.delete_cookie.assert_called_once_with("preferred_language")
+
+	def test_same_language_is_not_written(self):
+		frappe.db.set_value("User", self.user, "language", "ja")
+		with patch("ury.ury.controllers.setup_redirect.frappe.db.set_value") as set_value:
+			cookie_manager = self._login("ja")
+		set_value.assert_not_called()
+		cookie_manager.delete_cookie.assert_called_once_with("preferred_language")
+
+	def test_disallowed_language_is_ignored_but_cookie_is_consumed(self):
+		frappe.db.set_value("User", self.user, "language", "en")
+		cookie_manager = self._login("fr")
+		self.assertEqual(frappe.db.get_value("User", self.user, "language"), "en")
+		cookie_manager.delete_cookie.assert_called_once_with("preferred_language")
+
+	def test_no_cookie_leaves_language_alone(self):
+		frappe.db.set_value("User", self.user, "language", "zh")
+		cookie_manager = self._login(None)
+		self.assertEqual(frappe.db.get_value("User", self.user, "language"), "zh")
+		cookie_manager.delete_cookie.assert_not_called()
+
+	def test_guest_is_skipped(self):
+		with patch("ury.ury.controllers.setup_redirect.frappe.db.set_value") as set_value:
+			cookie_manager = self._login("ko", user="Guest")
+		set_value.assert_not_called()
+		cookie_manager.delete_cookie.assert_not_called()
+
+	def test_only_the_logging_in_user_is_changed(self):
+		before = frappe.db.get_value("User", "Guest", "language")
+		self._login("ko")
+		self.assertEqual(frappe.db.get_value("User", "Guest", "language"), before)
+
+	@patch("ury.ury.controllers.setup_redirect._setup_wizard_target", return_value="/ury/setup-wizard/0")
+	@patch("ury.ury.controllers.setup_redirect.is_ury_setup_complete", return_value=False)
+	def test_wizard_redirect_still_applies(self, _mock_complete, _mock_target):
+		request = MagicMock()
+		request.cookies = {"preferred_language": "ja"}
+		frappe.local.response.pop("home_page", None)
+		with (
+			patch.object(frappe.local, "request", request, create=True),
+			patch.object(frappe.local, "cookie_manager", MagicMock(), create=True),
+		):
+			on_session_creation(MagicMock(user=self.user))
+		self.assertEqual(frappe.local.response.get("home_page"), "/ury/setup-wizard/0")

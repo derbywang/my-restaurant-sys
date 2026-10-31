@@ -336,6 +336,7 @@ class TestUryPosApi(unittest.TestCase):
         
         self.assertEqual(result.get("status"), "success")
         self.assertTrue(frappe.db.exists("Customer", "Test Auth Customer"))
+        self.assertTrue(frappe.db.exists("Customer", result.get("name")))
 
 
 

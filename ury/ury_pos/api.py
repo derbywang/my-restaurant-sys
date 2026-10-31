@@ -977,6 +977,9 @@ def create_customer(customer_name, mobile_number=None, customer_group=None, terr
         return {
             "status": "success",
             "message": "Customer created successfully",
+            # The docname can differ from customer_name (e.g. "Name - 2" when
+            # customer names collide); callers must link orders by this.
+            "name": customer.name,
             "customer_name": customer_name,
             "mobile_number": mobile_number,
             "customer_group": customer_group,

@@ -9,3 +9,4 @@ ury.patches.v2_0.admin_permissions
 ury.patches.v2_0.staff_language_settings
 ury.patches.v2_0.jp_tax_structure
 ury.patches.v2_0.jp_tax_order_type_categories
+ury.patches.v2_0.jp_currency_format

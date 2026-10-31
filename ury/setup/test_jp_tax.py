@@ -77,11 +77,14 @@ class TestJPTaxStructure(FrappeTestCase):
 			self.assertTrue(all(row.valid_from for row in doc.taxes))
 		self.assertEqual(frappe.db.get_value("Item Group", "Consumable", "parent_item_group"), "食品")
 
-	def test_menu_items_keep_their_leaf_group_so_the_kitchen_routing_is_unchanged(self):
+	def test_menu_items_stay_in_their_leaf_groups_below_a_tax_group(self):
+		# the kitchen routes by the leaf group of the item, so the items must not move
+		routed = set(frappe.get_all("URY Production Item Groups", pluck="item_group"))
 		for item in frappe.get_all("URY Menu Item", pluck="item"):
-			self.assertEqual(frappe.db.get_value("Item", item, "item_group"), "Consumable")
-		units = frappe.get_all("URY Production Item Groups", pluck="item_group")
-		self.assertIn("Consumable", units)
+			group = frappe.db.get_value("Item", item, "item_group")
+			self.assertEqual(frappe.db.get_value("Item Group", group, "is_group"), 0, item)
+			self.assertTrue(has_tax_group(group), item)
+			self.assertIn(group, routed, item)
 		self.assertEqual(ungrouped_menu_item_groups(), [])
 
 	def test_restaurant_uses_the_new_template_and_the_old_one_is_disabled(self):

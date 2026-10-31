@@ -16,6 +16,10 @@ def after_install():
 
         apply_jp_tax_setup()
 
+        from ury.setup.jp_currency import apply_jpy_format
+
+        apply_jpy_format()
+
         click.secho("Thank you for installing URY App!", fg="green")
 
         

@@ -136,7 +136,12 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
 
 ### 4.5 JPY 的格式与精度
 
-- 要让金额精度变成 0：**不能**把 System Settings 的 `currency_precision` 设为 0（0 会被当作未设置，`frappe/model/meta.py` 的 `get_field_precision`）。用 **`use_number_format_from_currency = 1`**（JPY 的 `number_format` 已经是 `#,###`），或把 System Settings 的 `number_format` 改成 `#,###`。这是站点级设置；这家门店只使用 JPY，影响可控，修改前评估对已有数据的影响（已存数据不变，只影响以后的取整）。
+- 要让金额精度变成 0，**只改 System Settings 的 `number_format`，设为 `#,###`**（补丁 `jp_currency_format`，只在“日本公司 + JPY”的站点执行）：
+  - 单据金额字段的精度：开关 `use_number_format_from_currency` 为 0 时取 `number_format`（`frappe/model/meta.py` 的 `get_field_precision`）；
+  - Python 的 `fmt_money`（每日损益打印、交班邮件）**一律读 `number_format`，与那个开关无关**（`frappe/utils/data.py`）——所以只打开 `use_number_format_from_currency` 并不能消除打印里的 `.50`；
+  - Desk 前端也读它（`number_format.js` 的 `get_number_format`）。
+  - **不能**用 `currency_precision = 0`（0 会被当作未设置）；`use_number_format_from_currency` 保持 0；`Currency JPY` 的 `number_format` 本来就是 `#,###`。
+  - 这是站点级设置，对站点内所有币种生效；这家门店只使用 JPY。已存的单据不变，只影响以后的取整（取整方法是银行家取整）。尚未做交班合并的旧账单（金额带小数）要在切换前处理掉，否则合并后的 Sales Invoice 可能和各张 POS 账单差 1 日元。
 - `smallest_currency_fraction_value` 保持 0 即可（0 时圆整合计走 `rounded()`），不需要设为 1。
 - 圆整合计（Rounded Total）：日元没有小数，T4 之后税额是整数，`rounded_total` 与 `grand_total` 相等；`disable_rounded_total` 保持现状。
 - 确认每日损益的打印不再出现 `.50` 这样的小数（该打印用 `fmt_money`，精度跟随上面的设置）。
@@ -209,3 +214,4 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
 - **外卖平台的单（Aggregators）**：在日本一般按 8% 计税。现有的 `custom_no_taxes` 行为（分店设置为不计税时，这类单不加税）**保持不变**，但**需要向平台和税理士确认**：平台方是否开票、店里的小票和税额怎么处理、是否应当按 8% 计税。
 - 菜单价格要由门店按不含税价重新录入（补丁不会自动换算）。
 - 已有的草稿 POS Invoice 的处理方式（切换前先结清或取消）。
+- **待办（暂缓）**：`URY Menu.make_price_list`（`ury_menu.py`）目前是“删除该价目表的全部 Item Price，再逐条重新插入”（在同一个事务里，不会只留下删除的结果，但每次保存菜单都会重建，不保留价格行上的其他字段）。可以改成逐条同步：价格变化才更新、缺少才插入、菜单里已没有的才删除。这次暂缓，不修改 URY 原有的行为——价格消失的根本原因是在开发站点上运行了 `bench run-tests`（ERPNext 的 `before_tests` 会删除全部 Item Price），已用 `allow_tests=False` 防止。

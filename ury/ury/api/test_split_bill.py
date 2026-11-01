@@ -4,8 +4,6 @@ These tests describe what the code does now (docs/design/jp-tax-design.md, 待�
 where the result is not what a cashier would expect, the test says so. Run on the test site only.
 """
 
-import unittest
-
 import frappe
 
 from ury.setup.jp_tax import refresh_receipt_format
@@ -28,12 +26,6 @@ from ury.ury.api.order_totals import preview_order_totals
 from ury.ury.api.test_receipt import render, text
 from ury.ury.doctype.ury_order.ury_order import cancel_order, split_bill
 from ury.ury_pos.api import merge_bills
-
-
-# The bill split off gets no tax rows (split_bill copies the header, not the taxes), so it is
-# short by the tax: 500 instead of 550. Reported, not fixed (the task was to test); these
-# tests state the right result and are expected to fail until split_bill is fixed.
-split_off_bill_has_no_tax = unittest.expectedFailure
 
 
 class TestSplitBill(URYFlowTestCase):
@@ -76,7 +68,6 @@ class TestSplitBill(URYFlowTestCase):
 
 	# --- the amounts -----------------------------------------------------------------------
 
-	@split_off_bill_has_no_tax
 	def test_the_two_bills_add_up_to_the_original(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
 		new = self._split(source, ALCOHOL_ITEM)
@@ -93,16 +84,31 @@ class TestSplitBill(URYFlowTestCase):
 		self.assertEqual(self._total(one)["total_taxes_and_charges"], 95)
 		self.assertEqual([self._total(name)["total_taxes_and_charges"] for name in two], [47, 47])
 
-	def test_the_discount_stays_on_the_original_bill_only(self):
-		"""Not what a cashier expects: the new bill has no discount. (Not changed; reported.)"""
+	def test_the_new_bill_gets_the_discount_percentage_of_the_original(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], discount=10)
 		self.assertEqual(self._total(source)["rounded_total"], 1485)
 		new = self._split(source, ALCOHOL_ITEM)
-		self.assertEqual(self._values(source, "additional_discount_percentage").additional_discount_percentage, 10)
-		self.assertEqual(self._values(new, "additional_discount_percentage").additional_discount_percentage, 0)
-		self.assertEqual(self._total(source)["rounded_total"], 990)
+		for name in (source, new):
+			self.assertEqual(self._values(name, "additional_discount_percentage").additional_discount_percentage, 10)
+		self.assertEqual(self._total(source)["rounded_total"], 990)  # 1,000 - 10% = 900, +10%
+		self.assertEqual(self._total(new)["rounded_total"], 495)  # 500 - 10% = 450, +10%
+		self.assertEqual(self._total(source)["rounded_total"] + self._total(new)["rounded_total"], 1485)
 
-	@split_off_bill_has_no_tax
+	def test_splitting_a_discounted_bill_can_change_the_tax_by_a_yen(self):
+		"""Two beers at 5% off: 950 net, 95 tax. Split into one beer each: 475 net, 47.5 -> 47 tax
+		each, 94 together (T4 rounds the tax of each rate once per bill; 待确认事项)."""
+		source = self._bill([(ALCOHOL_ITEM, 2)], discount=5)
+		self.assertEqual(self._total(source)["total_taxes_and_charges"], 95)
+		new = self._split(source, ALCOHOL_ITEM)
+		self.assertEqual([self._total(name)["total_taxes_and_charges"] for name in (source, new)], [47, 47])
+
+	def test_the_new_bill_is_taxed_like_the_original(self):
+		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
+		new = self._split(source, ALCOHOL_ITEM)
+		saved = frappe.get_doc("POS Invoice", new)
+		self.assertEqual((saved.tax_category, saved.rounded_total), ("店内飲食", 550))
+		self.assertEqual([(t.rate, t.tax_amount) for t in saved.taxes if t.tax_amount], [(10, 50)])
+
 	def test_take_away_keeps_its_own_tax_on_both_bills(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], order_type="Take Away", table=TABLES[0])
 		new = self._split(source, FOOD_ITEM)
@@ -112,7 +118,6 @@ class TestSplitBill(URYFlowTestCase):
 
 	# --- paying, the shift, the receipt --------------------------------------------------------
 
-	@split_off_bill_has_no_tax
 	def test_each_bill_is_paid_on_its_own_and_the_shift_counts_both(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
 		new = self._split(source, ALCOHOL_ITEM)
@@ -124,7 +129,6 @@ class TestSplitBill(URYFlowTestCase):
 		self.assertEqual(closing.grand_total, 1650)
 		self.assertEqual(sum(p.expected_amount for p in closing.payment_reconciliation), 1650)
 
-	@split_off_bill_has_no_tax
 	def test_the_receipts_show_only_the_items_of_each_bill(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
 		new = self._split(source, ALCOHOL_ITEM)
@@ -133,9 +137,8 @@ class TestSplitBill(URYFlowTestCase):
 		out = text(render(new))
 		self.assertIn("合計（税込） | ¥550", out)
 		self.assertIn(ALCOHOL_ITEM, out)
-		self.assertNotIn(FOOD_ITEM, out)
+		self.assertNotIn("1 × ¥1,000", out)  # (the company has the name of the sushi item)
 
-	@split_off_bill_has_no_tax
 	def test_the_prefilled_payment_row_of_the_new_bill_does_not_break_paying(self):
 		source = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
 		new = self._split(source, ALCOHOL_ITEM)
@@ -223,7 +226,6 @@ class TestSplitBill(URYFlowTestCase):
 		self.assertEqual(self._total(first)["rounded_total"], 1100 + 1100)
 		self.assertFalse(self._values(new, "custom_merged_pos_invoice").custom_merged_pos_invoice)
 
-	@split_off_bill_has_no_tax
 	def test_a_split_bill_can_be_unmerged(self):
 		first = self._bill([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)])
 		second = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])

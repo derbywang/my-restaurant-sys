@@ -619,6 +619,9 @@ def split_bill(source_invoice, items_to_move, customer=None):
         if source.get(field) is not None:
             new_invoice.set(field, source.get(field))
 
+    # the discount percentage of the bill applies to what was moved as well
+    new_invoice.additional_discount_percentage = source.additional_discount_percentage
+
     split_group = source.get("custom_split_group") or frappe.generate_hash(length=10)
     source.custom_split_group = split_group
 
@@ -647,6 +650,16 @@ def split_bill(source_invoice, items_to_move, customer=None):
     for item in items_to_remove:
         source.remove(item)
 
+    # The tax is worked out again for the new bill (T4: tax category of the order type, the tax of
+    # each rate rounded once per bill): the rows of the taxes table are not copied, so the bill
+    # needs its tax template (set_missing_values replaces it with the POS Profile's, usually
+    # none). A bill without tax rows (no-tax aggregator orders) stays without.
+    tax_template = None
+    if source.taxes:
+        tax_template = source.taxes_and_charges or frappe.db.get_value(
+            "URY Restaurant", source.restaurant, "default_tax_template"
+        )
+
     payment_mode = source.payments[0].mode_of_payment if source.payments else None
 
     frappe.flags.ury_bill_split = True
@@ -657,6 +670,10 @@ def split_bill(source_invoice, items_to_move, customer=None):
 
         new_invoice.set_missing_values()
         new_invoice.run_method("set_missing_values")
+        if tax_template:
+            new_invoice.taxes_and_charges = tax_template
+            new_invoice.set("taxes", [])
+            new_invoice.set_taxes()
         new_invoice.calculate_taxes_and_totals()
 
         if payment_mode and new_invoice.invoice_created == 0:

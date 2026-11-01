@@ -30,4 +30,4 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_receipt`
 - **合并账单（会計合算）**：改了 `merge_bills` / `make_invoice` / `cancel_order` / `preview_order_totals` 或列表接口后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`
-- **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`；其中标为预期失败的测试对应已知问题（见 docs/design/jp-tax-design.md 第 7 章），修复后要去掉标记。
+- **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。

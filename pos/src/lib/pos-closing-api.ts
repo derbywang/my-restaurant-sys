@@ -38,6 +38,7 @@ export interface POSClosingPayment {
   mode_of_payment: string;
   amount: number;
   account: string;
+  type?: string;
 }
 
 /**

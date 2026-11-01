@@ -15,6 +15,7 @@ from ury.setup.test_site import (
 	URYFlowTestCase,
 	as_user,
 	close_shift,
+	_closing_rows,
 	close_sub_shift,
 	disable_multiple_cashier,
 	enable_multiple_cashier,
@@ -361,3 +362,55 @@ class TestSubCashierOpenOrders(URYFlowTestCase):
 		self.assertEqual(close_sub_shift(self.sub_opening).docstatus, 1)
 		# the main cashier's closing is the last safeguard
 		self.assertEqual(frappe.db.count("POS Invoice", {"docstatus": 0}), 1)
+
+
+class TestChangeInTheShift(URYFlowTestCase):
+	"""The change given back is taken off the cash of the shift. The closing dialog and Sub POS
+	Closing pick the row the change came out of the way ERPNext's `get_change_payment_row` does:
+	the Cash row whose account is the invoice's account for change amount, else any row of that
+	account, else any Cash row. `_closing_rows` is the harness copy of that rule."""
+
+	def _paid_with_cash(self, handed_over, change_account=None):
+		from ury.ury.doctype.ury_order.ury_order import make_invoice
+
+		self.opening = open_pos(CASHIER)
+		name = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		doc = frappe.get_doc("POS Invoice", name)
+		print_bill(name, CASHIER)
+		with as_user(CASHIER):
+			make_invoice(
+				customer=doc.customer,
+				payments=[{"mode_of_payment": "Cash", "amount": handed_over}],
+				cashier=CASHIER,
+				pos_profile=POS_PROFILE,
+				owner=CASHIER,
+				table=doc.restaurant_table,
+				invoice=name,
+			)
+		if change_account is not None:
+			frappe.db.set_value("POS Invoice", name, "account_for_change_amount", change_account)
+		return frappe.get_doc("POS Invoice", name)
+
+	def _expected_cash(self, invoice):
+		_totals, _taxes, payments = _closing_rows(self.opening, [invoice])
+		return next(p["expected_amount"] - p["opening_amount"] for p in payments if p["mode_of_payment"] == "Cash")
+
+	def test_change_is_taken_off_the_cash_when_the_accounts_match(self):
+		invoice = self._paid_with_cash(2000)
+		self.assertEqual(invoice.change_amount, 2000 - invoice.rounded_total)
+		self.assertEqual(self._expected_cash(invoice), invoice.rounded_total)
+
+	def test_change_is_taken_off_the_cash_when_the_change_account_is_not_a_payment_account(self):
+		"""The account for change amount of the invoice is not the account of any payment row:
+		ERPNext still takes the change off the Cash row."""
+		invoice = self._paid_with_cash(2000, change_account="Some Other Account")
+		self.assertEqual(self._expected_cash(invoice), invoice.rounded_total)
+
+	def test_change_is_taken_off_the_cash_when_the_change_account_is_empty(self):
+		invoice = self._paid_with_cash(2000, change_account="")
+		self.assertEqual(self._expected_cash(invoice), invoice.rounded_total)
+
+	def test_an_invoice_without_change_is_untouched(self):
+		invoice = self._paid_with_cash(1100, change_account="Some Other Account")
+		self.assertEqual(invoice.change_amount, 0)
+		self.assertEqual(self._expected_cash(invoice), 1100)

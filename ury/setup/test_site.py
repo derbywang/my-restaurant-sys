@@ -397,6 +397,17 @@ def pay_order(invoice, user=CASHIER, discount=None):
     return frappe.get_doc("POS Invoice", invoice)
 
 
+def change_payment_row(payments, change_account):
+    """The payment row the change came out of: ERPNext's `get_change_payment_row` (the closing
+    dialog and Sub POS Closing have the same rule)."""
+    same_account = [p for p in payments if p.account == change_account]
+    return (
+        next((p for p in same_account if p.type == "Cash"), None)
+        or next(iter(same_account), None)
+        or next((p for p in payments if p.type == "Cash"), None)
+    )
+
+
 def _closing_rows(opening, invoices):
     """What the URY POS closing dialog computes from the invoices it lists: totals, the
     tax by account and rate, and the expected amount per payment mode."""
@@ -412,9 +423,10 @@ def _closing_rows(opening, invoices):
                 row["amount"] += tax.tax_amount
             else:
                 taxes.append({"account_head": tax.account_head, "rate": tax.rate, "amount": tax.tax_amount})
+        change_row = change_payment_row(invoice.payments, invoice.account_for_change_amount)
         for payment in invoice.payments:
             amount = payment.amount
-            if payment.account == invoice.account_for_change_amount:
+            if payment is change_row:
                 amount -= invoice.change_amount or 0
             expected[payment.mode_of_payment] = expected.get(payment.mode_of_payment, 0) + amount
 

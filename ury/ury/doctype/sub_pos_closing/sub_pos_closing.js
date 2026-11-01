@@ -199,10 +199,22 @@ function add_to_pos_transaction(d, frm) {
 }
 
 
+// The payment row the change came out of, chosen like ERPNext's get_change_payment_row:
+// the Cash row of the change account, else any row of that account, else any Cash row.
+function get_change_payment_row(payments, change_account) {
+	const same_account = payments.filter(p => p.account == change_account);
+	return (
+		same_account.find(p => p.type == "Cash") ||
+		same_account[0] ||
+		payments.find(p => p.type == "Cash")
+	);
+}
+
 function refresh_payments(d, frm) {
+	const change_row = get_change_payment_row(d.payments, d.account_for_change_amount);
 	d.payments.forEach(p => {
 		const payment = frm.doc.payment_reconciliation.find(pay => pay.mode_of_payment === p.mode_of_payment);
-		if (p.account == d.account_for_change_amount) {
+		if (p === change_row) {
 			p.amount -= flt(d.change_amount);
 		}
 		if (payment) {

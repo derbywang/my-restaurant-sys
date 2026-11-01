@@ -261,4 +261,5 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
 - **拆单（会計分割）后各自舍入的 ¥1 差异**：税额按“每张账单、每个税率各舍去一次”计算（T4），所以带折扣的账单拆开后，两张的税额之和可能比原账单少 ¥1（例：啤酒 2 瓶打 95 折，税额 ¥95；每张 1 瓶，各 ¥47，合计 ¥94）。与上面合并账单的小票一样，请税理士确认这样记载可以（`test_split_bill.test_each_bill_rounds_its_own_tax_so_the_total_can_differ_by_a_yen`）。
 - **拆单的税额（已修复）**：拆出的新账单原来没有税额行（`split_bill` 只复制表头），只收不含税价，也不继承折扣。现在新账单按原账单的税率模板重新计算（税别按订单类型取 `tax_category`，每个税率每张账单舍去一次），并继承原账单的折扣百分比（`ury.ury.api.test_split_bill`）。
 - **待办（T7 初始设置向导）**：对每个 POS Profile 设置 `account_for_change_amount`，取 Mode of Payment `Cash` 在该公司的科目；没有这个科目就报错并提示先设置（不依赖“回退到公司默认现金科目”）。
-- **待办（拆单修复之后）**：URY 交班对话框（`POSClosingDialog.tsx`）和 `Sub POS Closing`（`sub_pos_closing.js`）扣找零的条件目前是“收款行的科目等于 `account_for_change_amount`”，改成与 ERPNext `get_change_payment_row` 相同的规则（先找科目相同的现金行，找不到就用现金行），避免两个科目不一致时现金多算。
+- **已完成**：交班对话框（`POSClosingDialog.tsx`）、`Sub POS Closing`（`sub_pos_closing.js`）和测试站点的交班辅助函数，扣找零的行改成与 ERPNext `get_change_payment_row` 相同的规则（科目相同的现金行 → 科目相同的任意行 → 任意现金行）。测试：`test_pos_closing.TestChangeInTheShift`。
+- **待办（界面整理，和“¥0 税行不显示”一起做）**：会計分割对话框底部的「元の伝票に残す／新しい伝票へ移す」显示的是不含税金额，没有标明。改成显示含税金额，或至少标「（税抜）」，避免收银员按不含税金额向客人报价。

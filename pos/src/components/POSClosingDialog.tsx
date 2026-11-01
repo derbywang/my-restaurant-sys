@@ -28,6 +28,7 @@ import {
   buildClosingTaxes,
   type OpenPosOpeningEntry,
   type POSClosingInvoice,
+  type POSClosingPayment,
   type ClosingPaymentSummary,
 } from '../lib/pos-closing-api';
 
@@ -100,12 +101,29 @@ interface AggregatedTotals {
 }
 
 /**
+ * The payment row the change came out of, chosen like ERPNext's
+ * get_change_payment_row: the Cash row of the change account, else any row of
+ * that account, else any Cash row.
+ */
+function changePaymentRow(
+  payments: POSClosingPayment[],
+  changeAccount: string
+): POSClosingPayment | undefined {
+  const sameAccount = payments.filter((p) => p.account === changeAccount);
+  return (
+    sameAccount.find((p) => p.type === 'Cash') ||
+    sameAccount[0] ||
+    payments.find((p) => p.type === 'Cash')
+  );
+}
+
+/**
  * Aggregates raw POS Invoice dicts into closing totals and per-mode expected
  * amounts, faithfully porting the logic in
  * ury/ury/doctype/sub_pos_closing/sub_pos_closing.js (refresh_payments /
  * set_form_data): sums grand_total/net_total/total_qty, and for each
- * payment subtracts the invoice's change_amount when the payment account
- * matches account_for_change_amount before accumulating by mode_of_payment.
+ * invoice subtracts its change_amount from the payment row the change came
+ * out of (see changePaymentRow) before accumulating by mode_of_payment.
  */
 function aggregateInvoices(invoices: POSClosingInvoice[]): {
   totals: AggregatedTotals;
@@ -119,9 +137,11 @@ function aggregateInvoices(invoices: POSClosingInvoice[]): {
     totals.netTotal += Number(invoice.net_total) || 0;
     totals.totalQty += Number(invoice.total_qty) || 0;
 
-    (invoice.payments || []).forEach((payment) => {
+    const payments = invoice.payments || [];
+    const changeRow = changePaymentRow(payments, invoice.account_for_change_amount);
+    payments.forEach((payment) => {
       let amount = Number(payment.amount) || 0;
-      if (payment.account === invoice.account_for_change_amount) {
+      if (payment === changeRow) {
         amount -= Number(invoice.change_amount) || 0;
       }
       expectedByMode[payment.mode_of_payment] =

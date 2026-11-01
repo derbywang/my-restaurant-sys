@@ -433,3 +433,7 @@ export async function mergeBills(
   }
   return result;
 } 
+/** 会計合算を解除: both bills stay, as ordinary bills again (the discount is cleared). */
+export async function unmergeBills(invoice: string): Promise<void> {
+  await call.post('ury.ury.api.merged_bill.unmerge_bills', { invoice });
+}

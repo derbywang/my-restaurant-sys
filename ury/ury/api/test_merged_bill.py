@@ -23,6 +23,7 @@ from ury.setup.test_site import (
 	print_bill,
 )
 from ury.ury.api.order_totals import preview_order_totals
+from ury.ury.api.merged_bill import AmountChanged, lock_for_payment, unmerge_bills
 from ury.ury.api.test_receipt import render, text
 from ury.ury_pos.api import getPosInvoice, merge_bills
 
@@ -51,8 +52,9 @@ class TestMergedBill(URYFlowTestCase):
 		with as_user(CASHIER):
 			return preview_order_totals(invoice, discount)
 
-	def _pay(self, invoice, amount, discount=None):
-		"""Settle the way the payment dialog does: one payment of the amount it shows."""
+	def _pay(self, invoice, amount, discount=None, expected=...):
+		"""Settle the way the payment dialog does: one payment of the amount it shows, which is
+		also the amount the server is told to expect."""
 		from ury.ury.doctype.ury_order.ury_order import make_invoice
 
 		doc = frappe.get_doc("POS Invoice", invoice)
@@ -68,6 +70,7 @@ class TestMergedBill(URYFlowTestCase):
 				additionalDiscount=discount,
 				table=doc.restaurant_table,
 				invoice=invoice,
+				expected_total=amount if expected is ... else expected,
 			)
 
 	def _values(self, name, *fields):
@@ -232,6 +235,121 @@ class TestMergedBill(URYFlowTestCase):
 		before = self._snapshot(self.second)
 		place_order(CASHIER, [(FOOD_ITEM, 2)], table=TABLES[0], invoice=self.first)
 		self.assertEqual(self._snapshot(self.second), before)
+
+	# --- 会計合算を解除 ----------------------------------------------------------------
+
+	def _unmerge(self, invoice, user=CASHIER):
+		with as_user(user):
+			return unmerge_bills(invoice)
+
+	def test_unmerging_leaves_two_ordinary_bills(self):
+		kot_before = frappe.db.count("URY KOT")
+		items_before = {n: frappe.get_all("POS Invoice Item", filters={"parent": n}, pluck="qty") for n in (self.first, self.second)}
+		self._unmerge(self.second)  # either bill will do
+		for name, own in ((self.first, 1100), (self.second, 550)):
+			values = self._values(name, "docstatus", "custom_merged_pos_invoice", "custom_merged_total")
+			self.assertEqual(values.docstatus, 0)
+			self.assertFalse(values.custom_merged_pos_invoice)
+			self.assertFalse(values.custom_merged_total)
+			self.assertEqual(frappe.db.count("URY Merged POS Invoice Detail", {"parent": name}), 0)
+			self.assertEqual(frappe.get_all("POS Invoice Item", filters={"parent": name}, pluck="qty"), items_before[name])
+			self.assertEqual(self._preview(name)["rounded_total"], own)
+		self.assertEqual(frappe.db.count("URY KOT"), kot_before)
+		names = [o["name"] for o in self._orders()]
+		self.assertIn(self.first, names)
+		self.assertIn(self.second, names)
+		self.assertFalse(any(o.get("custom_merged_pos_invoice") for o in self._orders()))
+
+	def test_each_bill_is_paid_on_its_own_after_unmerging(self):
+		self._unmerge(self.first)
+		self._pay(self.first, 1100)
+		self.assertEqual(self._values(self.first, "status").status, "Paid")
+		self.assertEqual(self._values(self.second, "status").status, "Draft")
+		self._pay(self.second, 550)
+		self.assertEqual(self._values(self.second, "status").status, "Paid")
+
+	def test_unmerging_clears_the_discount(self):
+		for name in (self.first, self.second):
+			doc = frappe.get_doc("POS Invoice", name)
+			doc.additional_discount_percentage = 10
+			doc.save()
+		self.assertEqual(self._values(self.first, "rounded_total").rounded_total, 990)
+		self._unmerge(self.first)
+		for name, own in ((self.first, 1100), (self.second, 550)):
+			values = self._values(name, "additional_discount_percentage", "discount_amount", "rounded_total")
+			self.assertEqual((values.additional_discount_percentage, values.discount_amount, values.rounded_total), (0, 0, own))
+
+	def test_unmerging_is_refused_when_it_cannot_be_done(self):
+		single = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		with self.assertRaises(frappe.ValidationError):
+			self._unmerge(single)
+		with as_user("Guest"), self.assertRaises(frappe.PermissionError):
+			unmerge_bills(self.first)
+		self.assertEqual(self._values(self.first, "custom_merged_pos_invoice").custom_merged_pos_invoice, self.second)
+
+		self._pay(self.first, 1650)
+		before = (self._snapshot(self.first), self._snapshot(self.second))
+		for name in (self.first, self.second):
+			with self.assertRaises(frappe.ValidationError):
+				self._unmerge(name)
+		self.assertEqual((self._snapshot(self.first), self._snapshot(self.second)), before)
+
+	def test_cancelling_and_unmerging_share_one_function(self):
+		from ury.ury.api import merged_bill
+		from ury.ury.doctype.ury_order import ury_order
+
+		calls = []
+		original = merged_bill.unmerge_pair
+		merged_bill.unmerge_pair = lambda *names: calls.append(names) or original(*names)
+		self.addCleanup(setattr, merged_bill, "unmerge_pair", original)
+		with as_user(MANAGER):
+			ury_order.cancel_order(self.first, "test")
+		self.assertEqual(calls, [(self.first, self.second)])
+
+	# --- the amount the terminal showed, and two terminals ----------------------------
+
+	def test_an_ordinary_bill_is_not_paid_at_an_old_amount(self):
+		single = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		shown = self._preview(single)["rounded_total"]  # 1,100
+		place_order(CASHIER, [(FOOD_ITEM, 2)], table=TABLES[2], invoice=single)  # another terminal adds a dish
+		with self.assertRaises(AmountChanged):
+			self._pay(single, shown)
+		self.assertEqual(self._values(single, "status").status, "Draft")
+		self.assertEqual(frappe.db.count("Payment Entry"), 0)
+		self._pay(single, self._preview(single)["rounded_total"])  # the new amount is accepted
+		self.assertEqual(self._values(single, "status").status, "Paid")
+
+	def test_a_merged_bill_is_not_paid_at_an_old_amount(self):
+		shown = self._preview(self.first)["rounded_total"]  # 1,650
+		place_order(CASHIER, [(ALCOHOL_ITEM, 2)], table=TABLES[1], invoice=self.second)  # the other bill grows
+		with self.assertRaises(AmountChanged):
+			self._pay(self.first, shown)
+		for name in (self.first, self.second):
+			self.assertEqual(self._values(name, "status").status, "Draft")
+
+	def test_a_bill_unmerged_on_another_terminal_is_not_paid_as_merged(self):
+		shown = self._preview(self.first)["rounded_total"]  # 1,650 for both bills
+		self._unmerge(self.second)
+		with self.assertRaises(AmountChanged):
+			self._pay(self.first, shown)
+		self.assertEqual(self._values(self.first, "status").status, "Draft")
+		self.assertEqual(self._values(self.second, "status").status, "Draft")
+
+	def test_no_expected_total_means_no_check(self):
+		self._pay(self.first, 1650, expected=None)
+		self.assertEqual(self._values(self.second, "status").status, "Paid")
+
+	def test_a_bill_read_before_another_terminal_changed_it_is_refused(self):
+		"""make_invoice reads the bill, then locks it: a change committed in between is caught."""
+		read = frappe.get_doc("POS Invoice", self.first)
+		lock_for_payment(read)  # fresh: fine
+		frappe.db.set_value("POS Invoice", self.first, "modified", "2000-01-01 00:00:00", update_modified=False)
+		with self.assertRaises(AmountChanged):
+			lock_for_payment(read)
+		frappe.db.set_value("POS Invoice", self.first, "modified", read.modified, update_modified=False)
+		frappe.db.set_value("POS Invoice", self.first, "custom_merged_pos_invoice", None, update_modified=False)
+		with self.assertRaises(AmountChanged):
+			lock_for_payment(read)
 
 	# --- the receipt -------------------------------------------------------------
 

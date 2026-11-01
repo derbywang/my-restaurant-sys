@@ -8,6 +8,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from erpnext.controllers.queries import item_query
 from ury.ury_pos.api import getBranch, getBranchRoom, getRoom, posOpening
+from ury.ury.api.merged_bill import check_expected_total, lock_for_payment
 from ury.ury.api.ury_kot_generate import kot_execute
 from ury.ury.api.ury_kot_generate import process_items_for_cancel_kot
 
@@ -1885,22 +1886,15 @@ def customer_favourite_item(customer_name):
 
 
 def unmerge_bill(invoice):
-    """Remove the link of the order that was merged with `invoice` (see ury_pos.api.merge_bills)."""
+    """Cancelling one of two merged bills unmerges the other (see ury.ury.api.merged_bill)."""
+    from ury.ury.api.merged_bill import unmerge_pair
+
     partner = invoice.get("custom_merged_pos_invoice")
     if not partner or not frappe.db.exists("POS Invoice", partner):
         return
     if frappe.db.get_value("POS Invoice", partner, "custom_merged_pos_invoice") != invoice.name:
         return
-    # a bill that is already paid (or cancelled) is not touched
-    if frappe.db.get_value("POS Invoice", partner, "docstatus") != 0:
-        return
-    frappe.db.set_value(
-        "POS Invoice",
-        partner,
-        {"custom_merged_pos_invoice": None, "custom_merged_total": 0},
-        update_modified=False,
-    )
-    frappe.db.delete("URY Merged POS Invoice Detail", {"parent": partner, "parenttype": "POS Invoice"})
+    unmerge_pair(invoice.name, partner)
 
 
 @frappe.whitelist()
@@ -2028,11 +2022,15 @@ def _validate_additional_discount(additional_discount, pos_profile):
 
 # Method for URY POS
 @frappe.whitelist()
-def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDiscount=None, table=None, invoice=None):
+def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDiscount=None, table=None, invoice=None, expected_total=None):
+    """Settle an order. `expected_total` is the amount due the terminal showed (after the
+    discount; both bills of a merged bill); when the bill has changed since, nothing is
+    paid and AmountChanged is raised so the POS can show the new amount."""
     additionalDiscount = _validate_additional_discount(additionalDiscount, pos_profile)
 
     order_type =  invoice_name = frappe.get_value("POS Invoice",invoice , "order_type")
     invoice = get_order_invoice(table, invoice, order_type, "Payments")
+    lock_for_payment(invoice)
 
     if table:
         restaurant = get_restaurant_and_menu_name(table)
@@ -2072,6 +2070,7 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
         
         doc_req = invoice.rounded_total
         target_req = target.rounded_total
+        check_expected_total(expected_total, doc_req + target_req)
         
         target.set("payments", [])
         
@@ -2101,6 +2100,7 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
             
         invoice.flags.ignore_payment_sync = True
     else:
+        check_expected_total(expected_total, invoice.rounded_total)
         for d in payments:
             invoice.append(
                 "payments", dict(mode_of_payment=d["mode_of_payment"], amount=d["amount"])

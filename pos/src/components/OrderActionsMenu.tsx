@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
-import { GitMerge, MoreVertical, SplitSquareHorizontal } from 'lucide-react';
+import { GitMerge, MoreVertical, SplitSquareHorizontal, Unlink } from 'lucide-react';
 import { Button } from '@ury/ui';
 import { t } from '../i18n';
 
@@ -10,6 +10,8 @@ interface OrderActionsMenuProps {
   onSplitBill?: () => void;
   showMergeBill?: boolean;
   onMergeBill?: () => void;
+  showUnmergeBill?: boolean;
+  onUnmergeBill?: () => void;
 }
 
 const OrderActionsMenu = ({
@@ -19,6 +21,8 @@ const OrderActionsMenu = ({
   onSplitBill,
   showMergeBill = false,
   onMergeBill,
+  showUnmergeBill = false,
+  onUnmergeBill,
 }: OrderActionsMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +39,7 @@ const OrderActionsMenu = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onOpenChange]);
 
-  if (!showSplitBill && !showMergeBill) {
+  if (!showSplitBill && !showMergeBill && !showUnmergeBill) {
     return null;
   }
 
@@ -54,6 +58,12 @@ const OrderActionsMenu = ({
     event.stopPropagation();
     onOpenChange(false);
     onMergeBill?.();
+  };
+
+  const handleUnmergeBill = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    onOpenChange(false);
+    onUnmergeBill?.();
   };
 
   return (
@@ -79,6 +89,16 @@ const OrderActionsMenu = ({
             >
               <GitMerge className="h-4 w-4 shrink-0" />
               {t('bill_merge.merge_bill')}
+            </Button>
+          )}
+          {showUnmergeBill && (
+            <Button
+              variant="ghost"
+              className="flex h-auto w-full justify-start gap-2 rounded-none px-4 py-2 text-sm font-normal text-gray-700 hover:bg-gray-100"
+              onClick={handleUnmergeBill}
+            >
+              <Unlink className="h-4 w-4 shrink-0" />
+              {t('bill_merge.unmerge_bill')}
             </Button>
           )}
           {showSplitBill && (

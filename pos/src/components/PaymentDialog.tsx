@@ -5,7 +5,7 @@ import { formatCurrency, call, parseFrappeError } from '@ury/core';
 import { Button, Input, Dialog, DialogContent, showToast } from '@ury/ui';
 import { DEFAULT_PAYMENT_MODE } from '../data/order-types';
 import { t } from '../i18n';
-import { previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
+import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
 
 
 interface PaymentDialogProps {
@@ -22,7 +22,6 @@ interface PaymentDialogProps {
   fetchOrders: () => Promise<void>;
   clearSelectedOrder: () => void;
   discountPercentage?: number;
-  discountAmount?: number;
 }
 
 const PaymentDialog: React.FC<PaymentDialogProps> = ({
@@ -49,6 +48,9 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [appliedPercentage, setAppliedPercentage] = useState<number | null>(null);
   // Every amount comes from the server (tax and rounding are calculated there).
   const [totals, setTotals] = useState<OrderTotals | null>(null);
+  // Bumped to read the amount due again; `amountChanged` asks the cashier to confirm the new one.
+  const [reloadKey, setReloadKey] = useState(0);
+  const [amountChanged, setAmountChanged] = useState(false);
   const [paymentInputs, setPaymentInputs] = useState<{ [mode: string]: string }>({});
 
   useEffect(() => {
@@ -72,7 +74,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [invoice, appliedPercentage]);
+  }, [invoice, appliedPercentage, reloadKey]);
 
   const handleApplyDiscount = () => {
     const value = parseFloat(discountValue);
@@ -142,9 +144,12 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const handlePayment = async () => {
     setIsProcessing(true);
     setError(null);
+    setAmountChanged(false);
     try {
       await call.post('ury.ury.doctype.ury_order.ury_order.make_invoice', {
         additionalDiscount: discountPercentageToSend > 0 ? discountPercentageToSend : null,
+        // the amount this dialog shows: refused by the server when the bill has changed since
+        expected_total: finalTotal,
         cashier,
         customer,
         invoice,
@@ -159,6 +164,13 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
       await fetchOrders();
     } catch (err) {
       console.error('Payment failed:', err);
+      if (isAmountChangedError(err)) {
+        // Nothing was paid: show the new amount due and ask the cashier to confirm it.
+        setPaymentInputs({});
+        setAmountChanged(true);
+        setReloadKey((key) => key + 1);
+        return;
+      }
       // parseFrappeError extracts human-readable message from _server_messages (e.g. stock validation error)
       setError(parseFrappeError(err, t('errors.payment_failed')));
     } finally {
@@ -262,6 +274,14 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
         {/* Right Column - Order Summary and Pay Button */}
         <div className="md:w-1/2 p-6 overflow-y-auto">
+          {amountChanged && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
+              <p className="text-amber-800 text-sm font-medium">
+                {t('payment.amount_changed', { amount: formatCurrency(finalTotal) })}
+              </p>
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">

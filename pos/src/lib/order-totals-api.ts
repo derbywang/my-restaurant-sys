@@ -72,3 +72,12 @@ export async function previewCartTotals(request: CartTotalsRequest): Promise<Ord
   );
   return response.message;
 }
+
+/**
+ * make_invoice refused to settle because the bill is not what the terminal showed (another
+ * terminal added a dish, merged or unmerged it ...). The POS reads the amount due again.
+ */
+export function isAmountChangedError(err: unknown): boolean {
+  const e = err as { exc_type?: string; exception?: string; httpStatus?: number } | null;
+  return !!e && (e.exc_type === 'AmountChanged' || String(e.exception ?? '').includes('AmountChanged') || e.httpStatus === 409);
+}

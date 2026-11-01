@@ -25,6 +25,7 @@ import {
   getCombinedOrderTotals,
   isMergedBill,
   resolvePrintFormat,
+  unmergeBills,
   mapSplitGroupInvoiceToPOSInvoice,
   type POSInvoice,
   type SplitGroupInvoice,
@@ -83,6 +84,8 @@ export default function Orders() {
   const [editLoading, setEditLoading] = React.useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = React.useState(false);
   const [showSplitDialog, setShowSplitDialog] = React.useState(false);
+  const [showUnmergeDialog, setShowUnmergeDialog] = React.useState(false);
+  const [unmergeLoading, setUnmergeLoading] = React.useState(false);
   const [showMergeDialog, setShowMergeDialog] = React.useState(false);
   const [orderActionsMenuOpen, setOrderActionsMenuOpen] = React.useState(false);
   const [isPrinting, setIsPrinting] = React.useState(false);
@@ -115,6 +118,12 @@ export default function Orders() {
     const invoicePrinted = String(selectedOrder.invoice_printed);
     return invoicePrinted === '0' || invoicePrinted === '1';
   }, [selectedOrder, selectedOrderItems]);
+
+  // 会計合算を解除 is offered for a merged bill that has not been paid
+  const canUnmergeBill = useMemo(() => {
+    if (!selectedOrder || !isMergedBill(selectedOrder)) return false;
+    return selectedOrder.status === 'Draft' || selectedOrder.status === 'Unbilled';
+  }, [selectedOrder]);
 
   const isSecondaryMergedBill = useMemo(() => {
     if (!selectedOrder) return false;
@@ -332,6 +341,24 @@ export default function Orders() {
     const updated = useRootStore.getState().orders.find((o) => o.name === selectedOrder.name);
     if (updated) {
       await selectOrder(updated);
+    }
+  }
+
+  async function handleUnmergeBill() {
+    if (!selectedOrder) return;
+    setUnmergeLoading(true);
+    try {
+      await unmergeBills(selectedOrder.name);
+      showToast.success(t('bill_merge.unmerge_success'));
+      setShowUnmergeDialog(false);
+      clearSelectedOrder();
+    } catch (err) {
+      showToast.error(parseFrappeError(err, t('bill_merge.unmerge_failed')));
+      setShowUnmergeDialog(false);
+    } finally {
+      setUnmergeLoading(false);
+      // the other terminals may have changed the bills: read the list again either way
+      await fetchOrders();
     }
   }
 
@@ -556,6 +583,8 @@ export default function Orders() {
                         onOpenChange={setOrderActionsMenuOpen}
                         showMergeBill={canMergeBill}
                         onMergeBill={() => setShowMergeDialog(true)}
+                        showUnmergeBill={canUnmergeBill}
+                        onUnmergeBill={() => setShowUnmergeDialog(true)}
                         showSplitBill={canSplitBill}
                         onSplitBill={() => setShowSplitDialog(true)}
                       />
@@ -788,8 +817,27 @@ export default function Orders() {
           fetchOrders={fetchOrders}
           clearSelectedOrder={clearSelectedOrder}
           discountPercentage={selectedOrder.additional_discount_percentage}
-          discountAmount={selectedOrder.discount_amount}
         />
+      )}
+      {selectedOrder && (
+        <Dialog open={showUnmergeDialog} onOpenChange={setShowUnmergeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('bill_merge.unmerge_bill')}</DialogTitle>
+              <DialogDescription>
+                {t('bill_merge.unmerge_confirm', { invoice: selectedOrder.custom_merged_pos_invoice })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowUnmergeDialog(false)} disabled={unmergeLoading}>
+                {t('common.cancel')}
+              </Button>
+              <Button onClick={handleUnmergeBill} disabled={unmergeLoading}>
+                {unmergeLoading ? t('common.loading') : t('bill_merge.unmerge_bill')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
       {selectedOrder && (
         <BillMergeDialog

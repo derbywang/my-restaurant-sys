@@ -307,6 +307,15 @@ def get_custom_fields():
 
 		"POS Profile": [
 			{
+				"fieldname": "custom_tax_rounding",
+				"fieldtype": "Select",
+				"label": "Tax Rounding",
+				"options": "Round Down\nRound Half Up\nRound Up",
+				"default": "Round Down",
+				"insert_after": "apply_discount_on",
+				"description": "How the fraction of the tax is handled. The tax of each rate is calculated once per invoice.",
+			},
+			{
 				"fieldname": "restaurant_info",
 				"fieldtype": "Section Break",
 				"label": "Restaurant Info",

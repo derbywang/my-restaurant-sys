@@ -5,6 +5,7 @@ import { formatCurrency, call, parseFrappeError } from '@ury/core';
 import { Button, Input, Dialog, DialogContent, showToast } from '@ury/ui';
 import { DEFAULT_PAYMENT_MODE } from '../data/order-types';
 import { t } from '../i18n';
+import { previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
 
 
 interface PaymentDialogProps {
@@ -37,31 +38,41 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   owner,
   fetchOrders,
   clearSelectedOrder,
-  discountPercentage,
-  discountAmount
+  discountPercentage
 }) => {
   const { paymentModes, fetchPaymentModes, posProfile: storePosProfile } = usePOSStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [discountType] = useState<'percentage'>('percentage'); // Only percentage now
   
-  // Calculate effective percentage if only amount is provided (for invoice-level discounts)
-  const effectivePercentage = discountPercentage 
-    ? discountPercentage 
-    : (discountAmount && grandTotal + discountAmount > 0 
-        ? (discountAmount / (grandTotal + discountAmount)) * 100 
-        : 0);
-        
-  const [discountValue, setDiscountValue] = useState<string>(effectivePercentage > 0 ? String(effectivePercentage) : '');
-  const [appliedDiscount, setAppliedDiscount] = useState<number>(discountAmount || 0); // Only tracking transaction discount!
+  const [discountValue, setDiscountValue] = useState<string>(discountPercentage ? String(discountPercentage) : '');
+  // The percentage the person applied; until then the order's own discount counts.
+  const [appliedPercentage, setAppliedPercentage] = useState<number | null>(null);
+  // Every amount comes from the server (tax and rounding are calculated there).
+  const [totals, setTotals] = useState<OrderTotals | null>(null);
   const [paymentInputs, setPaymentInputs] = useState<{ [mode: string]: string }>({});
 
   useEffect(() => {
     fetchPaymentModes();
   }, [fetchPaymentModes]);
 
-  // baseTotal represents the amount before any invoice-level discount (like pricing rule or manual discount)
-  const baseTotal = grandTotal + (discountAmount || 0);
+  useEffect(() => {
+    let cancelled = false;
+    previewOrderTotals(invoice, appliedPercentage)
+      .then((result) => {
+        if (cancelled) return;
+        setTotals(result);
+        setError(null);
+        if (appliedPercentage === null && result.discount_percentage > 0) {
+          setDiscountValue(String(result.discount_percentage));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(parseFrappeError(err, t('errors.payment_failed')));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice, appliedPercentage]);
 
   const handleApplyDiscount = () => {
     const value = parseFloat(discountValue);
@@ -73,20 +84,15 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setError(t('errors.discount_exceeds_max'));
       return;
     }
-    const calculatedDiscount = (baseTotal * value) / 100;
-    setAppliedDiscount(calculatedDiscount);
+    setAppliedPercentage(value);
     setError(null);
   };
 
-  // Order summary logic
-  const subtotal = baseTotal;
-  const adjustment = roundedTotal - grandTotal;
-  const roundedAdjustment = Math.round(adjustment * 100) / 100;
-  const showAdjustment = Math.abs(roundedAdjustment) > 0.001;
-  const totalDiscount = appliedDiscount;
-  const discountedTotal = Math.max(0, subtotal - totalDiscount);
-  // If discount is applied, round up; else, round normally
-  const finalTotal = appliedDiscount > 0 ? Math.ceil(discountedTotal) : Math.round(discountedTotal);
+  // Order summary: what the server calculated (the props are shown until it answers)
+  const finalTotal = totals ? totals.rounded_total : roundedTotal;
+  const adjustment = totals ? totals.rounded_total - totals.grand_total : roundedTotal - grandTotal;
+  const showAdjustment = Math.abs(adjustment) > 0.001;
+  const discountPercentageToSend = appliedPercentage ?? totals?.discount_percentage ?? discountPercentage ?? 0;
 
   // Calculate split payment total
   const payments = paymentModes
@@ -99,10 +105,6 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const paymentsTotal = payments.reduce((sum, p: any) => sum + p.amount, 0);
   const shortfall = finalTotal - paymentsTotal;
   const isShort = shortfall > 0.005;
-
-  const finalAdjustment = finalTotal - discountedTotal;
-  const roundedFinalAdjustment = Math.round(finalAdjustment * 100) / 100;
-  const showFinalAdjustment = Math.abs(roundedFinalAdjustment) > 0.001;
 
   useEffect(()=>{
     const defaultPaymentModePresent=paymentModes.find((mode)=>mode===DEFAULT_PAYMENT_MODE)
@@ -142,7 +144,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     setError(null);
     try {
       await call.post('ury.ury.doctype.ury_order.ury_order.make_invoice', {
-        additionalDiscount: appliedDiscount > 0 ? appliedDiscount : null,
+        additionalDiscount: discountPercentageToSend > 0 ? discountPercentageToSend : null,
         cashier,
         customer,
         invoice,
@@ -277,23 +279,30 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </div>
             )}
             <div className="space-y-2 text-sm">
-              {/* Subtotal (Grand Total) */}
+              {/* Items without tax, the discount, the tax of each rate */}
               <div className="flex justify-between">
                 <span className="text-gray-600">{t('payment.subtotal')}</span>
-                <span>{formatCurrency(subtotal)}</span>
+                <span>{formatCurrency(totals ? totals.total : grandTotal)}</span>
               </div>
-              {/* Discount */}
-              {appliedDiscount > 0 && (
+              {totals && totals.discount_amount > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>{t('payment.discount')}</span>
-                  <span>-{formatCurrency(appliedDiscount)}</span>
+                  <span>-{formatCurrency(totals.discount_amount)}</span>
                 </div>
               )}
+              {totals?.taxes.map((tax) => (
+                <div key={tax.account_head} className="flex justify-between">
+                  <span className="text-gray-600">
+                    {t('payment.tax_line', { rate: tax.rate, base: formatCurrency(tax.taxable_amount) })}
+                  </span>
+                  <span>{formatCurrency(tax.tax_amount)}</span>
+                </div>
+              ))}
               {/* Adjustment (if any) */}
-              {showFinalAdjustment && (
+              {showAdjustment && (
                 <div className="flex justify-between text-blue-600">
                   <span>{t('payment.adjustment')}</span>
-                  <span>{roundedFinalAdjustment > 0 ? '+' : ''}{formatCurrency(roundedFinalAdjustment)}</span>
+                  <span>{adjustment > 0 ? '+' : ''}{formatCurrency(adjustment)}</span>
                 </div>
               )}
               {/* Final Total (Rounded) */}

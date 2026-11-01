@@ -77,6 +77,7 @@
     "order_summary": "주문 요약",
     "subtotal": "소계",
     "discount": "할인",
+    "tax_line": "소비세 {{rate}}% (대상 {{base}})",
     "adjustment": "끝전 조정",
     "total": "합계",
     "pay_button": "{{amount}} 결제",

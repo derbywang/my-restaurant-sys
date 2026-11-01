@@ -87,8 +87,25 @@ def apply_jp_tax_setup():
         result["disabled"] += legacy
         result["drafts"].update(legacy_drafts)
 
+    result["discount_on_net_total"] = apply_net_total_discount()
     result["ungrouped_menu_groups"] = ungrouped_menu_item_groups()
     return result
+
+
+def apply_net_total_discount():
+    """A discount on the whole order is taken off the amount without tax; the tax of each
+    rate is then calculated (and rounded) on what is left. Returns the POS Profiles changed.
+    Only the POS Profile is changed, not the invoices that already exist."""
+    changed = []
+    for company in japan_companies():
+        for name in frappe.get_all(
+            "POS Profile",
+            filters={"company": company.name, "apply_discount_on": ["!=", "Net Total"]},
+            pluck="name",
+        ):
+            frappe.db.set_value("POS Profile", name, "apply_discount_on", "Net Total")
+            changed.append(name)
+    return changed
 
 
 def _ensure_tax_category(title):

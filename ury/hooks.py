@@ -164,6 +164,7 @@ before_uninstall = "ury.uninstall.uninstall"
 
 override_doctype_class = {
 	"POS Closing Entry": "ury.overrides.pos_closing_entry.URYPOSClosingEntry",
+	"POS Invoice": "ury.overrides.pos_invoice.URYPOSInvoice",
 }
 
 # Document Events

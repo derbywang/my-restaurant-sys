@@ -76,6 +76,7 @@
     "order_summary": "Résumé de la commande",
     "subtotal": "Sous-total",
     "discount": "Remise",
+    "tax_line": "TVA {{rate}} % (sur {{base}})",
     "adjustment": "Ajustement",
     "total": "Total",
     "pay_button": "Payer {{amount}}",

@@ -81,6 +81,7 @@
         "order_summary": "ملخص الطلب",
         "subtotal": "المجموع الفرعي",
         "discount": "الخصم",
+        "tax_line": "ضريبة {{rate}}٪ (على {{base}})",
         "adjustment": "التسوية",
         "total": "الإجمالي",
         "pay_button": "دفع {{amount}}",

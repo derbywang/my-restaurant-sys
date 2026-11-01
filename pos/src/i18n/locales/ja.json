@@ -77,6 +77,7 @@
     "order_summary": "伝票の内訳",
     "subtotal": "小計",
     "discount": "割引",
+    "tax_line": "消費税 {{rate}}%（対象 {{base}}）",
     "adjustment": "端数調整",
     "total": "合計",
     "pay_button": "{{amount}} を会計",

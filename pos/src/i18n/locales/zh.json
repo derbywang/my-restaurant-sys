@@ -77,6 +77,7 @@
     "order_summary": "订单汇总",
     "subtotal": "小计",
     "discount": "折扣",
+    "tax_line": "消费税 {{rate}}%（对象 {{base}}）",
     "adjustment": "尾数调整",
     "total": "合计",
     "pay_button": "收款 {{amount}}",

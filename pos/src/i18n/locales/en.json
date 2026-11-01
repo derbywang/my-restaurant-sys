@@ -77,6 +77,7 @@
     "order_summary": "Order Summary",
     "subtotal": "Subtotal",
     "discount": "Discount",
+    "tax_line": "Tax {{rate}}% (on {{base}})",
     "adjustment": "Adjustment",
     "total": "Total",
     "pay_button": "Pay {{amount}}",

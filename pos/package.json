@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --base=/assets/ury/pos/ && yarn copy-html-entry",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "build": "yarn typecheck && vite build --base=/assets/ury/pos/ && yarn copy-html-entry",
     "copy-html-entry": "cp ../ury/public/pos/index.html ../ury/www/pos.html",
     "lint": "eslint .",
     "i18n:check": "node ../scripts/check-i18n.mjs pos",
@@ -50,6 +51,6 @@
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.24.1",
     "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "vitest": "3.2.7"
   }
 }

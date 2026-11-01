@@ -655,7 +655,7 @@ export default function Orders() {
                   </DialogDescription>
                   {isMergedBill(selectedOrder) && (
                     <p className="mt-2 text-sm text-amber-700">
-                      {t('bill_merge.cancel_unmerges', { invoice: selectedOrder.custom_merged_pos_invoice })}
+                      {t('bill_merge.cancel_unmerges', { invoice: selectedOrder.custom_merged_pos_invoice ?? '' })}
                     </p>
                   )}
                 </DialogHeader>
@@ -825,7 +825,7 @@ export default function Orders() {
             <DialogHeader>
               <DialogTitle>{t('bill_merge.unmerge_bill')}</DialogTitle>
               <DialogDescription>
-                {t('bill_merge.unmerge_confirm', { invoice: selectedOrder.custom_merged_pos_invoice })}
+                {t('bill_merge.unmerge_confirm', { invoice: selectedOrder.custom_merged_pos_invoice ?? '' })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

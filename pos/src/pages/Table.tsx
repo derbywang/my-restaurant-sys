@@ -20,7 +20,7 @@ import TableMergeDialog from '../components/TableMergeDialog';
 import TableUnmergeDialog from '../components/TableUnmergeDialog';
 import TableTransferDialog from '../components/TableTransferDialog';
 import CaptainTransferDialog from '../components/CaptainTransferDialog';
-import TableCard, { TABLE_STATE_STYLES } from '../components/TableCard';
+import TableCard from '../components/TableCard';
 import MergeLinkConnector from '../components/MergeLinkConnector';
 
 const TableView = () => {

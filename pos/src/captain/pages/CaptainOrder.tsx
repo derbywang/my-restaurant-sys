@@ -12,6 +12,7 @@ import {
   SyncOrderRequest,
   tableTransfer,
 } from '../../lib/order-api';
+import { useCartTotals } from '../../hooks/useCartTotals';
 import { printOrder } from '../../lib/print';
 import { resolvePrintFormat } from '../../lib/invoice-api';
 import { getVacantTablesForBranch, Table } from '../../lib/table-api';

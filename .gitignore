@@ -15,10 +15,7 @@ ury/public/mosaic
 ury/public/order
 ury/www/order.html
 ury/public/node_modules
-urypos/yarn.lock
-mosaic/yarn.lock
 ury/www/urypos.html
 ury/www/mosaic.html
 build
 
-*.lock

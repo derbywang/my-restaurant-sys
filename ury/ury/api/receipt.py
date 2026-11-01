@@ -13,6 +13,8 @@ import re
 import frappe
 from frappe.utils import flt, get_datetime
 
+from ury.ury.api.merged_bill import table_label
+
 PRINT_FORMAT = "URY JP Receipt"
 REGISTRATION_NUMBER = re.compile(r"T\d{13}")
 ORDER_TYPES = {"Dine In": "店内", "Take Away": "お持ち帰り"}
@@ -68,7 +70,7 @@ def jp_receipt_data(doc):
 		**company,
 		"posting": posting.strftime("%Y年%m月%d日 %H:%M"),
 		"order_type": ORDER_TYPES.get(doc.order_type, doc.order_type or ""),
-		"table": doc.get("restaurant_table") or "",
+		"table": table_label(doc),
 		"invoices": sections,
 		"merged": len(invoices) > 1,
 		"has_reduced": any(line["reduced"] for section in sections for line in section["lines"]),

@@ -771,8 +771,8 @@ export default function Orders() {
                 >
                   {isPrinting ? <Spinner className="w-5 h-5" hideMessage  message={t('common.loading')} /> : <Printer className="w-5 h-5" />}
                 </Button>
-                {/* Payment Button - Only show for Draft, Unbilled, and Recently Paid orders */}
-                {isOrderEditable(selectedOrder.status) && (
+                {/* Payment Button - only for orders that are not paid yet */}
+                {(selectedOrder.status === 'Draft' || selectedOrder.status === 'Unbilled') && (
                   <Button
                     className="flex-1"
                     onClick={() => {

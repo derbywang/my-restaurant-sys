@@ -6,6 +6,7 @@ docs/design/jp-tax-design.md (J10). Run on the test site only.
 """
 
 import frappe
+from frappe.utils import add_to_date
 
 from ury.setup.jp_tax import RECEIPT_FORMAT, refresh_receipt_format
 from ury.setup.test_site import (
@@ -40,6 +41,9 @@ class TestMergedBill(URYFlowTestCase):
 		# 1,000 at table T-01, 500 at table T-02: 1,100 + 550 = 1,650 with 10% tax
 		self.first = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
 		self.second = place_order(CASHIER, [(ALCOHOL_ITEM, 1)], table=TABLES[1])
+		# the dev container's clock can step back: the bill made first is the card and comes first in the label
+		first_made = frappe.db.get_value("POS Invoice", self.first, "creation")
+		frappe.db.set_value("POS Invoice", self.second, "creation", add_to_date(first_made, seconds=1), update_modified=False)
 		with as_user(CASHIER):
 			merge_bills(self.first, self.second)
 
@@ -436,6 +440,33 @@ class TestMergedBill(URYFlowTestCase):
 			self._pay_with(self.first, [("Cash", 1000)], expected=1650)
 		self._both_unpaid()
 
+	# --- the tables on the bill ------------------------------------------------------------
+
+	def test_the_receipt_prints_the_tables_of_both_bills(self):
+		for name in (self.first, self.second):
+			self.assertIn("店内 T-01 + T-02", text(render(name)), name)
+		self._pay(self.first, 1650)
+		for name in (self.first, self.second):
+			self.assertIn("店内 T-01 + T-02", text(render(name)), name)
+
+	def test_the_tables_are_the_same_for_the_dialog_and_the_receipt(self):
+		self.assertEqual(self._preview(self.first)["table_label"], "T-01 + T-02")
+		self.assertEqual(self._preview(self.second)["table_label"], "T-01 + T-02")
+		single = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		self.assertEqual(self._preview(single)["table_label"], "T-03")
+
+	def test_the_tables_of_merged_tables_and_of_the_other_bill_are_listed_once(self):
+		frappe.db.set_value("POS Invoice", self.first, "custom_merged_tables", "T-03", update_modified=False)
+		frappe.db.set_value("POS Invoice", self.second, "custom_merged_tables", "T-03,T-02", update_modified=False)
+		self.assertEqual(self._preview(self.first)["table_label"], "T-01 + T-03 + T-02")
+
+	def test_after_unmerging_only_the_own_table_is_shown(self):
+		self._unmerge(self.first)
+		self.assertEqual(self._preview(self.first)["table_label"], "T-01")
+		self.assertEqual(self._preview(self.second)["table_label"], "T-02")
+		self.assertIn("店内 T-01", text(render(self.first)))
+		self.assertNotIn("T-02", text(render(self.first)))
+
 	# --- the receipt -------------------------------------------------------------
 
 	def test_the_receipt_reads_the_other_bill_as_it_is_now(self):
@@ -454,3 +485,65 @@ class TestMergedBill(URYFlowTestCase):
 		self.assertIn("お預かり | ¥1,650", out)
 		self.assertNotIn("お釣り", out)
 
+
+class TestOrderTabs(URYFlowTestCase):
+	"""An unpaid order is in exactly one of the tabs 会計待ち (Draft) and 伝票未発行 (Unbilled);
+	of a merged bill, the card is."""
+
+	def setUp(self):
+		super().setUp()
+		open_pos(CASHIER)
+
+	def _tabs(self):
+		with as_user(CASHIER):
+			draft = [o["name"] for o in getPosInvoice("Draft", 100, 0)["data"]]
+			unbilled = [o["name"] for o in getPosInvoice("Unbilled", 100, 0)["data"]]
+		return draft, unbilled
+
+	def _set(self, name, **fields):
+		frappe.db.set_value("POS Invoice", name, fields, update_modified=False)
+
+	def _in_which(self, name):
+		draft, unbilled = self._tabs()
+		return [tab for tab, names in (("Draft", draft), ("Unbilled", unbilled)) if name in names]
+
+	def test_every_unpaid_order_is_in_exactly_one_tab(self):
+		a = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])  # not printed, at a table
+		b = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])  # printed
+		print_bill(b)
+		c = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")  # no table, not printed
+		d = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")  # empty table, not printed
+		self._set(d, restaurant_table="")
+		e = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")  # empty table, printed
+		self._set(e, restaurant_table="", invoice_printed=1)
+		expected = {a: ["Unbilled"], b: ["Draft"], c: ["Draft"], d: ["Draft"], e: ["Draft"]}
+		for name, tabs in expected.items():
+			self.assertEqual(self._in_which(name), tabs, name)
+
+	def test_a_merged_bill_is_one_card_in_one_tab(self):
+		first = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		second = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])
+		print_bill(second)  # the two bills differ in the printed state
+		with as_user(CASHIER):
+			merge_bills(first, second)
+		self.assertEqual(self._in_which(first) + self._in_which(second), ["Unbilled"])
+		self.assertEqual(self._in_which(first), ["Unbilled"])  # the card is the one made first
+
+	def test_unmerging_puts_each_bill_in_its_own_tab(self):
+		first = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		second = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])
+		with as_user(CASHIER):
+			merge_bills(first, second)
+		print_bill(first)  # printed while merged: the bills are not in the same state any more
+		with as_user(CASHIER):
+			unmerge_bills(first)
+		self.assertEqual(self._in_which(first), ["Draft"])
+		self.assertEqual(self._in_which(second), ["Unbilled"])
+
+	def test_an_order_whose_partner_is_gone_is_not_hidden(self):
+		"""A link to a bill that was cancelled (old data) must not hide the newer bill."""
+		older = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		newer = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])
+		self._set(older, docstatus=2, status="Cancelled", custom_merged_pos_invoice=newer)
+		self._set(newer, custom_merged_pos_invoice=older)
+		self.assertEqual(self._in_which(newer), ["Unbilled"])

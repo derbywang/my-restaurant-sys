@@ -94,6 +94,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const finalTotal = totals ? totals.rounded_total : roundedTotal;
   const adjustment = totals ? totals.rounded_total - totals.grand_total : roundedTotal - grandTotal;
   const showAdjustment = Math.abs(adjustment) > 0.001;
+  // The tables as the server reads them now (the list this dialog was opened from may be old)
+  const shownTableLabel = totals?.table_label ?? tableLabel;
   const discountPercentageToSend = appliedPercentage ?? totals?.discount_percentage ?? discountPercentage ?? 0;
 
   // Calculate split payment total
@@ -112,7 +114,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     const defaultPaymentModePresent=paymentModes.find((mode)=>mode===DEFAULT_PAYMENT_MODE)
     //only one payment mode should be present, then autofill the final amount, if not do not fill
     const otherPaymentModesNotEntered=Object.keys(paymentInputs).length<=1;
-    if(finalTotal && paymentModes && DEFAULT_PAYMENT_MODE && defaultPaymentModePresent && otherPaymentModesNotEntered){
+    // after the amount changed the cashier enters the money again: never fill in the new amount
+    if(!amountChanged && finalTotal && paymentModes && DEFAULT_PAYMENT_MODE && defaultPaymentModePresent && otherPaymentModesNotEntered){
       //check if default payment mode is present in paymentModes
       setPaymentInputs((prev)=>({ 
         ...prev,
@@ -169,6 +172,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         setPaymentInputs({});
         setAmountChanged(true);
         setReloadKey((key) => key + 1);
+        // the order list behind the dialog is old as well
+        await fetchOrders();
         return;
       }
       // parseFrappeError extracts human-readable message from _server_messages (e.g. stock validation error)
@@ -292,10 +297,10 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
           {/* Order Summary */}
           <div className="space-y-3 mb-6">
             <h3 className="text-lg font-semibold">{t('payment.order_summary')}</h3>
-            {tableLabel && (
+            {shownTableLabel && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">{t('tables.table_name')}</span>
-                <span className="font-medium">{tableLabel}</span>
+                <span className="font-medium">{shownTableLabel}</span>
               </div>
             )}
             <div className="space-y-2 text-sm">

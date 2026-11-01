@@ -18,6 +18,29 @@ class AmountChanged(frappe.ValidationError):
 	http_status_code = 409
 
 
+def table_label(doc):
+	"""The tables of a bill as the cashier reads them: the table of the bill made first and the
+	tables merged into it, then the same for the other bill ("T-01 + T-03 + T-02"), each listed
+	once. Whichever of the two bills is asked for, the answer is the same (it is also the card of
+	the order list). The payment dialog and the receipt print this."""
+	tables = []
+
+	def add(invoice):
+		table = invoice.get("restaurant_table")
+		if not table:
+			return
+		merged = sorted(t.strip() for t in (invoice.get("custom_merged_tables") or "").split(",") if t.strip())
+		tables.extend(t for t in [table, *merged] if t not in tables)
+
+	bills = [doc]
+	partner = doc.get("custom_merged_pos_invoice")
+	if partner and frappe.db.exists("POS Invoice", {"name": partner, "docstatus": ["<", 2]}):
+		bills.append(frappe.get_doc("POS Invoice", partner))
+	for bill in sorted(bills, key=lambda b: (str(b.creation), b.name)):
+		add(bill)
+	return " + ".join(tables)
+
+
 def allocate_payments(invoice, target, payments):
 	"""Put the payments the cashier entered on the two bills of a merged bill, each for its
 	own amount: first the clicked bill, then the other one.

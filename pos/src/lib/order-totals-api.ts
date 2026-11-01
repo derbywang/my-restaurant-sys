@@ -30,6 +30,8 @@ export interface OrderTotals {
   total_taxes_and_charges: number;
   grand_total: number;
   rounded_total: number;
+  /** The tables of the bill (both bills of a merged bill), e.g. "T-01 + T-02". */
+  table_label?: string;
 }
 
 /**

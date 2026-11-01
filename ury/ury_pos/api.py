@@ -244,6 +244,7 @@ _MERGED_PRIMARY_ONLY = """(
 	OR NOT EXISTS (
 		SELECT 1 FROM `tabPOS Invoice` partner
 		WHERE partner.name = `tabPOS Invoice`.custom_merged_pos_invoice
+			AND partner.docstatus < 2
 			AND (partner.creation < `tabPOS Invoice`.creation
 				OR (partner.creation = `tabPOS Invoice`.creation AND partner.name < `tabPOS Invoice`.name))
 	)
@@ -449,7 +450,7 @@ def getInvoiceForCashier(status, cashier, limit, limit_start):
                 posting_date, rounded_total, order_type 
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s AND cashier = %s
-            AND (invoice_printed = 0 AND restaurant_table IS NOT NULL)
+            AND (invoice_printed = 0 AND COALESCE(restaurant_table, '') != '')
             ORDER BY modified desc
             LIMIT %s OFFSET %s
             """,
@@ -546,7 +547,7 @@ def getPosInvoice(status, limit, limit_start):
                 additional_discount_percentage, discount_amount
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s 
-            AND (invoice_printed = 0 AND restaurant_table IS NOT NULL)
+            AND (invoice_printed = 0 AND COALESCE(restaurant_table, '') != '')
             AND {_MERGED_PRIMARY_ONLY}
             ORDER BY modified desc
             LIMIT %s OFFSET %s

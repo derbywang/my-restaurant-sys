@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from ury.ury.api.merged_bill import table_label
 from ury.ury.api.pos_closing import _check_branch
 
 
@@ -45,6 +46,8 @@ def preview_order_totals(invoice, discount_percentage=None):
 	if partner:
 		totals = combine_totals(totals, totals_of(partner))
 		totals["merged_invoice"] = partner.name
+	# read again with the amounts, so a dialog that was opened on an old list shows the bill as it is now
+	totals["table_label"] = table_label(doc)
 	return totals
 
 

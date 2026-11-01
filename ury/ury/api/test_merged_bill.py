@@ -73,6 +73,24 @@ class TestMergedBill(URYFlowTestCase):
 				expected_total=amount if expected is ... else expected,
 			)
 
+	def _pay_with(self, invoice, payments, expected):
+		"""Settle with the payment rows given (mode, amount), as the dialog sends them."""
+		from ury.ury.doctype.ury_order.ury_order import make_invoice
+
+		doc = frappe.get_doc("POS Invoice", invoice)
+		print_bill(invoice, CASHIER)
+		with as_user(CASHIER):
+			make_invoice(
+				customer=doc.customer,
+				payments=[{"mode_of_payment": mode, "amount": amount} for mode, amount in payments],
+				cashier=CASHIER,
+				pos_profile=POS_PROFILE,
+				owner=CASHIER,
+				table=doc.restaurant_table,
+				invoice=invoice,
+				expected_total=expected,
+			)
+
 	def _values(self, name, *fields):
 		return frappe.db.get_value("POS Invoice", name, list(fields), as_dict=True)
 
@@ -351,6 +369,73 @@ class TestMergedBill(URYFlowTestCase):
 		with self.assertRaises(AmountChanged):
 			lock_for_payment(read)
 
+	# --- what the customer handed over, and the change ---------------------------------------
+
+	def _both_unpaid(self):
+		for name in (self.first, self.second):
+			self.assertEqual(self._values(name, "docstatus", "status"), {"docstatus": 0, "status": "Draft"}, name)
+
+	def test_cash_over_the_amount_keeps_the_change(self):
+		self._pay_with(self.first, [("Cash", 2000)], expected=1650)
+		first = self._values(self.first, "status", "rounded_total", "paid_amount", "change_amount")
+		second = self._values(self.second, "status", "rounded_total", "paid_amount", "change_amount")
+		self.assertEqual((first.status, second.status), ("Paid", "Paid"))
+		# the clicked bill carries the whole hand-over; the other is paid exactly
+		self.assertEqual((first.paid_amount, first.change_amount), (1450, 350))
+		self.assertEqual((second.paid_amount, second.change_amount), (550, 0))
+		self.assertEqual(first.paid_amount - first.change_amount + second.paid_amount, 1650)
+		self.assertEqual(frappe.get_all("Sales Invoice Payment", filters={"parent": self.first}, pluck="amount"), [1450])
+
+	def test_the_receipt_shows_what_was_handed_over_and_the_change(self):
+		self._pay_with(self.first, [("Cash", 1000), ("Cash", 1000)], expected=1650)
+		for name in (self.first, self.second):
+			out = text(render(name))
+			self.assertIn("合計（税込） | ¥1,650", out)
+			self.assertIn("お預かり | ¥2,000", out)
+			self.assertIn("お釣り | ¥350", out)
+
+	def test_exact_cash_has_no_change(self):
+		self._pay_with(self.second, [("Cash", 1650)], expected=1650)
+		self.assertEqual(self._values(self.second, "change_amount").change_amount, 0)
+		self.assertEqual(self._values(self.first, "change_amount").change_amount, 0)
+		self.assertNotIn("お釣り", text(render(self.first)))
+
+	def test_the_change_is_not_counted_in_the_shift(self):
+		self._pay_with(self.first, [("Cash", 2000)], expected=1650)
+		closing = close_shift(self.opening)
+		self.assertEqual(sum(p.expected_amount for p in closing.payment_reconciliation), 1650)
+		self.assertEqual(closing.grand_total, 1650)
+		for name in (self.first, self.second):
+			consolidated = self._values(name, "consolidated_invoice").consolidated_invoice
+			self.assertTrue(consolidated, name)
+		sales_invoice = frappe.db.get_value(
+			"Sales Invoice", self._values(self.first, "consolidated_invoice").consolidated_invoice, ["grand_total", "outstanding_amount"], as_dict=True
+		)
+		self.assertEqual((sales_invoice.grand_total, sales_invoice.outstanding_amount), (1650, 0))
+
+	def test_an_ordinary_bill_keeps_its_change_as_before(self):
+		single = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		self._pay_with(single, [("Cash", 1500)], expected=1100)
+		values = self._values(single, "paid_amount", "change_amount")
+		self.assertEqual((values.paid_amount, values.change_amount), (1500, 400))
+
+	def test_change_is_refused_when_the_clicked_bill_has_no_cash_row(self):
+		"""Change is given in cash only: money over the amount is never put on another mode."""
+		with self.assertRaises(frappe.ValidationError):
+			self._pay_with(self.first, [("Credit Card", 2000)], expected=1650)
+		self._both_unpaid()
+
+	def test_change_is_refused_when_it_is_more_than_the_cash(self):
+		# 100 in cash and 1,900 by card for 1,650: 350 over, but only 100 could be given back
+		with self.assertRaises(frappe.ValidationError):
+			self._pay_with(self.first, [("Cash", 100), ("Credit Card", 1900)], expected=1650)
+		self._both_unpaid()
+
+	def test_less_than_the_amount_is_still_refused(self):
+		with self.assertRaises(frappe.ValidationError):
+			self._pay_with(self.first, [("Cash", 1000)], expected=1650)
+		self._both_unpaid()
+
 	# --- the receipt -------------------------------------------------------------
 
 	def test_the_receipt_reads_the_other_bill_as_it_is_now(self):
@@ -368,3 +453,4 @@ class TestMergedBill(URYFlowTestCase):
 		self.assertIn("合計（税込） | ¥1,650", out)
 		self.assertIn("お預かり | ¥1,650", out)
 		self.assertNotIn("お釣り", out)
+

@@ -18,6 +18,46 @@ class AmountChanged(frappe.ValidationError):
 	http_status_code = 409
 
 
+def allocate_payments(invoice, target, payments):
+	"""Put the payments the cashier entered on the two bills of a merged bill, each for its
+	own amount: first the clicked bill, then the other one.
+
+	Money over the amount due is change. It is kept on the clicked bill's cash row, and
+	ERPNext works out the change from it, exactly as for an ordinary bill. Change is given in
+	cash only: it is refused when the clicked bill has no cash row, or when it is more than
+	the cash handed over."""
+	invoice_due, target_due = flt(invoice.rounded_total), flt(target.rounded_total)
+	left_over = 0
+	for payment in payments:
+		amount, mode = flt(payment["amount"]), payment["mode_of_payment"]
+		if invoice_due > 0:
+			give = min(amount, invoice_due)
+			invoice.append("payments", dict(mode_of_payment=mode, amount=give))
+			amount -= give
+			invoice_due -= give
+		if target_due > 0 and amount > 0:
+			give = min(amount, target_due)
+			target.append("payments", dict(mode_of_payment=mode, amount=give))
+			amount -= give
+			target_due -= give
+		left_over += amount
+
+	if left_over > 0.001:
+		cash_rows = [row for row in invoice.payments if _is_cash(row.mode_of_payment)]
+		cash_handed_over = sum(flt(p["amount"]) for p in payments if _is_cash(p["mode_of_payment"]))
+		if not cash_rows or left_over > cash_handed_over + 0.001:
+			frappe.throw(
+				_("The payment is {0} more than the amount due. Change can only be given for cash.").format(
+					frappe.format(left_over, {"fieldtype": "Currency"})
+				)
+			)
+		cash_rows[-1].amount = flt(cash_rows[-1].amount) + left_over
+
+
+def _is_cash(mode_of_payment):
+	return frappe.db.get_value("Mode of Payment", mode_of_payment, "type") == "Cash"
+
+
 def lock_bills(*names):
 	"""Lock the rows of the given POS Invoices (in name order, so two terminals locking the same
 	pair cannot wait for each other) and return their current state.

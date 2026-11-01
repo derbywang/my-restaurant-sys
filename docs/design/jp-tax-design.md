@@ -262,4 +262,4 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
 - **拆单的税额（已修复）**：拆出的新账单原来没有税额行（`split_bill` 只复制表头），只收不含税价，也不继承折扣。现在新账单按原账单的税率模板重新计算（税别按订单类型取 `tax_category`，每个税率每张账单舍去一次），并继承原账单的折扣百分比（`ury.ury.api.test_split_bill`）。
 - **待办（T7 初始设置向导）**：对每个 POS Profile 设置 `account_for_change_amount`，取 Mode of Payment `Cash` 在该公司的科目；没有这个科目就报错并提示先设置（不依赖“回退到公司默认现金科目”）。
 - **已完成**：交班对话框（`POSClosingDialog.tsx`）、`Sub POS Closing`（`sub_pos_closing.js`）和测试站点的交班辅助函数，扣找零的行改成与 ERPNext `get_change_payment_row` 相同的规则（科目相同的现金行 → 科目相同的任意行 → 任意现金行）。测试：`test_pos_closing.TestChangeInTheShift`。
-- **待办（界面整理，和“¥0 税行不显示”一起做）**：会計分割对话框底部的「元の伝票に残す／新しい伝票へ移す」显示的是不含税金额，没有标明。改成显示含税金额，或至少标「（税抜）」，避免收银员按不含税金额向客人报价。
+- **待办（界面整理）**：会計分割对话框显示含税金额等，见 [ui-todo.md](ui-todo.md)。

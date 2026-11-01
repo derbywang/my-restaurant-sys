@@ -14,6 +14,12 @@ import { t } from '../i18n';
 import { usePOSStore } from '../store/pos-store';
 import { useRootStore } from '../store/root-store';
 import ClosingPaymentTable from './ClosingPaymentTable';
+import {
+  aggregateInvoices,
+  buildRows,
+  type AggregatedTotals,
+  type OpeningBalanceDetail,
+} from '../lib/closing-rows';
 import ChecklistGateDialog from './ChecklistGateDialog';
 import { getChecklist } from '../lib/checklist-api';
 import {
@@ -28,7 +34,6 @@ import {
   buildClosingTaxes,
   type OpenPosOpeningEntry,
   type POSClosingInvoice,
-  type POSClosingPayment,
   type ClosingPaymentSummary,
 } from '../lib/pos-closing-api';
 
@@ -41,11 +46,6 @@ interface POSClosingDialogProps {
    * submission), right before the dialog itself closes.
    */
   onClosingSubmitted?: () => void | Promise<void>;
-}
-
-interface OpeningBalanceDetail {
-  mode_of_payment: string;
-  opening_amount: number;
 }
 
 interface OpeningEntryDoc {
@@ -92,98 +92,6 @@ function extractServerErrorMessage(error: unknown, fallback: string): string {
   }
   if (error instanceof Error && error.message) return error.message;
   return fallback;
-}
-
-interface AggregatedTotals {
-  grandTotal: number;
-  netTotal: number;
-  totalQty: number;
-}
-
-/**
- * The payment row the change came out of, chosen like ERPNext's
- * get_change_payment_row: the Cash row of the change account, else any row of
- * that account, else any Cash row.
- */
-function changePaymentRow(
-  payments: POSClosingPayment[],
-  changeAccount: string
-): POSClosingPayment | undefined {
-  const sameAccount = payments.filter((p) => p.account === changeAccount);
-  return (
-    sameAccount.find((p) => p.type === 'Cash') ||
-    sameAccount[0] ||
-    payments.find((p) => p.type === 'Cash')
-  );
-}
-
-/**
- * Aggregates raw POS Invoice dicts into closing totals and per-mode expected
- * amounts, faithfully porting the logic in
- * ury/ury/doctype/sub_pos_closing/sub_pos_closing.js (refresh_payments /
- * set_form_data): sums grand_total/net_total/total_qty, and for each
- * invoice subtracts its change_amount from the payment row the change came
- * out of (see changePaymentRow) before accumulating by mode_of_payment.
- */
-function aggregateInvoices(invoices: POSClosingInvoice[]): {
-  totals: AggregatedTotals;
-  expectedByMode: Record<string, number>;
-} {
-  const totals: AggregatedTotals = { grandTotal: 0, netTotal: 0, totalQty: 0 };
-  const expectedByMode: Record<string, number> = {};
-
-  invoices.forEach((invoice) => {
-    totals.grandTotal += Number(invoice.grand_total) || 0;
-    totals.netTotal += Number(invoice.net_total) || 0;
-    totals.totalQty += Number(invoice.total_qty) || 0;
-
-    const payments = invoice.payments || [];
-    const changeRow = changePaymentRow(payments, invoice.account_for_change_amount);
-    payments.forEach((payment) => {
-      let amount = Number(payment.amount) || 0;
-      if (payment === changeRow) {
-        amount -= Number(invoice.change_amount) || 0;
-      }
-      expectedByMode[payment.mode_of_payment] =
-        (expectedByMode[payment.mode_of_payment] || 0) + amount;
-    });
-  });
-
-  return { totals, expectedByMode };
-}
-
-function buildRows(
-  openingBalances: OpeningBalanceDetail[],
-  expectedByMode: Record<string, number>
-): ClosingPaymentSummary[] {
-  const rows = new Map<string, ClosingPaymentSummary>();
-
-  openingBalances.forEach((detail) => {
-    rows.set(detail.mode_of_payment, {
-      mode_of_payment: detail.mode_of_payment,
-      opening_amount: Number(detail.opening_amount) || 0,
-      expected_amount: 0,
-      closing_amount: 0,
-      difference: 0,
-    });
-  });
-
-  Object.entries(expectedByMode).forEach(([mode, expected]) => {
-    const existing = rows.get(mode);
-    if (existing) {
-      existing.expected_amount = expected;
-    } else {
-      rows.set(mode, {
-        mode_of_payment: mode,
-        opening_amount: 0,
-        expected_amount: expected,
-        closing_amount: 0,
-        difference: 0,
-      });
-    }
-  });
-
-  return Array.from(rows.values());
 }
 
 const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosingDialogProps) => {

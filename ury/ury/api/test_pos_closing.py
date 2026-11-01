@@ -414,3 +414,13 @@ class TestChangeInTheShift(URYFlowTestCase):
 		invoice = self._paid_with_cash(1100, change_account="Some Other Account")
 		self.assertEqual(invoice.change_amount, 0)
 		self.assertEqual(self._expected_cash(invoice), 1100)
+
+	def test_expected_cash_includes_the_opening_amount(self):
+		"""Expected = opening amount + the cash of the shift, the change taken off (ERPNext's rule
+		and the closing dialog's `buildRows`); the closing amount the cashier counts is the whole drawer."""
+		invoice = self._paid_with_cash(2000)
+		self.opening.balance_details[0].opening_amount = 2000  # in memory only
+		_totals, _taxes, payments = _closing_rows(self.opening, [invoice])
+		cash = next(p for p in payments if p["mode_of_payment"] == "Cash")
+		self.assertEqual(cash["opening_amount"], 2000)
+		self.assertEqual(cash["expected_amount"], 2000 + invoice.rounded_total)

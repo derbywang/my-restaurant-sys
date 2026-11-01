@@ -45,6 +45,8 @@
 
 测试（`TestMultipleCashierClosing`）的观察结果：主收银员 1,100 日元、副收银员 2,750 日元，预期金额 3,850；服务器算出的 `closing_amount` 等于副收银员的 2,750，`difference` 是 −1,100（即主收银员自己的收入被当成短缺）。测试里按这个现状写了断言，修复时要一起改。
 
+同时处理：多收银员模式下 `calculate_closing_amount` 重算 `closing_amount` / `difference` 时没有改动 `expected_amount`，要和上面一起核对（主收银员的 Expected 是否含开班金额、副收银员的金额怎么合并）。
+
 ### 5.2 其他观察（未处理）
 
 - `Sub POS Closing.validate` 用 `posting_date between 开始时间 and 结束时间`（日期对日期时间比较），同一天里的更早班次的账单可能被重复计入。

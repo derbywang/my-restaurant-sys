@@ -108,6 +108,34 @@ export default function CaptainOrder() {
   );
 
   const total = activeOrders.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartTotals = useCartTotals({
+    lines: activeOrders.map((item) => ({ id: item.id, name: item.name, quantity: item.quantity })),
+    posProfile: posProfile?.name,
+    orderType: DINE_IN,
+    customer: selectedCustomer?.name,
+    table,
+    invoice: isUpdatingOrder ? orderId : null,
+  });
+  const totals = cartTotals.status === 'ready' || cartTotals.status === 'loading' ? cartTotals.totals : null;
+  const totalSummary = (
+    <div className="mb-2 px-1">
+      {totals && (
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>{t('captain.subtotal')}</span>
+          <span>{formatCurrency(totals.total)}</span>
+        </div>
+      )}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-gray-700">
+          {totals ? t('captain.total_incl_tax') : t('captain.total')}
+        </span>
+        <span className={cn('text-lg font-semibold text-gray-900', cartTotals.status === 'loading' && 'opacity-50')}>
+          {formatCurrency(totals ? totals.rounded_total : total)}
+        </span>
+      </div>
+      {cartTotals.status === 'error' && <p className="text-xs text-amber-600">{t('cart.tax_unavailable')}</p>}
+    </div>
+  );
   const isInteractionDisabled = isOrderInteractionDisabled() || isSubmitting;
 
   const canView = permissions?.view ?? false;
@@ -618,10 +646,7 @@ export default function CaptainOrder() {
         {/* Primary action for tablet */}
         {canModify && (
           <div className="bg-white border-t border-gray-200 p-3 mx-3 mb-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-sm font-semibold text-gray-700">{t('captain.total')}</span>
-              <span className="text-lg font-semibold text-gray-900">{formatCurrency(total)}</span>
-            </div>
+            {totalSummary}
             <Button
               onClick={handleSend}
               variant="default"
@@ -647,10 +672,7 @@ export default function CaptainOrder() {
       {/* Primary action for mobile */}
       {canModify && (
         <div className="sticky bottom-0 lg:hidden bg-white border-t border-gray-200 p-3">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-sm font-semibold text-gray-700">{t('captain.total')}</span>
-            <span className="text-lg font-semibold text-gray-900">{formatCurrency(total)}</span>
-          </div>
+          {totalSummary}
           <Button
             onClick={handleSend}
             variant="default"

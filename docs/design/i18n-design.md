@@ -137,6 +137,8 @@
 | DocType `URY Self Ordering Profile` | 增加 `default_language`（链接到 Language，默认 ja）和 `allowed_languages`（Table MultiSelect，默认 ja / zh / ko / en） |
 | DocType `URY Ordering Session` | 增加 `language`（Data） |
 
+**注意（日本税制）**：顾客端菜单的单价必须显示含税价（総額表示義務），含税单价由服务器按商品税率和单型计算，不能在浏览器里换算；见 `docs/design/jp-tax-design.md` 的 T4b。
+
 ## 6. 数据翻译（菜品名、分类名）
 
 - 新建子表 DocType `URY Translation Row`：`language`（链接到 Language）、`label`（Data）、`description`（Small Text）。

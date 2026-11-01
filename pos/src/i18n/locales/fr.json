@@ -46,6 +46,9 @@
     "double_click_hint": "Double-cliquez pour les options de personnalisation",
     "clear_cart": "Vider le panier",
     "total": "Total",
+    "subtotal": "Sous-total",
+    "total_incl_tax": "Total TTC",
+    "tax_unavailable": "Total TTC indisponible — confirmé à l'encaissement",
     "add_new_order": "Nouvelle commande",
     "update_order": "Mettre à jour la commande",
     "updating_order": "Mise à jour...",
@@ -384,6 +387,8 @@
     "loading_addons": "Chargement des suppléments...",
     "no_addons": "Aucun supplément",
     "total": "Total",
+    "subtotal": "Sous-total",
+    "total_incl_tax": "Total TTC",
     "update_order": "Mettre à jour la commande",
     "add_to_order": "Ajouter à la commande"
   },

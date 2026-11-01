@@ -16,6 +16,7 @@ import type { RootState } from '../store/root-store';
 import { showToast } from '@ury/ui';
 import { DINE_IN } from '../data/order-types';
 import { t } from '../i18n';
+import { useCartTotals } from '../hooks/useCartTotals';
 
 const OrderPanel = () => {
   const { 
@@ -60,6 +61,16 @@ const OrderPanel = () => {
     ),
     2
   );
+
+  const cartTotals = useCartTotals({
+    lines: activeOrders.map((item) => ({ id: item.id, name: item.name, quantity: item.quantity })),
+    posProfile: posProfile?.name,
+    orderType: selectedOrderType,
+    customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : selectedCustomer?.name,
+    table: selectedTable,
+    invoice: isUpdatingOrder ? orderId : null,
+  });
+  const totals = cartTotals.status === 'ready' || cartTotals.status === 'loading' ? cartTotals.totals : null;
 
   const handleEdit = (item: typeof activeOrders[0]) => {
     const menuItem = {
@@ -344,10 +355,33 @@ const OrderPanel = () => {
                 >
                   <MessageSquare className="w-4 h-4" />
                 </Button>
-                <span className="text-lg font-semibold">{t('cart.total')}</span>
+                <span className="text-lg font-semibold">{totals ? t('cart.total_incl_tax') : t('cart.total')}</span>
               </div>
-              <span className="text-lg font-semibold">{formatCurrency(total)}</span>
+              {totals ? (
+                <span className={cn('text-lg font-semibold', cartTotals.status === 'loading' && 'opacity-50')}>
+                  {formatCurrency(totals.rounded_total)}
+                </span>
+              ) : (
+                <span className="text-lg font-semibold">{formatCurrency(total)}</span>
+              )}
             </div>
+            {totals && (
+              <div className="mb-4 -mt-2 space-y-0.5 text-sm text-gray-500">
+                <div className="flex justify-between">
+                  <span>{t('cart.subtotal')}</span>
+                  <span>{formatCurrency(totals.total)}</span>
+                </div>
+                {totals.taxes.map((tax) => (
+                  <div key={`${tax.account_head}-${tax.rate}`} className="flex justify-between">
+                    <span>{t('payment.tax_line', { rate: tax.rate, base: formatCurrency(tax.taxable_amount) })}</span>
+                    <span>{formatCurrency(tax.tax_amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {cartTotals.status === 'error' && (
+              <p className="mb-4 -mt-2 text-xs text-amber-600">{t('cart.tax_unavailable')}</p>
+            )}
             <Button
               onClick={handleSubmit}
               variant="default"

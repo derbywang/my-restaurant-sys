@@ -49,3 +49,26 @@ export async function previewOrderTotals(
   );
   return response.message;
 }
+
+export interface CartTotalsRequest {
+  /** The cart as sync_order takes it. */
+  items: Array<{ item: string; item_name: string; qty: number }>;
+  pos_profile: string;
+  order_type: string;
+  customer?: string;
+  table?: string;
+  /** The open order the cart will replace the lines of, if any. */
+  invoice?: string | null;
+}
+
+/**
+ * The amounts of a cart that has not been sent yet, as the server will have them once
+ * sync_order saves it (preview_cart_totals; nothing is saved).
+ */
+export async function previewCartTotals(request: CartTotalsRequest): Promise<OrderTotals> {
+  const response = await call.post<{ message: OrderTotals }>(
+    'ury.ury.api.order_totals.preview_cart_totals',
+    { ...request, items: JSON.stringify(request.items) }
+  );
+  return response.message;
+}

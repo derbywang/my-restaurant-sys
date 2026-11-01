@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import flt
@@ -31,7 +33,64 @@ def preview_order_totals(invoice, discount_percentage=None):
 	return totals_of(doc)
 
 
+@frappe.whitelist()
+def preview_cart_totals(items, pos_profile, order_type, customer=None, table=None, invoice=None, discount_percentage=None):
+	"""The amounts of an order that has not been sent yet, as the server will calculate
+	them when `sync_order` saves it (nothing is saved).
+
+	`items` is the cart as `sync_order` takes it (item, qty). It replaces the lines of the
+	open order `invoice` if there is one, so the result is the order as it will be after the
+	cart is sent. Prices come from the order's price list and the tax from the item tax
+	templates and the tax category of the order type, exactly as for a saved order.
+	"""
+	from ury.ury.doctype.ury_order.ury_order import get_order_invoice, price_items_for_invoice
+	from ury.ury.hooks.ury_pos_invoice import before_validate
+
+	if isinstance(items, str):
+		items = json.loads(items)
+	if not items:
+		return totals_of(None)
+
+	doc = get_order_invoice(table, invoice, order_type)
+	if doc.name and doc.docstatus != 0:
+		frappe.throw(_("POS Invoice {0} is not an open order.").format(doc.name))
+	if doc.name and not doc.get("restaurant_table") and table:
+		doc.restaurant_table = table
+
+	posprofile = frappe.get_doc("POS Profile", pos_profile)
+	_check_branch(pos_profile)
+	doc.pos_profile = pos_profile
+	doc.order_type = order_type
+	doc.customer = customer or doc.customer or posprofile.customer
+	if order_type == "Aggregators":
+		doc.selling_price_list = frappe.db.get_value(
+			"Aggregator Settings",
+			{"customer": doc.customer, "parent": doc.branch, "parenttype": "Branch"},
+			"price_list",
+		)
+
+	menu = frappe.db.get_value("URY Menu", {"branch": doc.branch}, "name")
+	doc.items = []
+	for row in price_items_for_invoice(items, doc.selling_price_list, pos_profile, doc.branch, menu):
+		doc.append("items", row)
+
+	before_validate(doc, "before_validate")
+	doc.set_pos_fields(for_validate=True)
+	doc.set_missing_item_details(for_validate=True)
+	if discount_percentage not in (None, ""):
+		percentage = flt(discount_percentage)
+		if percentage < 0 or percentage > 100:
+			frappe.throw(_("Discount percentage must be between 0 and 100"))
+		doc.additional_discount_percentage = percentage
+		doc.discount_amount = 0
+	doc.calculate_taxes_and_totals()
+	return totals_of(doc)
+
+
 def totals_of(doc):
+	if doc is None:
+		return {"currency": None, "total": 0, "discount_percentage": 0, "discount_amount": 0, "net_total": 0,
+			"taxes": [], "total_taxes_and_charges": 0, "grand_total": 0, "rounded_total": 0}
 	taxable = doc.flags.get("taxable_by_rate") or {}
 	taxes = []
 	for tax in doc.taxes:

@@ -142,6 +142,28 @@ def getBranch():
     return branch_name
 
 @frappe.whitelist()
+def get_production_units_for_branch():
+    """The names of the production units (kitchens) of the user's branch. The POS listens to
+    the KOT error channels `kot_error_<branch>_<production unit>` for them (KotAlertListener).
+    A user without a branch, or a branch without production units, gets an empty list."""
+    branch = frappe.db.sql(
+        """
+        SELECT b.branch
+        FROM `tabURY User` AS a
+        INNER JOIN `tabBranch` AS b ON a.parent = b.name
+        WHERE a.user = %s
+        """,
+        frappe.session.user,
+    )
+    if not branch:
+        return {"production_units": []}
+    units = frappe.get_all(
+        "URY Production Unit", filters={"branch": branch[0][0]}, pluck="name", order_by="name"
+    )
+    return {"production_units": units}
+
+
+@frappe.whitelist()
 def getBranchRoom():
     user = frappe.session.user
     sql_query = """

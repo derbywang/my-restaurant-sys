@@ -1,7 +1,8 @@
 import { call } from '@ury/core';
 
+// call.get returns the whole Frappe response: the function's return value is in `message`.
 interface ProductionUnitsResponse {
-  production_units: string[];
+  message?: { production_units?: string[] };
 }
 
 /**
@@ -15,7 +16,7 @@ export async function getProductionUnitsForBranch(): Promise<string[]> {
     const response = await call.get<ProductionUnitsResponse>(
       'ury.ury_pos.api.get_production_units_for_branch'
     );
-    return response.production_units || [];
+    return response.message?.production_units ?? [];
   } catch (error) {
     console.error('Failed to fetch production units for branch:', error);
     return [];

@@ -7,6 +7,7 @@
 - 设计文档在 docs/design/。实施某项功能前，先阅读对应的设计文档，并按其中的阶段划分和验收用例来做。
   - 多语言：docs/design/i18n-design.md
 - 类型检查：`cd pos && yarn typecheck`（即 `tsc -p tsconfig.app.json --noEmit`，`yarn build` 会先跑它）；`frontend/` 和 `self-order/` 用 `npx tsc -p tsconfig.app.json --noEmit`，`packages/core` 和 `packages/ui` 用 `yarn typecheck`。不要用不带 `-p tsconfig.app.json` 的 `tsc --noEmit`：根 tsconfig 的 `files` 是空的，什么都不检查。
+- 提交前逐条确认命令的结果：`git reset` / `git add` 之后用 `git status` 或 `git diff --cached --stat` 确认暂存的内容正好是要提交的文件，确认无误再 `git commit`；不要把命令串在一起、不看结果就提交。已经 push 的提交不要 force push。
 - 每个阶段单独提交；不要修改 ury/public/ 下的构建产物；改完前端后执行 yarn build。
 
 ## 对 AGENTS.MD 的更正（以本节为准）
@@ -32,4 +33,5 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
 - **合并账单（会計合算）**：改了 `merge_bills` / `make_invoice` / `cancel_order` / `preview_order_totals` 或列表接口后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`
 - **交班对话框的金额计算**（`pos/src/lib/closing-rows.ts`：Expected = 开班金额 + 当班收款 − 找零）：改了之后运行 `cd pos && yarn test`（Vitest，只运行 `*.spec.ts`），并运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`。
+- **生产单元（KOT 错误提示的频道）**：改了 `get_production_units_for_branch` 或 `create_kot_log` 的频道名后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_production_units`。
 - **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。

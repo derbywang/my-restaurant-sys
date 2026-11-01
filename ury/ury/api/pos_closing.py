@@ -7,6 +7,8 @@ those posted after the opening: an order taken before the opening and paid after
 or one the previous closing left out, would otherwise never be consolidated.
 """
 
+from datetime import timedelta
+
 import frappe
 from frappe import _
 from frappe.utils import get_datetime, now_datetime
@@ -18,7 +20,14 @@ SUPERVISOR_ROLES = {"URY Manager", "System Manager"}
 
 def unconsolidated_invoices(pos_profile, end=None):
 	"""Names of the submitted, unconsolidated POS Invoices of `pos_profile` posted up to `end`
-	(oldest first)."""
+	(oldest first).
+
+	The POS sends the closing time to the second ("2026-11-01 10:00:05") while an invoice's
+	`posting_time` has microseconds. An `end` without fractions therefore stands for the
+	whole second, or an invoice paid at 10:00:05.7 would be after a closing at "10:00:05"."""
+	end = get_datetime(end) if end else now_datetime()
+	if end.microsecond == 0:
+		end += timedelta(seconds=1, microseconds=-1)
 	rows = frappe.db.sql(
 		"""
 		select name from `tabPOS Invoice`
@@ -27,7 +36,7 @@ def unconsolidated_invoices(pos_profile, end=None):
 			and timestamp(posting_date, posting_time) <= %s
 		order by timestamp(posting_date, posting_time), name
 		""",
-		(pos_profile, get_datetime(end) if end else now_datetime()),
+		(pos_profile, end),
 		pluck="name",
 	)
 	return rows

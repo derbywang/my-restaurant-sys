@@ -431,18 +431,19 @@ def _closing_rows(opening, invoices):
     return totals, taxes, payments
 
 
-def close_shift(opening, keep_transactions=True, only=None, extra=()):
+def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None):
     """Close the shift the way the URY POS dialog does: list the invoices with
     `ury.ury.api.pos_closing.get_pos_invoices`, create the POS Closing Entry as a draft
     with them as `pos_transactions`, then submit it.
 
     keep_transactions=False sends no invoice list (what the POS used to do), `only`
-    restricts the list to the given invoice names, `extra` adds names that were not listed.
+    restricts the list to the given invoice names, `extra` adds names that were not listed,
+    `end` is the closing time (default: now).
     """
     require_test_site()
     from ury.ury.api.pos_closing import get_pos_invoices
 
-    end = now_datetime()
+    end = end or now_datetime()
     with as_user(opening.user):
         invoices = get_pos_invoices(opening.period_start_date, end, POS_PROFILE, opening.user)
         if only is not None:

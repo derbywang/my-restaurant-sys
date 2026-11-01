@@ -132,7 +132,11 @@ class TestPOSClosing(URYFlowTestCase):
 
 	def _set_posting(self, invoice, when):
 		frappe.db.set_value(
-			"POS Invoice", invoice, {"posting_date": when.date(), "posting_time": when.time()}, update_modified=False
+			"POS Invoice",
+			invoice,
+			# a string: a time object would lose the microseconds the real posting times have
+			{"posting_date": when.date(), "posting_time": when.strftime("%H:%M:%S.%f")},
+			update_modified=False,
 		)
 
 	def _set_creation(self, invoice, when):
@@ -181,6 +185,47 @@ class TestPOSClosing(URYFlowTestCase):
 		self.assertEqual(unconsolidated_invoices(POS_PROFILE, self._at(10)), [first])
 		self.assertEqual(unconsolidated_invoices(POS_PROFILE, self._at(9)), [])
 		self.assertEqual(unconsolidated_invoices(POS_PROFILE, self._at(12)), [first, later])
+
+	def _paid_at(self, when, table=0):
+		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[table])
+		pay_order(order)
+		self._set_posting(order, when)
+		return order
+
+	def test_a_closing_time_to_the_second_covers_the_whole_second(self):
+		"""The POS sends the closing time without fractions, the invoices have microseconds."""
+		open_pos(CASHIER)
+		paid = self._paid_at(datetime.datetime(2026, 1, 1, 10, 0, 5, 700000))
+		at = datetime.datetime
+		cases = [
+			("2026-01-01 10:00:05", [paid]),  # as the POS sends it
+			(at(2026, 1, 1, 10, 0, 5), [paid]),
+			(at(2026, 1, 1, 10, 0, 6), [paid]),
+			(at(2026, 1, 1, 10, 0, 4), []),
+			(at(2026, 1, 1, 10, 0, 4, 999999), []),
+			# with fractions the time is exact
+			(at(2026, 1, 1, 10, 0, 5, 699999), []),
+			(at(2026, 1, 1, 10, 0, 5, 700000), [paid]),
+		]
+		for end, expected in cases:
+			self.assertEqual(unconsolidated_invoices(POS_PROFILE, end), expected, end)
+
+	def test_an_invoice_of_the_next_second_still_waits(self):
+		open_pos(CASHIER)
+		self._paid_at(datetime.datetime(2026, 1, 1, 10, 0, 6))
+		self.assertEqual(unconsolidated_invoices(POS_PROFILE, "2026-01-01 10:00:05"), [])
+
+	def test_closing_in_the_second_of_the_last_payment(self):
+		opening = open_pos(CASHIER)
+		self._set_opening_start(opening, self._at(9))
+		earlier = self._paid_at(datetime.datetime(2026, 1, 1, 10, 0, 1, 100000), table=0)
+		last = self._paid_at(datetime.datetime(2026, 1, 1, 10, 0, 5, 700000), table=1)
+
+		closing = close_shift(opening, end=datetime.datetime(2026, 1, 1, 10, 0, 5))
+
+		self.assertEqual({row.pos_invoice for row in closing.pos_transactions}, {earlier, last})
+		for name in (earlier, last):
+			self.assertTrue(frappe.db.get_value("POS Invoice", name, "consolidated_invoice"), name)
 
 	def test_customers_get_one_sales_invoice_each_and_the_totals_add_up(self):
 		opening = open_pos(CASHIER)

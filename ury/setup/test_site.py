@@ -431,6 +431,16 @@ def _closing_rows(opening, invoices):
     return totals, taxes, payments
 
 
+def _not_before_last_posting(now):
+    """The dev container's wall clock steps back by up to a second every ~30 s (WSL2 time
+    sync), so `now` can be earlier than an invoice posted a moment ago. Production does
+    not mix the two clocks like this; the harness must not close "before" its own invoices."""
+    last = frappe.db.sql(
+        "select max(timestamp(posting_date, posting_time)) from `tabPOS Invoice` where docstatus = 1"
+    )[0][0]
+    return max(now, last) if last else now
+
+
 def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None):
     """Close the shift the way the URY POS dialog does: list the invoices with
     `ury.ury.api.pos_closing.get_pos_invoices`, create the POS Closing Entry as a draft
@@ -443,7 +453,7 @@ def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None):
     require_test_site()
     from ury.ury.api.pos_closing import get_pos_invoices
 
-    end = end or now_datetime()
+    end = end or _not_before_last_posting(now_datetime())
     with as_user(opening.user):
         invoices = get_pos_invoices(opening.period_start_date, end, POS_PROFILE, opening.user)
         if only is not None:

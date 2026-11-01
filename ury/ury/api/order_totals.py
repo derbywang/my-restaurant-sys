@@ -14,6 +14,9 @@ def preview_order_totals(invoice, discount_percentage=None):
 	The POS shows these and nothing else: the tax of each rate is rounded on the server
 	(ury.overrides.pos_invoice), so any calculation in the browser could differ by a yen.
 	`discount_percentage`, when given, replaces the order's discount.
+
+	A merged bill (two open orders paid as one) is the amount of both orders: whichever of
+	the two is asked for, the answer is the same, and a discount applies to both.
 	"""
 	doc = frappe.get_doc("POS Invoice", invoice)
 	doc.check_permission("read")
@@ -22,15 +25,64 @@ def preview_order_totals(invoice, discount_percentage=None):
 	if doc.pos_profile:
 		_check_branch(doc.pos_profile)
 
+	percentage = None
 	if discount_percentage not in (None, ""):
 		percentage = flt(discount_percentage)
 		if percentage < 0 or percentage > 100:
 			frappe.throw(_("Discount percentage must be between 0 and 100"))
-		doc.additional_discount_percentage = percentage
-		doc.discount_amount = 0
 
-	doc.calculate_taxes_and_totals()
-	return totals_of(doc)
+	docs = [doc]
+	partner = merged_partner(doc)
+	if partner:
+		docs.append(partner)
+	for item in docs:
+		if percentage is not None:
+			item.additional_discount_percentage = percentage
+			item.discount_amount = 0
+		item.calculate_taxes_and_totals()
+
+	totals = totals_of(doc)
+	if partner:
+		totals = combine_totals(totals, totals_of(partner))
+		totals["merged_invoice"] = partner.name
+	return totals
+
+
+def merged_partner(doc):
+	"""The open order merged into `doc` (docs/design: two orders paid as one), if any."""
+	name = doc.get("custom_merged_pos_invoice")
+	if not name or not frappe.db.exists("POS Invoice", {"name": name, "docstatus": 0}):
+		return None
+	partner = frappe.get_doc("POS Invoice", name)
+	partner.check_permission("read")
+	return partner
+
+
+def combine_totals(first, second):
+	"""The totals of two orders paid as one; the tax of each rate is the sum of the two."""
+	taxes = {}
+	for tax in [*first["taxes"], *second["taxes"]]:
+		row = taxes.setdefault(
+			(tax["account_head"], tax["rate"]), {**tax, "taxable_amount": 0, "tax_amount": 0}
+		)
+		row["taxable_amount"] += tax["taxable_amount"]
+		row["tax_amount"] += tax["tax_amount"]
+	combined = {
+		key: first[key] + second[key]
+		for key in (
+			"total",
+			"discount_amount",
+			"net_total",
+			"total_taxes_and_charges",
+			"grand_total",
+			"rounded_total",
+		)
+	}
+	return {
+		**first,
+		**combined,
+		"taxes": sorted(taxes.values(), key=lambda row: -row["rate"]),
+	}
 
 
 @frappe.whitelist()

@@ -389,6 +389,7 @@
     "merge_confirm": "Merge bills",
     "merge_success": "Bill {{invoice}} merged successfully",
     "merge_failed": "Failed to merge bills",
+    "cancel_unmerges": "Cancelling this order unmerges the bill: {{invoice}} becomes an ordinary bill again and only its own amount is charged.",
     "merged_bill": "Merged bill",
     "includes_bill": "Includes {{invoice}}",
     "combined_total": "Combined total",

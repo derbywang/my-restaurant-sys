@@ -28,3 +28,5 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.overrides.test_pos_invoice`
 - **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。改了模板或 `receipt.py` 后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_receipt`
+- **合并账单（会計合算）**：改了 `merge_bills` / `make_invoice` / `cancel_order` / `preview_order_totals` 或列表接口后运行：
+  `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`

@@ -1884,6 +1884,25 @@ def customer_favourite_item(customer_name):
     return result
 
 
+def unmerge_bill(invoice):
+    """Remove the link of the order that was merged with `invoice` (see ury_pos.api.merge_bills)."""
+    partner = invoice.get("custom_merged_pos_invoice")
+    if not partner or not frappe.db.exists("POS Invoice", partner):
+        return
+    if frappe.db.get_value("POS Invoice", partner, "custom_merged_pos_invoice") != invoice.name:
+        return
+    # a bill that is already paid (or cancelled) is not touched
+    if frappe.db.get_value("POS Invoice", partner, "docstatus") != 0:
+        return
+    frappe.db.set_value(
+        "POS Invoice",
+        partner,
+        {"custom_merged_pos_invoice": None, "custom_merged_total": 0},
+        update_modified=False,
+    )
+    frappe.db.delete("URY Merged POS Invoice Detail", {"parent": partner, "parenttype": "POS Invoice"})
+
+
 @frappe.whitelist()
 def cancel_order(invoice_id, reason):
     pos_invoice = frappe.get_doc("POS Invoice", invoice_id)
@@ -1905,6 +1924,23 @@ def cancel_order(invoice_id, reason):
                 _("You are not allowed to cancel an invoice from another branch."),
                 frappe.PermissionError,
             )
+
+    # ERPNext does not cancel a bill that another submitted bill links to, and the paid bill is
+    # not edited to get around that. Refuse before anything (tables, KOT) has been changed.
+    if pos_invoice.docstatus == 1:
+        paid_partner = frappe.db.get_value(
+            "POS Invoice", {"custom_merged_pos_invoice": pos_invoice.name, "docstatus": 1}, "name"
+        )
+        if paid_partner:
+            frappe.throw(
+                _("{0} was paid together with {1} (merged bill) and cannot be cancelled on its own.").format(
+                    pos_invoice.name, paid_partner
+                )
+            )
+
+    # A merged bill is two orders paid as one. Cancelling one of them unmerges the other,
+    # which becomes an ordinary bill for its own amount again.
+    unmerge_bill(pos_invoice)
 
     # Release the full merge cluster, not only the primary table and CSV partners.
     if pos_invoice.restaurant_table:
@@ -2029,6 +2065,9 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
 
     if invoice.custom_merged_pos_invoice:
         target = frappe.get_doc("POS Invoice", invoice.custom_merged_pos_invoice)
+        # a discount on a merged bill is the same percentage on both orders
+        target.additional_discount_percentage = invoice.additional_discount_percentage
+        target.discount_amount = 0
         target.calculate_taxes_and_totals()
         
         doc_req = invoice.rounded_total

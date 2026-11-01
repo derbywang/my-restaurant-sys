@@ -361,6 +361,7 @@
     "merge_confirm": "Fusionner les additions",
     "merge_success": "Addition {{invoice}} fusionnée avec succès",
     "merge_failed": "Échec de la fusion des additions",
+    "cancel_unmerges": "Annuler cette commande dissocie l'addition : {{invoice}} redevient une addition ordinaire, seul son propre montant est facturé.",
     "merged_bill": "Addition fusionnée",
     "includes_bill": "Inclut {{invoice}}",
     "combined_total": "Total combiné",

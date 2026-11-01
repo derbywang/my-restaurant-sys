@@ -389,6 +389,7 @@
     "merge_confirm": "合并账单",
     "merge_success": "账单 {{invoice}} 合并成功",
     "merge_failed": "合并账单失败",
+    "cancel_unmerges": "取消这张订单会解除合并：{{invoice}} 变回普通账单，只收它自己的金额。",
     "merged_bill": "已合并账单",
     "includes_bill": "包含 {{invoice}}",
     "combined_total": "合并合计",

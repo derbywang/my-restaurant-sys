@@ -389,6 +389,7 @@
     "merge_confirm": "전표 합치기",
     "merge_success": "전표 {{invoice}}을(를) 합쳤습니다",
     "merge_failed": "전표 합치기에 실패했습니다",
+    "cancel_unmerges": "이 주문을 취소하면 합산이 해제됩니다. {{invoice}} 은(는) 일반 전표로 돌아가며 해당 금액만 청구됩니다.",
     "merged_bill": "합쳐진 전표",
     "includes_bill": "{{invoice}} 포함",
     "combined_total": "합산 금액",

@@ -28,6 +28,8 @@ export interface POSInvoice {
   split_siblings?: string[];
   custom_merged_pos_invoice?: string | null;
   custom_merged_total?: number | null;
+  /** The table of the order merged into this bill (merged bills only). */
+  merged_table?: string | null;
   additional_discount_percentage?: number;
   discount_amount?: number;
 }

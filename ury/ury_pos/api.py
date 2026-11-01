@@ -237,6 +237,32 @@ def _backfill_split_groups(invoices):
             inv["custom_split_group"] = parent_group_map.get(inv["custom_split_from"])
 
 
+# A merged bill is two orders that point at each other and are paid as one; the list shows
+# the one made first as the card of the pair.
+_MERGED_PRIMARY_ONLY = """(
+	COALESCE(custom_merged_pos_invoice, '') = ''
+	OR NOT EXISTS (
+		SELECT 1 FROM `tabPOS Invoice` partner
+		WHERE partner.name = `tabPOS Invoice`.custom_merged_pos_invoice
+			AND (partner.creation < `tabPOS Invoice`.creation
+				OR (partner.creation = `tabPOS Invoice`.creation AND partner.name < `tabPOS Invoice`.name))
+	)
+)"""
+
+
+def _enrich_merged_bills(invoices):
+    """For a merged bill: the table of the other order and its amount as it is now."""
+    for invoice in invoices:
+        partner = invoice.get("custom_merged_pos_invoice")
+        if not partner:
+            continue
+        table, total = frappe.db.get_value("POS Invoice", partner, ["restaurant_table", "rounded_total"]) or (None, None)
+        invoice["merged_table"] = table
+        if total is not None:
+            invoice["custom_merged_total"] = total
+    return invoices
+
+
 def _enrich_split_group_meta(invoices):
     if not invoices:
         return invoices
@@ -485,7 +511,7 @@ def getPosInvoice(status, limit, limit_start):
     limit_start = int(limit_start)
     if status == "Draft":
         invoices = frappe.db.sql(
-            """
+            f"""
             SELECT 
                 name, invoice_printed, grand_total, restaurant_table, custom_merged_tables,
                 cashier, waiter, net_total, posting_time, 
@@ -497,6 +523,7 @@ def getPosInvoice(status, limit, limit_start):
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s 
             AND (invoice_printed = 1 OR (invoice_printed = 0 AND COALESCE(restaurant_table, '') = ''))
+            AND {_MERGED_PRIMARY_ONLY}
             ORDER BY modified desc
             LIMIT %s OFFSET %s
             """,
@@ -508,7 +535,7 @@ def getPosInvoice(status, limit, limit_start):
         
         docstatus = "Draft"
         invoices = frappe.db.sql(
-            """
+            f"""
             SELECT 
                 name, invoice_printed, grand_total, restaurant_table, custom_merged_tables,
                 cashier, waiter, net_total, posting_time, 
@@ -520,6 +547,7 @@ def getPosInvoice(status, limit, limit_start):
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s 
             AND (invoice_printed = 0 AND restaurant_table IS NOT NULL)
+            AND {_MERGED_PRIMARY_ONLY}
             ORDER BY modified desc
             LIMIT %s OFFSET %s
             """,
@@ -530,7 +558,7 @@ def getPosInvoice(status, limit, limit_start):
     elif status == "Recently Paid":
         docstatus = "Paid"
         invoices = frappe.db.sql(
-            """
+            f"""
             SELECT 
                 name, invoice_printed, grand_total, restaurant_table, custom_merged_tables,
                 cashier, waiter, net_total, posting_time, 
@@ -540,6 +568,7 @@ def getPosInvoice(status, limit, limit_start):
                 custom_merged_pos_invoice, custom_merged_total
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s 
+            AND {_MERGED_PRIMARY_ONLY}
             ORDER BY modified desc
             LIMIT %s OFFSET %s
             """,
@@ -550,7 +579,7 @@ def getPosInvoice(status, limit, limit_start):
     else:
         
         invoices = frappe.db.sql(
-            """
+            f"""
             SELECT 
                 name, invoice_printed, grand_total, restaurant_table, custom_merged_tables,
                 cashier, waiter, net_total, posting_time, 
@@ -560,6 +589,7 @@ def getPosInvoice(status, limit, limit_start):
                 custom_merged_pos_invoice, custom_merged_total
             FROM `tabPOS Invoice` 
             WHERE branch = %s AND status = %s 
+            AND {_MERGED_PRIMARY_ONLY}
             ORDER BY modified desc
             LIMIT %s OFFSET %s
             """,
@@ -573,7 +603,7 @@ def getPosInvoice(status, limit, limit_start):
             updatedlist.pop()
     else:
             next = False
-    updatedlist = _enrich_split_group_meta(updatedlist)
+    updatedlist = _enrich_merged_bills(_enrich_split_group_meta(updatedlist))
     return  { "data":updatedlist,"next":next}
 
 
@@ -636,7 +666,7 @@ def searchPosInvoice(query,status):
         ],
         limit_page_length=10 
     )
-    pos_invoices = _enrich_split_group_meta(pos_invoices)
+    pos_invoices = _enrich_merged_bills(_enrich_split_group_meta(pos_invoices))
     
     return {"data": pos_invoices, "next": len(pos_invoices) == 10}
     

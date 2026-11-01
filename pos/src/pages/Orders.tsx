@@ -32,9 +32,13 @@ import {
 import { formatMergedTableLabel } from '../lib/table-utils';
 import { t } from '../i18n';
 
-function getOrderTableLabel(order: Pick<POSInvoice, 'restaurant_table' | 'custom_merged_tables'>) {
+function getOrderTableLabel(
+  order: Pick<POSInvoice, 'restaurant_table' | 'custom_merged_tables'> & { merged_table?: string | null }
+) {
   if (!order.restaurant_table) return null;
-  return formatMergedTableLabel(order.restaurant_table, order.custom_merged_tables);
+  const label = formatMergedTableLabel(order.restaurant_table, order.custom_merged_tables);
+  // a merged bill: the tables of both orders
+  return order.merged_table ? `${label} + ${order.merged_table}` : label;
 }
 
 function isOrderEditable(status: string) {
@@ -620,6 +624,11 @@ export default function Orders() {
                   <DialogDescription>
                     {t('errors.enter_cancel_reason')}
                   </DialogDescription>
+                  {isMergedBill(selectedOrder) && (
+                    <p className="mt-2 text-sm text-amber-700">
+                      {t('bill_merge.cancel_unmerges', { invoice: selectedOrder.custom_merged_pos_invoice })}
+                    </p>
+                  )}
                 </DialogHeader>
                 <div className="px-6 mb-3">
                 <Textarea

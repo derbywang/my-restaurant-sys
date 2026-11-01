@@ -308,7 +308,8 @@ def sync_merged_invoice(doc):
                 target.save(ignore_permissions=True)
                 target.submit()
 
-        else:
+        elif target.docstatus == 0:
+            # a paid or cancelled bill is not saved again
             target.save(ignore_permissions=True)
 
         frappe.publish_realtime(
@@ -331,7 +332,40 @@ def sync_merged_invoice(doc):
         frappe.flags.in_bill_merge_sync = False
 
 
+def refresh_merged_snapshot(doc):
+    """Keep what the merged order shows of this one (its total and its items) current.
+
+    `custom_merged_total` and the detail rows of the other order are copies taken when the
+    bills were merged; without this, an item added later is missing from them.
+    """
+    partner = doc.get("custom_merged_pos_invoice")
+    if not partner or doc.docstatus != 0:
+        return
+    if frappe.db.get_value("POS Invoice", partner, "docstatus") != 0:
+        return
+    frappe.db.set_value(
+        "POS Invoice", partner, "custom_merged_total", doc.rounded_total or doc.grand_total, update_modified=False
+    )
+    frappe.db.delete("URY Merged POS Invoice Detail", {"parent": partner, "parenttype": "POS Invoice"})
+    for idx, item in enumerate(doc.items, start=1):
+        frappe.get_doc(
+            {
+                "doctype": "URY Merged POS Invoice Detail",
+                "parent": partner,
+                "parenttype": "POS Invoice",
+                "parentfield": "custom_merged_pos_invoice_details",
+                "idx": idx,
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": item.qty,
+                "rate": item.rate,
+                "amount": item.amount,
+            }
+        ).db_insert()
+
+
 def on_update(doc, method):
+    refresh_merged_snapshot(doc)
     sync_merged_invoice(doc)
 
 

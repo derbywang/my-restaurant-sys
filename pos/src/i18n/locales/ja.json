@@ -389,6 +389,7 @@
     "merge_confirm": "会計合算を実行",
     "merge_success": "伝票 {{invoice}} を合算しました",
     "merge_failed": "会計合算に失敗しました",
+    "cancel_unmerges": "この伝票を取り消すと会計合算が解除されます。{{invoice}} は通常の伝票に戻り、その金額だけが請求されます。",
     "merged_bill": "合算した伝票",
     "includes_bill": "{{invoice}} を含む",
     "combined_total": "合算合計",

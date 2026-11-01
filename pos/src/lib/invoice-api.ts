@@ -253,6 +253,9 @@ export async function updatePrintStatus(orderId: string) {
 
 export const MERGED_POS_INVOICE_PRINT_FORMAT = 'Merged POS Invoice Format';
 
+/** The Japanese receipt (適格簡易請求書). It prints merged bills too, so no separate format is needed. */
+export const JP_RECEIPT_PRINT_FORMAT = 'URY JP Receipt';
+
 export interface MergeBillCandidate {
   name: string;
   customer: string;
@@ -302,7 +305,7 @@ export function resolvePrintFormat(
   order: Pick<POSInvoice, 'custom_merged_pos_invoice'>,
   defaultFormat: string | null | undefined
 ) {
-  if (order.custom_merged_pos_invoice) {
+  if (order.custom_merged_pos_invoice && defaultFormat !== JP_RECEIPT_PRINT_FORMAT) {
     return MERGED_POS_INVOICE_PRINT_FORMAT;
   }
   return defaultFormat as string;

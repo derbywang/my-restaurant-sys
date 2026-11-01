@@ -86,13 +86,13 @@ def network_printing(
 
 
 @frappe.whitelist()
-def select_network_printer(pos_profile, invoice_id):
+def select_network_printer(pos_profile, invoice_id, print_format=None):
     invoice_doc = frappe.get_doc("POS Invoice", invoice_id)
     if not frappe.has_permission("POS Invoice", "write", doc=invoice_doc):
         frappe.throw(_("Not permitted to print this invoice"), frappe.PermissionError)
 
     table = frappe.db.get_value("POS Invoice", invoice_id, "restaurant_table")
-    print_format = frappe.db.get_value("POS Profile", pos_profile, "print_format")
+    print_format = print_format or frappe.db.get_value("POS Profile", pos_profile, "print_format")
 
     if table:
         room = frappe.db.get_value("URY Table", table, "restaurant_room")

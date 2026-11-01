@@ -123,6 +123,7 @@ ury_demo_transaction_doctypes = [
 # ----------
 
 # add methods and filters to jinja environment
+jinja = {"methods": ["ury.ury.api.receipt.jp_receipt_data"]}
 # jinja = {
 # 	"methods": "ury.utils.jinja_methods",
 # 	"filters": "ury.utils.jinja_filters"
@@ -133,6 +134,7 @@ ury_demo_transaction_doctypes = [
 
 # before_install = "ury.install.before_install"
 after_install = "ury.install.after_install"
+after_migrate = ["ury.setup.jp_tax.refresh_receipt_format"]
 
 # Uninstallation
 # ------------

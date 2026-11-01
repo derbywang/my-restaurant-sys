@@ -12,3 +12,4 @@ ury.patches.v2_0.jp_tax_order_type_categories
 ury.patches.v2_0.jp_currency_format
 ury.patches.v2_0.tax_rounding
 ury.patches.v2_0.jp_discount_on_net_total
+ury.patches.v2_0.jp_receipt_format

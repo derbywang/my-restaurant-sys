@@ -1,0 +1,62 @@
+{#- URY JP Receipt: 適格簡易請求書 (docs/design/jp-tax-design.md 4.6). The amounts come from ury.ury.api.receipt. -#}
+{%- set r = jp_receipt_data(doc) -%}
+<style>
+	.jp-receipt { width: 72mm; font-size: 12px; line-height: 1.45; color: #000; }
+	.jp-receipt table { width: 100%; border-collapse: collapse; }
+	.jp-receipt td, .jp-receipt th { padding: 1px 0; vertical-align: top; }
+	.jp-receipt .r { text-align: right; white-space: nowrap; }
+	.jp-receipt .c { text-align: center; }
+	.jp-receipt .title { font-size: 16px; font-weight: bold; text-align: center; margin: 6px 0; }
+	.jp-receipt .total td { font-size: 15px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; }
+	.jp-receipt hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
+	.jp-receipt .small { font-size: 10.5px; }
+	@media screen { .jp-receipt { padding: 8px; } }
+</style>
+<div class="jp-receipt">
+	<div class="c"><b>{{ r.company }}</b></div>
+	{%- if r.branch and r.branch != r.company %}<div class="c">{{ r.branch }}</div>{% endif %}
+	{%- if r.address %}<div class="c small">{{ r.address }}</div>{% endif %}
+	{%- if r.phone %}<div class="c small">TEL {{ r.phone }}</div>{% endif %}
+	<div class="c small">
+		{%- if r.registration_valid %}登録番号 {{ r.registration_number }}
+		{%- else %}登録番号 未設定{% endif -%}
+	</div>
+
+	<div class="title">{{ r.title }}</div>
+
+	<table class="small">
+		<tr><td>{{ r.posting }}</td><td class="r">{{ r.order_type }}{% if r.table %} {{ r.table }}{% endif %}</td></tr>
+		<tr><td colspan="2">No. {{ doc.name }}{% if r.merged %}（合算 {{ r.invoices[1].name }}）{% endif %}</td></tr>
+	</table>
+	<hr>
+
+	{%- for section in r.invoices %}
+	{%- if r.merged %}<div class="small"><b>{{ section.name }}</b></div>{% endif %}
+	<table>
+		{%- for line in section.lines %}
+		<tr>
+			<td>{% if line.reduced %}※{% endif %}{{ line.name }}</td>
+			<td class="r">{{ line.qty }} × {{ line.rate }}</td>
+			<td class="r" style="width: 22%">{{ line.amount }}</td>
+		</tr>
+		{%- endfor %}
+	</table>
+	{%- if r.merged %}<table class="small"><tr><td>小計</td><td class="r">{{ section.total }}</td></tr></table>{% endif %}
+	{%- endfor %}
+	<hr>
+
+	<table>
+		<tr><td>小計（税抜）</td><td class="r">{{ r.subtotal }}</td></tr>
+		{%- if r.discount %}<tr><td>割引</td><td class="r">-{{ r.discount }}</td></tr>{% endif %}
+		{%- for row in r.rates %}
+		<tr><td>{% if row.reduced %}※{% endif %}{{ row.rate }}対象（税抜）</td><td class="r">{{ row.taxable }}</td></tr>
+		<tr><td>　消費税等 {{ row.rate }}</td><td class="r">{{ row.tax }}</td></tr>
+		{%- endfor %}
+		<tr class="total"><td>合計（税込）</td><td class="r">{{ r.total }}</td></tr>
+		{%- if r.paid %}
+		<tr><td>お預かり</td><td class="r">{{ r.received }}</td></tr>
+		{%- if r.change %}<tr><td>お釣り</td><td class="r">{{ r.change }}</td></tr>{% endif %}
+		{%- endif %}
+	</table>
+	{%- if r.has_reduced %}<div class="small" style="margin-top: 4px">※は軽減税率対象</div>{% endif %}
+</div>

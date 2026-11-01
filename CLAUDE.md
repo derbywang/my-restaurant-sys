@@ -26,3 +26,5 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`
 - **`POS Invoice`**：`override_doctype_class` → `ury.overrides.pos_invoice.URYPOSInvoice`，`calculate_taxes_and_totals` 换成子类 `URYTaxesAndTotals`，只重写 `round_off_totals`（每个税率按账单合计只算一次税额，舍入方式取 POS Profile 的 `custom_tax_rounding`）。升级后对比 ERPNext `taxes_and_totals.py` 的 `calculate_taxes` / `round_off_totals` 以及 `AccountsController.calculate_taxes_and_totals`，并运行：
   `bench --site ury-test.localhost run-tests --module ury.overrides.test_pos_invoice`
+- **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。改了模板或 `receipt.py` 后运行：
+  `bench --site ury-test.localhost run-tests --module ury.ury.api.test_receipt`

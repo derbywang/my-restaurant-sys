@@ -171,6 +171,15 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
 - 按税率分开的金额要和 4.4 的计算结果一致。分组用一个 Jinja 辅助方法（在 `hooks.py` 的 `jinja` 里注册），依据商品行的 `item_tax_rate` 和税行。
 - 打印文字固定用日文（不用按员工语言翻译的 `_()`）；`pos/src/lib/print.ts` 里 printview 的 `_lang=en` 要改。
 
+**T6 的实现**
+
+- 打印格式 `URY JP Receipt`（POS Invoice，80mm 宽）。**模板文件是 `ury/templates/print_formats/ury_jp_receipt.html`**，每次 `bench migrate` 后（`after_migrate` → `refresh_receipt_format`）会写回站点上的 Print Format，所以不要在站点上直接改这个格式，改文件后 migrate。
+- 数据由 `ury/ury/api/receipt.py` 的 `jp_receipt_data` 准备（通过 `hooks.py` 的 `jinja` 注册给模板）：税额取账单保存的税行，各税率的对象金额取该税率商品 `net_amount`（折扣后）之和；同时在内存里重新计算一次作校验，**不一致时仍打印保存的金额并写 Error Log（标题以 `Receipt:` 开头），打印不会失败**。
+- 标题：付款前「ご請求明細」，付款后（docstatus = 1）「領収書」。登记号取自 `Company.tax_id`，格式不对或未设置时只印“登録番号 未設定”，不阻止打印；POS Profile 保存时会提示（orange）。公司地址和电话有就印。
+- 合并账单（J10）：同一个格式，按税率合并两张账单的对象金额和税额，明细按账单分开，合计为两张之和；旧的 `Merged POS Invoice Format` 保留给没有改用新格式的 POS Profile（`resolvePrintFormat` 在 POS Profile 使用新格式时不再换成旧格式）。
+- 补丁 `jp_receipt_format`（`apply_jp_tax_setup` 也会调用）：只把 `print_format` 为空 / `POS Invoice` / `Merged POS Invoice Format` 的日本公司的 POS Profile 改为新格式，其他自定义格式保持不变并在补丁输出里列出。
+- 三种打印方式都使用 POS Profile 的 `print_format`：QZ Tray 与 Websocket 打印由收银端取 `resolvePrintFormat` 的结果，网络打印的 `select_network_printer` 现在也接受收银端传来的格式（以前只读 POS Profile，合并账单会用错格式）。
+
 ### 4.7 初始化工作
 
 - 停用（**不删除**）现在的 5% 模板，按 4.1 新建税模板、商品税模板、税类别和 `CT 1%` 科目。
@@ -233,3 +242,5 @@ ERPNext 的 Item 和 Item Group 都有 Taxes 子表，字段包括 `item_tax_tem
     3. 加料行是独立的商品行，没有和主商品关联：厨房单、小票、拆单上它们是单独的行。
     4. 浏览器里显示的加料价格来自菜单，服务器按价目表计价；按订单类型使用不同菜单（`order_type_wise_menu`）时两者可能不同，以服务器的预览 / 账单金额为准。
     5. 清理遗留代码：`selectedVariant` / `selectedAddons` 字段和相关计算。
+- **印花税（収入印紙）**：收款金额在 5 万日元以上的收据（領収書）需要贴印花税票。请税理士确认操作方式（是否适用、谁来贴、小票上如何标注）；目前小票不处理印花税。
+- **合并账单小票的税额记载**：合并账单的小票上，各税率的税额是“各张账单舍去后相加”，不是“合计后再舍去一次”（两者可能差 ¥1）。这样做是为了和实际收的税额（以及交班合并后的税额）一致。请税理士确认合并小票可以这样记载。

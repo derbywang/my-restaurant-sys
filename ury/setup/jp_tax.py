@@ -49,7 +49,7 @@ GROUPS_TO_MOVE = {"Consumable": "食品"}
 
 
 def japan_companies():
-    return frappe.get_all("Company", filters={"country": "Japan"}, fields=["name", "abbr"])
+    return frappe.get_all("Company", filters={"country": "Japan"}, fields=["name", "abbr", "tax_id"])
 
 
 def is_japan_site():
@@ -88,6 +88,7 @@ def apply_jp_tax_setup():
         result["drafts"].update(legacy_drafts)
 
     result["discount_on_net_total"] = apply_net_total_discount()
+    result["receipt_format"] = apply_receipt_format()
     result["ungrouped_menu_groups"] = ungrouped_menu_item_groups()
     return result
 
@@ -106,6 +107,61 @@ def apply_net_total_discount():
             frappe.db.set_value("POS Profile", name, "apply_discount_on", "Net Total")
             changed.append(name)
     return changed
+
+
+RECEIPT_FORMAT = "URY JP Receipt"
+# print formats the POS Profile may have had before; only these are replaced
+REPLACEABLE_PRINT_FORMATS = (None, "", "POS Invoice", "Merged POS Invoice Format")
+
+
+def refresh_receipt_format():
+    """Create the print format `URY JP Receipt` or bring its template up to date with
+    `templates/print_formats/ury_jp_receipt.html` (runs after every migrate, so the file
+    is the source; do not edit the format on the site)."""
+    with open(frappe.get_app_path("ury", "templates", "print_formats", "ury_jp_receipt.html"), encoding="utf-8") as f:
+        html = f.read()
+    if frappe.db.exists("Print Format", RECEIPT_FORMAT):
+        if frappe.db.get_value("Print Format", RECEIPT_FORMAT, "html") != html:
+            frappe.db.set_value("Print Format", RECEIPT_FORMAT, "html", html)
+        return
+    frappe.get_doc(
+        {
+            "doctype": "Print Format",
+            "name": RECEIPT_FORMAT,
+            "doc_type": "POS Invoice",
+            "module": "URY",
+            "custom_format": 1,
+            "print_format_type": "Jinja",
+            "html": html,
+            "margin_top": 0,
+            "margin_bottom": 0,
+            "margin_left": 0,
+            "margin_right": 0,
+            "default_print_language": "ja",
+        }
+    ).insert(ignore_permissions=True)
+
+
+def apply_receipt_format():
+    """Make `URY JP Receipt` the bill/receipt format of the POS Profiles of Japanese
+    companies. A profile that uses some other print format of its own is left alone (and
+    reported). Returns {"changed": [...], "kept": {profile: format}, "no_registration_number": [...]}."""
+    refresh_receipt_format()
+    result = {"changed": [], "kept": {}, "no_registration_number": []}
+    for company in japan_companies():
+        if not company.get("tax_id"):
+            result["no_registration_number"].append(company.name)
+        for profile in frappe.get_all(
+            "POS Profile", filters={"company": company.name}, fields=["name", "print_format"]
+        ):
+            if profile.print_format == RECEIPT_FORMAT:
+                continue
+            if profile.print_format in REPLACEABLE_PRINT_FORMATS:
+                frappe.db.set_value("POS Profile", profile.name, "print_format", RECEIPT_FORMAT)
+                result["changed"].append(profile.name)
+            else:
+                result["kept"][profile.name] = profile.print_format
+    return result
 
 
 def _ensure_tax_category(title):

@@ -5,6 +5,24 @@ from frappe import _, msgprint
 def validate(doc, method):
     validate_bill_check(doc, method)
     validate_cost_center(doc, method)
+    warn_registration_number(doc, method)
+
+
+def warn_registration_number(doc, method):
+    """The receipt of a Japanese shop needs the invoice registration number (T + 13 digits)
+    in Company > Tax ID. Only a warning: the receipt still prints (docs/design/jp-tax-design.md 4.6)."""
+    from ury.ury.api.receipt import PRINT_FORMAT, is_registration_number
+
+    if doc.get("print_format") != PRINT_FORMAT:
+        return
+    if not is_registration_number(frappe.db.get_value("Company", doc.company, "tax_id")):
+        msgprint(
+            _("Company {0} has no valid invoice registration number (T + 13 digits) in Tax ID. The receipt will say it is not set.").format(
+                doc.company
+            ),
+            title=_("Receipt"),
+            indicator="orange",
+        )
 
 
 def validate_bill_check(doc, method):

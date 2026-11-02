@@ -29,6 +29,11 @@
 5. 第 2 步支付方式的说明写着 “add Card, UPI, or others”，UPI 是印度的支付方式。
 6. 验证站点的会计年度是 2026-01-04 ～ 2027-01-03（开始日是 1 月 4 日，不是月初），要查第 1 步日期的计算 / 填写方式（`calculateFyStartDate`、日期选择器）。
 
+## 换行符（CRLF / LF）
+- 仓库里至少有 8 个文本文件在版本库里是 CRLF（`frontend/package.json`、`frontend/src/` 下 6 个文件含 `ConfigurePage.tsx`、`TERMS.md`），其余都是 LF。`ConfigurePage.tsx` 被 git 判为 `-text`（可能含特殊字符），要先查原因。用脚本或编辑器改 CRLF 文件时，换行符被悄悄转成 LF，一次差点产生上千行的假改动（T7 提交前发现并恢复）。
+- 方案：加 `.gitattributes`，写 `* text=auto eol=lf`，并用 `git add --renormalize .` 一次性把这些 CRLF 文件转成 LF，单独提交（“chore: normalize line endings”）。只会改这 8 个左右的文件，其余已是 LF，不会动；做之前先用 `git add --renormalize . && git diff --cached --stat` 预览实际受影响的文件。
+- 影响：这些文件的提交会显示整文件变更，`git blame` 会指向这次提交（可用 `git blame -w` 或 `.git-blame-ignore-revs` 忽略）；之后改这些文件不会再出现换行符噪声。编辑器要保持 LF。
+
 ## 厨房屏幕（mosaic）
 - socket 断线时，在屏幕上显示明显的提示（例如顶部红条），连接恢复后自动消失。现在断线只在控制台记一条警告，厨房人员看不出画面已经不再实时更新。
 

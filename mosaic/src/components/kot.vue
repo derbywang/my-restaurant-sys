@@ -244,6 +244,7 @@
 import { FrappeApp } from "frappe-js-sdk";
 import Masonry from "masonry-layout";
 import io from "socket.io-client";
+import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from "../lib/realtime";
 
 let host = window.location.hostname;
 let port = window.location.port;
@@ -271,9 +272,16 @@ async function fetchAndSetSiteName() {
 async function initializeSocket() {
     await fetchAndSetSiteName();
     if (window.globalSiteName) {
-        let site = window.globalSiteName;
-        let site_url = `${url}/${site}`;
-        socket = io(site_url,{ withCredentials: true });
+        let site_url = buildSocketUrl({
+            protocol,
+            hostname: host,
+            port,
+            siteName: window.globalSiteName,
+            devServer: Boolean(window.dev_server),
+            socketioPort: window.socketio_port,
+        });
+        socket = io(site_url, { withCredentials: true, ...SOCKET_RECONNECT_OPTIONS });
+        keepTryingToConnect(socket);
         console.log("socket == >",socket)
         socket.on('connect_error', (err) => {
             console.error("Socket connection error:", err);

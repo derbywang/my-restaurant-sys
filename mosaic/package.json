@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build --base=/assets/ury/mosaic/ && yarn copy-html-entry",
     "preview": "vite preview",
+    "test": "node --test src/lib/*.test.mjs",
     "copy-html-entry": "cp ../ury/public/mosaic/index.html ../ury/www/mosaic.html"
   },
   "dependencies": {

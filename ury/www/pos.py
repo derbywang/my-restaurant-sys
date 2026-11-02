@@ -3,6 +3,7 @@ import re
 
 import frappe
 import frappe.sessions
+from frappe.utils import cint
 from frappe import _
 from frappe.utils.telemetry import capture
 
@@ -39,7 +40,13 @@ def get_context(context):
 	boot_json = json.dumps(boot_json)
 
 	context.update(
-		{"build_version": frappe.utils.get_build_version(), "boot": boot_json, "csrf_token": csrf_token}
+		{
+			"build_version": frappe.utils.get_build_version(),
+			"boot": boot_json,
+			"csrf_token": csrf_token,
+			# the realtime connection: on `bench start` Socket.IO listens on its own port
+			"dev_server": cint(getattr(frappe.local, "dev_server", 0)),
+		}
 	)
 	return context
 

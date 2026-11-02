@@ -8,6 +8,13 @@ export { storage } from './storage';
 export { getCurrency, setCurrency } from './currency';
 export { formatCurrency, formatCompactCurrency, formatInvoiceTime, flt } from './format';
 export { initPrinting, loadQzPrinter, disconnectQzPrinter, printWithQz } from './print/qz';
+export {
+  buildSocketUrl,
+  keepTryingToConnect,
+  SOCKET_RECONNECT_OPTIONS,
+  SLOW_RETRY_MS,
+} from './realtime';
+export type { SocketUrlInput, ReconnectableSocket } from './realtime';
 export { validateFieldValue } from './utils/validateField';
 export type { ValidationMessages } from './utils/validateField';
 export { setStaffLanguage } from './frappe/language';

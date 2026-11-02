@@ -13,6 +13,7 @@
  */
 
 import { io, type Socket } from 'socket.io-client';
+import { buildSocketUrl } from '@ury/core';
 
 let socket: Socket | null = null;
 let connectPromise: Promise<Socket> | null = null;
@@ -29,26 +30,17 @@ function getSiteName(): string {
   return getBoot().sitename ?? '';
 }
 
-/**
- * Same rules as frappe/public/js/frappe/socketio_client.js get_host():
- * on the dev server, socket.io listens on boot.socketio_port (usually 9000),
- * not on the web port.
- */
-function buildSocketUrl(): string {
+function buildUrl(): string {
   const boot = getBoot();
-  const siteName = getSiteName();
-  const { protocol, hostname } = window.location;
-  const devServer = Boolean((window as any).dev_server);
-  const socketioPort = boot.socketio_port;
-
-  let host = `${protocol}//${hostname}`;
-  if (devServer && socketioPort) {
-    host = `${protocol}//${hostname}:${socketioPort}`;
-  } else if (window.location.port) {
-    host = `${protocol}//${hostname}:${window.location.port}`;
-  }
-
-  return siteName ? `${host}/${siteName}` : host;
+  const { protocol, hostname, port } = window.location;
+  return buildSocketUrl({
+    protocol,
+    hostname,
+    port,
+    siteName: getSiteName(),
+    devServer: Boolean((window as any).dev_server),
+    socketioPort: boot.socketio_port,
+  });
 }
 
 /**
@@ -63,7 +55,7 @@ export function getSetupSocket(): Promise<Socket> {
 
   if (!connectPromise) {
     connectPromise = new Promise<Socket>((resolve, reject) => {
-      const url = buildSocketUrl();
+      const url = buildUrl();
       const s = io(url, {
         withCredentials: true,
         reconnectionAttempts: 5,

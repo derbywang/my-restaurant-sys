@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from '@ury/core';
 
 // Mirrors the connection pattern used by the legacy Vue KDS app
 // (mosaic/src/components/kot.vue): the socket.io server is namespaced per
@@ -30,14 +31,21 @@ async function createSocket(): Promise<Socket> {
     throw new Error('Site name is not set. Socket cannot be initialized.');
   }
 
-  const host = window.location.hostname;
-  const port = window.location.port;
-  const protocol = window.location.protocol;
-  const url = port ? `${protocol}//${host}:${port}` : `${protocol}//${host}`;
-  const siteUrl = `${url}/${site}`;
+  // On `bench start` Socket.IO listens on its own port (frappe.boot.socketio_port), like in
+  // the Frappe desk; in production it is the origin of the page (nginx).
+  const siteUrl = buildSocketUrl({
+    protocol: window.location.protocol,
+    hostname: window.location.hostname,
+    port: window.location.port,
+    siteName: site,
+    devServer: Boolean((window as unknown as { dev_server?: number }).dev_server),
+    socketioPort: (window as unknown as { frappe?: { boot?: { socketio_port?: number } } }).frappe?.boot
+      ?.socketio_port,
+  });
 
   globalSiteName = site;
-  const newSocket = io(siteUrl, { withCredentials: true });
+  const newSocket = io(siteUrl, { withCredentials: true, ...SOCKET_RECONNECT_OPTIONS });
+  keepTryingToConnect(newSocket);
 
   newSocket.on('connect_error', (err) => {
     console.error('Socket connection error:', err);

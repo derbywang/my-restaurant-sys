@@ -34,4 +34,5 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`
 - **交班对话框的金额计算**（`pos/src/lib/closing-rows.ts`：Expected = 开班金额 + 当班收款 − 找零）：改了之后运行 `cd pos && yarn test`（Vitest，只运行 `*.spec.ts`），并运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`。
 - **生产单元（KOT 错误提示的频道）**：改了 `get_production_units_for_branch` 或 `create_kot_log` 的频道名后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_production_units`。
+- **实时连接（Socket.IO）的地址和重连规则**（`packages/core/src/realtime.ts`，mosaic 的副本是 `mosaic/src/lib/realtime.js`，两处要保持一致）：改了之后运行 `cd packages/core && yarn test` 和 `cd mosaic && yarn test`。
 - **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。

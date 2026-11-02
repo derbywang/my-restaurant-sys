@@ -116,6 +116,10 @@ def preview_cart_totals(items, pos_profile, order_type, customer=None, table=Non
 	_check_branch(pos_profile)
 	doc.pos_profile = pos_profile
 	doc.order_type = order_type
+	# Without a table (a take-away order before it gets one) the invoice does not know its
+	# restaurant, and with it the tax category of the order type; the POS Profile does.
+	doc.restaurant = doc.restaurant or posprofile.restaurant
+	doc.branch = doc.branch or posprofile.branch
 	doc.customer = customer or doc.customer or posprofile.customer
 	if order_type == "Aggregators":
 		doc.selling_price_list = frappe.db.get_value(

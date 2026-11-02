@@ -121,6 +121,21 @@ class TestPreviewCartTotals(URYFlowTestCase):
 		self.assertEqual(totals["rounded_total"], 1630)
 		self._assert_same(totals, place_order(CASHIER, items, table=TABLES[0], order_type="Take Away"))
 
+	def test_take_away_without_a_table_uses_the_take_away_tax(self):
+		# no table selected (the POS sends none for a take-away order): the restaurant comes
+		# from the POS Profile, so the order type still picks the tax category
+		items = [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)]
+		totals = self._cart(items, order_type="Take Away", table=None)
+		self.assertEqual(
+			[(t["rate"], t["taxable_amount"], t["tax_amount"]) for t in totals["taxes"]], [(10, 500, 50), (8, 1000, 80)]
+		)
+		self.assertEqual(totals["rounded_total"], 1630)
+
+	def test_dine_in_without_a_table_is_ten_percent(self):
+		totals = self._cart([(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=None)
+		self.assertEqual([(t["rate"], t["tax_amount"]) for t in totals["taxes"]], [(10, 150)])
+		self.assertEqual(totals["rounded_total"], 1650)
+
 	def test_the_cart_replaces_the_lines_of_the_open_order(self):
 		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
 		items = [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 2)]

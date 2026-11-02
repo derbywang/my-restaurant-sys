@@ -27,6 +27,7 @@ import TableTransferDialog from '../../components/TableTransferDialog';
 import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
 import { t } from '../../i18n';
+import { customerId } from '../../lib/default-customer';
 
 type Mode = 'menu' | 'order';
 
@@ -113,7 +114,7 @@ export default function CaptainOrder() {
     lines: activeOrders.map((item) => ({ id: item.id, name: item.name, quantity: item.quantity })),
     posProfile: posProfile?.name,
     orderType: DINE_IN,
-    customer: selectedCustomer?.name,
+    customer: customerId(selectedCustomer),
     table,
     invoice: isUpdatingOrder ? orderId : null,
   });
@@ -221,7 +222,7 @@ export default function CaptainOrder() {
       // live E2E test — a 500 "missing 1 required positional argument:
       // 'customer'" — not just a Cashier-UI convention). Match OrderPanel's
       // exact validate-before-submit gate rather than only omitting the field.
-      if (!selectedCustomer?.name) {
+      if (!customerId(selectedCustomer)) {
         showToast.error(t('captain.select_customer_first'));
         return;
       }
@@ -241,7 +242,7 @@ export default function CaptainOrder() {
         order_type: DINE_IN,
         table,
         room: selectedRoom || undefined,
-        customer: selectedCustomer.name,
+        customer: customerId(selectedCustomer),
         cashier: posProfile.cashier,
         owner: posProfile.owner,
         mode_of_payment: paymentModes[0],

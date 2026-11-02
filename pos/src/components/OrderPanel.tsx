@@ -17,6 +17,7 @@ import { showToast } from '@ury/ui';
 import { DINE_IN } from '../data/order-types';
 import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
+import { customerId } from '../lib/default-customer';
 
 const OrderPanel = () => {
   const { 
@@ -66,7 +67,7 @@ const OrderPanel = () => {
     lines: activeOrders.map((item) => ({ id: item.id, name: item.name, quantity: item.quantity })),
     posProfile: posProfile?.name,
     orderType: selectedOrderType,
-    customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : selectedCustomer?.name,
+    customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : customerId(selectedCustomer),
     table: selectedTable,
     invoice: isUpdatingOrder ? orderId : null,
   });
@@ -102,7 +103,7 @@ const OrderPanel = () => {
           showToast.error(t('errors.select_aggregator'));
           return;
         }
-      } else if (!selectedCustomer?.name) {
+      } else if (!customerId(selectedCustomer)) {
         showToast.error(t('errors.select_customer'));
         return;
       }
@@ -128,7 +129,7 @@ const OrderPanel = () => {
         order_type: selectedOrderType,
         table: selectedTable || undefined,
         room: selectedRoom || undefined,
-        customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : selectedCustomer?.name,
+        customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : customerId(selectedCustomer),
         aggregator_id: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : undefined,
         cashier: posProfile.cashier,
         owner: posProfile.owner,

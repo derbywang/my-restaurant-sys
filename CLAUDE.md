@@ -37,4 +37,5 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
 - **生产单元（KOT 错误提示的频道）**：改了 `get_production_units_for_branch` 或 `create_kot_log` 的频道名后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_production_units`。
 - **实时连接（Socket.IO）的地址和重连规则**（`packages/core/src/realtime.ts`，mosaic 的副本是 `mosaic/src/lib/realtime.js`，两处要保持一致）：改了之后运行 `cd packages/core && yarn test` 和 `cd mosaic && yarn test`。
 - **无现金支付与找零规则**：改了 `ury/setup/cashless.py`、`make_invoice` 的找零检查（`merged_bill.check_change_is_cash`）、小票的付款行、`pos/src/lib/payment-change.ts` 后运行：`bench --site ury-test.localhost run-tests --module ury.setup.test_cashless`、`--module ury.ury.api.test_cashless_payment`、`--module ury.ury.api.test_receipt`，以及 `cd pos && yarn test`。设计见 `docs/design/cashless-payment-design.md`。
+- **默认顾客与顾客报表**：改了 `pos/src/lib/default-customer.ts` 或 store 里默认顾客的填入时机后运行 `cd pos && yarn test`；改了 `ury/ury/report_api/customers.py`（联系人清单、回头客统计排除各 POS Profile 的默认顾客）后运行 `bench --site ury-test.localhost run-tests --module ury.ury.report_api.test_customers`。
 - **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。

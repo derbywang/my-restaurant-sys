@@ -124,3 +124,12 @@ export async function searchCustomers(search: string, limit = 5) {
     throw error;
   }
 }
+
+export async function getCustomerRecord(name: string) {
+  const rows = await db.getDocList(DOCTYPES.CUSTOMER, {
+    fields: ['name', 'customer_name', 'mobile_number', 'disabled'],
+    filters: [['name', '=', name]],
+    limit: 1,
+  });
+  return rows[0] ?? null;
+}

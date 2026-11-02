@@ -17,7 +17,7 @@
 
 ## 高优先级（T7 完成后接着做）
 - ~~自定义支付方式没有科目~~：已处理（クレジットカード・PayPay・楽天ペイ 预设，其他支付方式自动建科目），见 `cashless-payment-design.md`。
-- **POS 默认选中默认顾客**：现在点单、收款前必须手动选顾客（后端 `sync_order` 要求有 customer）。T7 已在向导里建了默认顾客（日本「一般のお客様」，其他国家 Walk-in Customer）并写入 POS Profile 的 `customer`，但前端 `selectedCustomer` 初始为空。日本的餐厅大多数客人不留名字，每单都要手动选顾客会拖慢高峰期的点单和收款。要让 POS（收银台、Captain）默认选中 POS Profile 的 customer。
+- ~~**POS 默认选中默认顾客**~~（已处理：新建订单 / 下一单 / 选空桌 / 切换到堂食、外带时选中 POS Profile 的 customer；外卖、电话订餐不默认；提交用顾客 id；顾客报表排除默认顾客。逻辑在 `pos/src/lib/default-customer.ts`）：现在点单、收款前必须手动选顾客（后端 `sync_order` 要求有 customer）。T7 已在向导里建了默认顾客（日本「一般のお客様」，其他国家 Walk-in Customer）并写入 POS Profile 的 `customer`，但前端 `selectedCustomer` 初始为空。日本的餐厅大多数客人不留名字，每单都要手动选顾客会拖慢高峰期的点单和收款。要让 POS（收银台、Captain）默认选中 POS Profile 的 customer。
 - **自助点餐的默认顾客**：URY Self Ordering Profile 的 `default_customer` 没有设置时自助点餐下单直接报错（`self_ordering.py`）。向导只写了 POS Profile 的 `customer`，和自助点餐的工作一起处理（可复用向导建的默认顾客）。
 - **第二家分店的 POS Profile 与默认用户冲突**：向导为新分店的 POS Profile 把所有 URY Cashier 都设为默认用户，已有另一家分店的 POS Profile 时，ERPNext 报 “Already set default in pos profile …”。目前向导只用于第一家分店，增加分店前要处理。
 

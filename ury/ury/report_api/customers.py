@@ -153,6 +153,11 @@ def get_customer_data(customer, start_date, end_date, branch=None, page=1, page_
 	}
 
 
+# The customer a POS Profile picks for bills nobody gave a name for: not a contact to reach, and
+# "returning" every day. The reports below leave it out.
+DEFAULT_CUSTOMERS = "SELECT `customer` FROM `tabPOS Profile` WHERE IFNULL(`customer`, '') != ''"
+
+
 @frappe.whitelist()
 def get_daywise_customer_details(start_date, end_date, branch=None):
 	"""Contact list of every distinct customer who visited within a date
@@ -172,12 +177,12 @@ def get_daywise_customer_details(start_date, end_date, branch=None):
 		condition = get_business_day_range_condition()
 		join = report_settings_join()
 		params = {"branch": branch, "start_date": start_date, "end_date": end_date}
-		invoice_join = "b.`branch` = %(branch)s AND b.`status` IN (\"Consolidated\", \"Paid\") AND b.`docstatus` = 1"
+		invoice_join = "b.`branch` = %(branch)s AND b.`status` IN (\"Consolidated\", \"Paid\") AND b.`docstatus` = 1" + f" AND b.`customer` NOT IN ({DEFAULT_CUSTOMERS})"
 	else:
 		condition = "b.`posting_date` BETWEEN %(start_date)s AND %(end_date)s"
 		join = ""
 		params = {"start_date": start_date, "end_date": end_date}
-		invoice_join = "b.`status` IN (\"Consolidated\", \"Paid\") AND b.`docstatus` = 1"
+		invoice_join = "b.`status` IN (\"Consolidated\", \"Paid\") AND b.`docstatus` = 1" + f" AND b.`customer` NOT IN ({DEFAULT_CUSTOMERS})"
 
 	rows = frappe.db.sql(
 		f"""
@@ -244,14 +249,14 @@ def get_repeated_customers(start_date, end_date, branch=None):
 		prior_condition = get_prior_business_day_condition(date_expr="date_list.`date`", prefix="c")
 		join = report_settings_join(prefix="d")
 		params = {"branch": branch, "start_date": start_date, "end_date": end_date}
-		invoice_filter = "d.`branch` = %(branch)s AND d.`status` IN (\"Consolidated\", \"Paid\") AND d.`docstatus` = 1"
+		invoice_filter = "d.`branch` = %(branch)s AND d.`status` IN (\"Consolidated\", \"Paid\") AND d.`docstatus` = 1" + f" AND d.`customer` NOT IN ({DEFAULT_CUSTOMERS})"
 		prior_branch_filter = "AND c.`branch` = %(branch)s"
 	else:
 		day_condition = "d.`posting_date` = date_list.`date`"
 		prior_condition = "c.`posting_date` < date_list.`date`"
 		join = ""
 		params = {"start_date": start_date, "end_date": end_date}
-		invoice_filter = "d.`status` IN (\"Consolidated\", \"Paid\") AND d.`docstatus` = 1"
+		invoice_filter = "d.`status` IN (\"Consolidated\", \"Paid\") AND d.`docstatus` = 1" + f" AND d.`customer` NOT IN ({DEFAULT_CUSTOMERS})"
 		prior_branch_filter = ""
 
 	rows = frappe.db.sql(

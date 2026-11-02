@@ -225,7 +225,7 @@ export function CustomerPicker({ value, onChange, disabled }: CustomerPickerProp
         <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3">
           <div>
             <p className="font-medium text-blue-900">{value.name}</p>
-            <p className="text-sm text-blue-700">{value.phone}</p>
+            {value.phone && <p className="text-sm text-blue-700">{value.phone}</p>}
           </div>
           <Button
             onClick={() => onChange(null)}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { call } from '@ury/core';
 import { nextId } from '../utils/id';
+import { MenuKind } from '../utils/menuKind';
 import { uniqueShortCode, generateTableNames, isAutoTableName } from '../utils/shortCode';
 
 export interface BranchData {
@@ -34,6 +35,8 @@ export interface MenuItemData {
   name: string;
   course: string;
   price: number;
+  /** 種類 (Japanese sites only): decides the item group and so the consumption tax. */
+  kind?: MenuKind;
 }
 
 export interface TaxConfigData {
@@ -86,6 +89,9 @@ export interface ConfigureState {
 }
 
 export interface ConfigureContextType extends ConfigureState {
+  /** Country of the company the first step created (null until loaded). */
+  country: string | null;
+  isJapan: boolean;
   setActiveSection: (section: SectionId) => void;
   markSectionCompleted: (section?: SectionId) => void;
   /** Marks the section complete using its current (possibly untouched, seeded) values and advances — the "Use the defaults" affordance. */
@@ -175,11 +181,11 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
 
   const [menuItems, setMenuItems] = useState<MenuItemData[]>(
     persisted?.menuItems || [
-      { id: nextId('menu'), name: 'Pizza',   course: 'Main Course', price: 250 },
-      { id: nextId('menu'), name: 'Burger',  course: 'Main Course', price: 180 },
-      { id: nextId('menu'), name: 'Fries',   course: 'Starters',   price: 80  },
-      { id: nextId('menu'), name: 'Wings',   course: 'Starters',   price: 120 },
-      { id: nextId('menu'), name: 'Coffee',  course: 'Beverages',  price: 60  },
+      { id: nextId('menu'), name: 'Pizza',   course: 'Main Course', price: 250 , kind: '食品' },
+      { id: nextId('menu'), name: 'Burger',  course: 'Main Course', price: 180 , kind: '食品' },
+      { id: nextId('menu'), name: 'Fries',   course: 'Starters',   price: 80  , kind: '食品' },
+      { id: nextId('menu'), name: 'Wings',   course: 'Starters',   price: 120 , kind: '食品' },
+      { id: nextId('menu'), name: 'Coffee',  course: 'Beverages',  price: 60  , kind: '食品' },
     ]
   );
 
@@ -193,6 +199,7 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
     persisted?.paymentMethods || [{ id: nextId('pm'), name: 'Cash' }]
   );
 
+  const [country, setCountry] = useState<string | null>(null);
   const [users, setUsers] = useState<UserData[]>(
     persisted?.users || [
       {
@@ -210,8 +217,14 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
       try {
         const res = await call<any>('ury.ury.api.minimal.business_setup.get_business_setup');
         const companyName = res?.message?.company || res?.company || res?.message?.data?.company || res?.data?.company;
+        const data = res?.message?.data || res?.data || {};
+        setCountry(data.country || null);
         if (companyName && !persisted?.branch?.branchName) {
           setBranch((prev) => ({ ...prev, branchName: companyName }));
+        }
+        // the registration number belongs to the company: show what is already saved there
+        if (data.tax_id && !persisted?.branch?.taxId) {
+          setBranch((prev) => ({ ...prev, taxId: prev.taxId || data.tax_id }));
         }
       } catch (err) {
         console.error('Failed to load company name', err);
@@ -477,6 +490,8 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
   return (
     <ConfigureContext.Provider
       value={{
+        country,
+        isJapan: country === 'Japan',
         activeSection,
         visitedSections,
         completedSections,

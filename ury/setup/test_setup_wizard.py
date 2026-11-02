@@ -4,6 +4,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from ury.setup.setup_wizard import get_setup_stages, load_demo_masters, load_demo_pos, load_demo_transactions
+from ury.setup.wizard_defaults import apply_all_pos_profile_defaults, apply_company_defaults
 from ury.ury.api.minimal.setup_organization import (
 	_normalize_setup_payload,
 	get_setup_progress_steps,
@@ -12,22 +13,32 @@ from ury.ury.api.minimal.setup_organization import (
 
 
 class TestUrySetupStages(FrappeTestCase):
-	def test_empty_without_demo_flag(self):
-		self.assertEqual(get_setup_stages(None), [])
-		self.assertEqual(get_setup_stages({}), [])
-		self.assertEqual(get_setup_stages({"setup_ury_demo": 0}), [])
-		self.assertEqual(get_setup_stages({"setup_ury_demo": "0"}), [])
+	def _fns(self, args):
+		return [task["fn"] for stage in get_setup_stages(args) for task in stage["tasks"]]
 
-	def test_three_sync_stages_when_demo_requested(self):
+	def test_regional_and_profile_stages_always_run(self):
+		for args in (None, {}, {"setup_ury_demo": 0}, {"setup_ury_demo": "0"}):
+			self.assertEqual(self._fns(args), [apply_company_defaults, apply_all_pos_profile_defaults])
+
+	def test_demo_stages_sit_between_them_when_demo_requested(self):
 		stages = get_setup_stages({"setup_ury_demo": 1, "company_name": "Cafe"})
-		self.assertEqual(len(stages), 3)
+		self.assertEqual(len(stages), 5)
 
 		fns = [task["fn"] for stage in stages for task in stage["tasks"]]
-		self.assertEqual(fns, [load_demo_masters, load_demo_transactions, load_demo_pos])
+		self.assertEqual(
+			fns,
+			[
+				apply_company_defaults,
+				load_demo_masters,
+				load_demo_transactions,
+				load_demo_pos,
+				apply_all_pos_profile_defaults,
+			],
+		)
 		self.assertTrue(all("enqueue" not in fn.__name__ for fn in fns))
 
 	def test_accepts_boolean_true(self):
-		self.assertEqual(len(get_setup_stages({"setup_ury_demo": True})), 3)
+		self.assertEqual(len(get_setup_stages({"setup_ury_demo": True})), 5)
 
 
 class TestNormalizeSetupPayload(FrappeTestCase):

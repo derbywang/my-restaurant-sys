@@ -1,16 +1,14 @@
 import frappe
 from frappe import _
 
-def _default_menu_item_group():
-    """Item group for items created by the wizard. On Japanese sites it must sit
-    under 食品 so the consumption tax applies (the leaf groups keep driving the kitchen)."""
-    from ury.ury.api.item_group import get_menu_item_groups
-    from ury.setup.jp_tax import is_japan_site
+def item_group_for_kind(kind=None):
+    """Item group for an item created by the wizard. On Japanese sites it comes from the item's
+    種類 (食品 / 酒類 / 非食品) and sits under the group that carries its consumption tax (the
+    leaf groups keep driving the kitchen). Elsewhere the kind does not exist and is ignored."""
+    from ury.setup.jp_tax import is_japan_site, menu_group_for_kind
 
     if is_japan_site():
-        for group in get_menu_item_groups():
-            if group["parent"] == "食品":
-                return group["name"]
+        return menu_group_for_kind(kind)
     return frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
 
 
@@ -29,6 +27,19 @@ def _site_default_currency():
     if not currency:
         frappe.throw(_("Set the country in System Settings or a default currency in Global Defaults first."))
     return currency
+
+
+def save_registration_number(company, value):
+    """適格請求書の登録番号 belongs to the company (one number for all branches). On a Japanese
+    company it must be T + 13 digits; empty is allowed (the receipt then says it is not set)."""
+    from ury.ury.api.receipt import is_registration_number
+
+    value = (value or "").strip()
+    if not value:
+        return
+    if frappe.db.get_value("Company", company, "country") == "Japan" and not is_registration_number(value):
+        frappe.throw(_("The registration number must be T followed by 13 digits (e.g. T1234567890123)."))
+    frappe.db.set_value("Company", company, "tax_id", value)
 
 
 @frappe.whitelist()
@@ -51,7 +62,9 @@ def get_business_setup():
         "data": {
             "branches": branches,
             "restaurant": restaurant.as_dict() if restaurant else None,
-            "company": company_name
+            "company": company_name,
+            "country": frappe.db.get_value("Company", company_name, "country"),
+            "tax_id": frappe.db.get_value("Company", company_name, "tax_id"),
         }
     }
 
@@ -81,14 +94,13 @@ def update_business_setup(branch=None, restaurant=None):
             # Check if we should update or create
             branch_name = b_data.get("name") or b_data.get("branch")
             tax_id = b_data.get("tax_id") or b_data.get("taxId")
-            if tax_id:
-                comp = frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
-                if comp:
-                    frappe.db.set_value("Company", comp, "tax_id", tax_id)
+            comp = frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
+            if comp:
+                save_registration_number(comp, tax_id)
 
             if branch_name and frappe.db.exists("Branch", branch_name):
                 doc = frappe.get_doc("Branch", branch_name)
-                doc.update(b_data)
+                doc.update({k: v for k, v in b_data.items() if k not in ("tax_id", "taxId")})
                 doc.save(ignore_permissions=True)
             elif branch_name:
                 doc = frappe.new_doc("Branch")
@@ -173,9 +185,8 @@ def submit_configure_data(data):
     if data.get("branch"):
         b = data["branch"]
         branch_name = b.get("branchName") or default_company
-        tax_id = b.get("taxId")
-        if tax_id:
-            frappe.db.set_value("Company", default_company, "tax_id", tax_id)
+        # one registration number for the whole company; Branch has no tax_id field
+        save_registration_number(default_company, b.get("taxId"))
 
         if not frappe.db.exists("Branch", branch_name):
             branch_doc = frappe.get_doc({
@@ -183,14 +194,11 @@ def submit_configure_data(data):
                 "branch": branch_name,
                 "custom_invoice_series_prefix": b.get("invoicePrefix", "INV-"),
                 "custom_aggregator_series_prefix": b.get("aggregatorPrefix", "AGG-"),
-                "tax_id": tax_id,
                 "user": [{"user": frappe.session.user}]
             })
             branch_doc.insert(ignore_permissions=True)
             results["branch"] = branch_doc.name
         else:
-            if tax_id:
-                frappe.db.set_value("Branch", branch_name, "tax_id", tax_id)
             results["branch"] = branch_name
 
     # 2. URY Rooms
@@ -288,7 +296,7 @@ def submit_configure_data(data):
     frappe.publish_realtime("ury_configure_progress", {"step": 2, "status": "loading"}, user=user)
 
     menu_items_table = []
-    item_group = _default_menu_item_group()
+    item_groups = []  # every group an item was put in; the kitchen must cover them
     
     if not frappe.db.exists("UOM", "Unit"):
         frappe.get_doc({"doctype": "UOM", "uom_name": "Unit", "must_be_whole_number": 0}).insert(ignore_permissions=True)
@@ -301,6 +309,9 @@ def submit_configure_data(data):
         item_title = m.get("name")
         course_title = m.get("course", "Main Course")
         item_price = float(m.get("price", 0))
+        item_group = item_group_for_kind(m.get("kind"))
+        if item_group not in item_groups:
+            item_groups.append(item_group)
 
         if not item_title:
             continue
@@ -410,7 +421,10 @@ def submit_configure_data(data):
             company_doc = frappe.get_doc("Company", default_company)
             
             # Create Sales Taxes and Charges Template if tax rate > 0
-            tax_config = data.get("taxConfig", {})
+            # Japan: the consumption tax (10% / 8% / 1%) is set up by apply_jp_tax_setup below,
+            # whatever rate the form sent
+            is_japan = company_doc.country == "Japan"
+            tax_config = {} if is_japan else data.get("taxConfig", {})
             tax_rate = float(tax_config.get("taxPercentage", 0))
             tax_type = tax_config.get("taxType", "Exclusive")
             tax_template_name = None
@@ -455,7 +469,9 @@ def submit_configure_data(data):
 
             selling_price_list = menu_price_list or frappe.db.get_value("Price List", {"selling": 1}, "name") or "Standard Selling"
             
-            customer = frappe.db.get_value("Customer", {}, "name")
+            from ury.setup.wizard_defaults import ensure_default_customer
+
+            customer = ensure_default_customer(company_doc.country)
             
             # Fetch cashier users for applicable_for_users
             cashier_users = frappe.get_all("Has Role", filters={"role": "URY Cashier", "parenttype": "User"}, fields=["parent"])
@@ -526,6 +542,10 @@ def submit_configure_data(data):
                 
             pos_doc.insert(ignore_permissions=True)
             results["pos_profile"] = pos_doc.name
+            if is_japan:
+                from ury.setup.jp_tax import apply_jp_tax_setup
+
+                apply_jp_tax_setup()
         else:
             p_doc = frappe.get_doc("POS Profile", pos_profile_name)
             meta = frappe.get_meta("POS Profile")
@@ -548,13 +568,28 @@ def submit_configure_data(data):
                     child_meta = frappe.get_meta(df.options)
                     c_field = "role" if child_meta.has_field("role") else (child_meta.fields[0].fieldname if child_meta.fields else "name")
                     val = [{c_field: v}] if isinstance(v, str) else v
-                    setattr(p_doc, k, val)
+                    # set() turns the dicts into child rows (setattr would keep plain dicts)
+                    p_doc.set(k, val)
                 else:
                     setattr(p_doc, k, v)
             p_doc.save(ignore_permissions=True)
             results["pos_profile"] = pos_profile_name
 
-        # Create URY Production Unit
+        # change account, default customer and the Japan defaults (fills only what is empty;
+        # raises with a hint when there is no cash account)
+        from ury.setup.wizard_defaults import apply_pos_profile_defaults
+
+        apply_pos_profile_defaults(results["pos_profile"])
+
+        # Create URY Production Unit. On a Japanese site it covers all three kinds (food, alcohol,
+        # non-food): an item in a group no unit covers only gives a warning on every order. The
+        # non-food items (merchandise) therefore also show up on the kitchen's KOT; the kitchen
+        # simply ignores them.
+        from ury.setup.jp_tax import is_japan_site, menu_group_for_kind
+
+        kitchen_groups = list(item_groups) or [item_group_for_kind()]
+        if is_japan_site():
+            kitchen_groups += [g for g in map(menu_group_for_kind, ("食品", "酒類", "非食品")) if g not in kitchen_groups]
         production_unit_name = f"Kitchen - {branch_name}"
         if not frappe.db.exists("URY Production Unit", production_unit_name):
             prod_doc = frappe.get_doc({
@@ -563,14 +598,23 @@ def submit_configure_data(data):
                 "pos_profile": pos_profile_name,
                 "branch": branch_name,
                 "warehouse": warehouse_name,
-                "item_groups": [{"item_group": item_group}]
+                "item_groups": [{"item_group": g} for g in kitchen_groups]
             })
             prod_doc.insert(ignore_permissions=True)
             results["production_unit"] = prod_doc.name
+        else:
+            prod_doc = frappe.get_doc("URY Production Unit", production_unit_name)
+            covered = {row.item_group for row in prod_doc.item_groups}
+            missing = [g for g in kitchen_groups if g not in covered]
+            for g in missing:
+                prod_doc.append("item_groups", {"item_group": g})
+            if missing:
+                prod_doc.save(ignore_permissions=True)
 
-    except Exception as e:
+    except Exception:
+        # do not report success without a POS Profile
         frappe.log_error(frappe.get_traceback(), "Failed to create POS Profile")
-        results["pos_profile_error"] = str(e)
+        raise
 
     frappe.db.set_single_value("System Settings", "setup_complete", 1)
 

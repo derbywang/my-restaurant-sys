@@ -14,6 +14,7 @@
 - 版本：ury/__init__.py 中是 3.0.0-beta.1（AGENTS.MD 中写的 0.2.1 已过时）
 - 许可证：LICENSE 是 AGPL v3（hooks.py 和 AGENTS.MD 中写的 MIT 不对）；修改后的代码同样适用 AGPL
 - yarn workspaces 成员还包括 self-order（自助点餐，React，路由 /order，目前还在开发中）
+- 开发环境**没有默认站点**（`common_site_config.json` 里没有 `default_site`），`bench serve` 按 Host 头区分站点：`ury.localhost`（开发）、`ury-test.localhost`（测试）、`ury-wizard.localhost`（向导验证，临时）。所有需要站点的 bench 命令（`migrate`、`execute`、`export-fixtures`、`run-tests`、`console` 等）都要带 `--site`；浏览器要用站点域名访问（`http://ury.localhost:8000`），`localhost` / `127.0.0.1` 找不到站点。
 - 开发环境中实时推送（Socket.IO）连不上，因为 8000 端口没有转发 /socket.io，厨房屏幕需要手动刷新；正式环境由 nginx 转发，没有这个问题
 
 ## 操作规则（站点数据与单据）

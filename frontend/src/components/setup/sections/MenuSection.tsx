@@ -5,7 +5,10 @@ import { getCurrency } from '@ury/core';
 import { Plus, Trash2 } from 'lucide-react';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { Switch } from '../../ui/switch';
+import { MENU_KINDS, normalizeMenuKind } from '../../../utils/menuKind';
 import { MenuBulkUpload } from '../../common/MenuBulkUpload';
+
+const KIND_OPTIONS = MENU_KINDS.map((kind) => ({ value: kind, label: kind }));
 
 const COURSE_OPTIONS = [
   { value: 'Starters', label: 'Starters' },
@@ -18,6 +21,7 @@ const COURSE_OPTIONS = [
 export function MenuSection() {
   const {
     branch,
+    isJapan,
     menuItems,
     addMenuItem,
     addMenuItems,
@@ -37,6 +41,7 @@ export function MenuSection() {
       name: '',
       course: 'Main Course',
       price: 0,
+      kind: '食品',
     });
   };
 
@@ -52,7 +57,12 @@ export function MenuSection() {
       />
 
       {/* 2. Tax Settings */}
-      {branch.taxId && branch.taxId.trim() !== '' && (
+      {isJapan && (
+        <p className="text-sm text-muted-foreground">
+          消費税（10%・8%・1%）は自動で設定されます。税率の入力は不要です。各商品の「種類」（食品・酒類・非食品）で税率が決まります。ソフトドリンクは「食品」、お酒は「酒類」を選んでください。
+        </p>
+      )}
+      {!isJapan && branch.taxId && branch.taxId.trim() !== '' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full items-center">
           <div className="flex items-center gap-3">
             <Switch
@@ -104,6 +114,7 @@ export function MenuSection() {
           <div className="hidden md:flex gap-3 px-2 text-xs font-medium text-muted-foreground">
             <div className="flex-1">Item Name</div>
             <div className="flex-1">Course</div>
+            {isJapan && <div className="flex-1">種類</div>}
             <div className="flex-1">{priceColumnLabel}</div>
             {menuItems.length > 1 && <div className="w-8"></div>}
           </div>
@@ -113,7 +124,7 @@ export function MenuSection() {
               key={item.id}
               className="py-2 flex flex-col md:flex-row md:items-center gap-3"
             >
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className={`flex-1 grid grid-cols-1 gap-3 ${isJapan ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                 <div>
                   <Input
                     type="text"
@@ -135,6 +146,18 @@ export function MenuSection() {
                     placeholder="Course"
                   />
                 </div>
+
+                {isJapan && (
+                  <div>
+                    <SearchableSelect
+                      id={`kind-${item.id}`}
+                      value={normalizeMenuKind(item.kind)}
+                      options={KIND_OPTIONS}
+                      onChange={(_id, value) => updateMenuItem(item.id, { kind: normalizeMenuKind(value) })}
+                      placeholder="種類"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <Input

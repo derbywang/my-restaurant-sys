@@ -17,7 +17,7 @@ import { MenuSection } from '../../components/setup/sections/MenuSection';
 import { PaymentSection } from '../../components/setup/sections/PaymentSection';
 import { UserSection } from '../../components/setup/sections/UserSection';
 import { setupService } from '../../services/setup';
-import { call } from '@ury/core';
+import { call, isRegistrationNumber } from '@ury/core';
 import { CONFIGURE_PROGRESS_STEPS } from '../../components/setup/constants';
 import { ProgressModal } from '../../components/setup/ProgressModal';
 
@@ -157,6 +157,7 @@ function ConfigurePageContent() {
     taxConfig,
     paymentMethods,
     users,
+    isJapan,
     goToPrevSection,
     goToNextSection,
   } = useConfigure();
@@ -238,6 +239,10 @@ function ConfigurePageContent() {
   }, []);
 
   const handleFinish = () => {
+    if (isJapan && branch.taxId.trim() !== '' && !isRegistrationNumber(branch.taxId)) {
+      setError('登録番号は「T」と13桁の数字で入力してください（例：T1234567890123）。');
+      return;
+    }
     const payload = {
       branch,
       rooms,
@@ -370,4 +375,4 @@ export default function ConfigurePage() {
       <ConfigurePageContent />
     </ConfigureProvider>
   );
-}
+}

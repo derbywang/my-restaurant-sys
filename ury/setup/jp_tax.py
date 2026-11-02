@@ -44,6 +44,14 @@ GROUP_TAXES = {
 # the multi-row template above and would only invite mistakes, so they are disabled.
 LEGACY_TEMPLATE_TITLES = ("Japan Tax 10%", "Japan Tax 8%")
 
+# The 種類 of a menu item entered in the setup wizard -> the leaf group it is put in. Soft
+# drinks are 食品 (only alcohol is 酒類); 非食品 is merchandise, packaging and the like.
+MENU_KIND_GROUPS = {
+    "食品": "料理・ドリンク",
+    "酒類": "お酒",
+    "非食品": "物販・その他",
+}
+
 # Existing leaf groups to hang under a parent group.
 GROUPS_TO_MOVE = {"Consumable": "食品"}
 
@@ -91,6 +99,26 @@ def apply_jp_tax_setup():
     result["receipt_format"] = apply_receipt_format()
     result["ungrouped_menu_groups"] = ungrouped_menu_item_groups()
     return result
+
+
+def menu_group_for_kind(kind):
+    """The leaf group below 食品 / 酒類 / 非食品 for a menu item of this 種類 (created when
+    missing; empty means 食品). The tax of the item comes from the parent group."""
+    kind = (kind or "").strip() or "食品"
+    if kind not in MENU_KIND_GROUPS:
+        frappe.throw(frappe._("Unknown item kind {0}: use 食品, 酒類 or 非食品.").format(kind))
+    name = MENU_KIND_GROUPS[kind]
+    _ensure_parent_group(kind)
+    if not frappe.db.exists("Item Group", name):
+        frappe.get_doc(
+            {
+                "doctype": "Item Group",
+                "item_group_name": name,
+                "parent_item_group": kind,
+                "is_group": 0,
+            }
+        ).insert(ignore_permissions=True)
+    return name
 
 
 def apply_net_total_discount():

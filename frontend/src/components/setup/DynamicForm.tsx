@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
 import { defineCatalog } from '@json-render/core';
 import { schema } from '@json-render/react/schema';
-import { defineRegistry, Renderer, JSONUIProvider, useBoundProp, useStateBinding, createStateStore } from '@json-render/react';
+import { defineRegistry, Renderer, JSONUIProvider, useStateBinding, createStateStore } from '@json-render/react';
 import { z } from 'zod';
 import { Input } from '@ury/ui';
 import { SearchableSelect } from '../common/SearchableSelect';
@@ -31,10 +31,12 @@ const formCatalog = defineCatalog(schema, {
   components: {
     FormRoot: {
       props: z.object({}),
+      slots: ["default"],
       description: "Form root container"
     },
     FormSection: {
       props: z.object({ label: z.string().optional() }),
+      slots: ["default"],
       description: "Form section with a label"
     },
     FieldRenderer: {
@@ -44,9 +46,11 @@ const formCatalog = defineCatalog(schema, {
         error: z.string().optional(),
         options: z.array(z.any()).optional()
       }),
+      slots: [],
       description: "Generic field renderer"
     }
-  }
+  },
+  actions: {}
 });
 
 // 2. Define the Component Registry
@@ -85,7 +89,7 @@ const { registry } = defineRegistry(formCatalog, {
         if (bindingPath) {
           setBoundVal(newVal);
         }
-        emit("change", { fieldId: field.id, value: newVal });
+        emit("change");
         onFieldChange?.(field.id, newVal);
       };
 
@@ -248,16 +252,13 @@ export const DynamicForm = forwardRef<DynamicFormHandle, DynamicFormProps>(
       }
     }), [rawSchema, store]);
 
-    const handleAction = (action: string, params: any) => {
-      if (action === "fieldChange") {
-        store.set(`/errors/${params?.fieldId}`, '');
-        onFieldChange?.(params?.fieldId, params?.value);
-      }
-    };
+    // The field already reports its own change (onFieldChange in FieldRenderer); the spec's
+    // `change` action only needs a handler so the provider does not warn about a missing one.
+    const handlers = useMemo(() => ({ fieldChange: () => undefined }), []);
 
     return (
       <FormCallbackContext.Provider value={{ onFieldChange }}>
-        <JSONUIProvider store={store} onAction={handleAction}>
+        <JSONUIProvider store={store} registry={registry} handlers={handlers}>
           <div className="space-y-6">
             <Renderer spec={spec} registry={registry} />
           </div>

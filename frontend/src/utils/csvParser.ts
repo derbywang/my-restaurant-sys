@@ -1,7 +1,11 @@
+import { MenuKind, normalizeMenuKind } from './menuKind';
+
 export interface ParsedMenuRow {
   name: string;
   course: string;
   price: number;
+  /** 種類 (Japanese sites): 食品 when the column is missing or empty. */
+  kind: MenuKind;
 }
 
 /** Splits a single CSV line into raw cell values, honoring double-quoted fields (with "" escapes). */
@@ -42,7 +46,7 @@ export function parseCsvLine(line: string): string[] {
  *   "Item","Item Name","Rate","Special Dish","Disabled","Course Icon","Course"
  *   "item","item_name","rate","special_dish","disabled","course_icon","course"
  *   ...instructions / separator rows...
- *   "CB","Chicken Biriyani",250,1,0,"","Main Courses"
+ *   "CB","Chicken Biriyani",250,1,0,"","Main Courses",""
  *
  * Falls back to a plain name,course,price layout if the template's "Item Name"
  * header isn't found, so a simpler hand-written CSV still imports.
@@ -55,6 +59,7 @@ export function parseMenuCsv(text: string): ParsedMenuRow[] {
   let nameIndex = -1;
   let courseIndex = -1;
   let priceIndex = -1;
+  let kindIndex = -1;
 
   for (let i = 0; i < Math.min(lines.length, 5); i++) {
     const cells = parseCsvLine(lines[i]);
@@ -64,6 +69,7 @@ export function parseMenuCsv(text: string): ParsedMenuRow[] {
       nameIndex = foundNameIndex;
       courseIndex = cells.findIndex((cell) => cell.toLowerCase() === 'course');
       priceIndex = cells.findIndex((cell) => cell.toLowerCase() === 'rate');
+      kindIndex = cells.findIndex((cell) => cell === '種類' || cell.toLowerCase() === 'kind');
       break;
     }
   }
@@ -74,6 +80,7 @@ export function parseMenuCsv(text: string): ParsedMenuRow[] {
     nameIndex = 0;
     courseIndex = 1;
     priceIndex = 2;
+    kindIndex = 3;
   }
 
   const rows: ParsedMenuRow[] = [];
@@ -86,7 +93,7 @@ export function parseMenuCsv(text: string): ParsedMenuRow[] {
 
     const course = (cells[courseIndex] || '').trim();
     const price = parseFloat(cells[priceIndex]) || 0;
-    rows.push({ name, course, price });
+    rows.push({ name, course, price, kind: normalizeMenuKind(kindIndex >= 0 ? cells[kindIndex] : '') });
   }
 
   return rows;

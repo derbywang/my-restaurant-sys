@@ -1,10 +1,12 @@
 import React from 'react';
 import { useConfigure } from '../../../context/ConfigureContext';
 import { Input } from '@ury/ui';
+import { isRegistrationNumber } from '@ury/core';
 import { Switch } from '../../ui/switch';
 
 export function BranchSection() {
-  const { branch, updateBranch } = useConfigure();
+  const { branch, updateBranch, isJapan } = useConfigure();
+  const taxIdInvalid = isJapan && branch.taxId.trim() !== '' && !isRegistrationNumber(branch.taxId);
 
   return (
     <div className="space-y-5 w-full">
@@ -26,19 +28,29 @@ export function BranchSection() {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">Tax ID</label>
+          <label className="text-sm font-medium text-foreground">
+            {isJapan ? '適格請求書発行事業者の登録番号（全店共通）' : 'Tax ID'}
+          </label>
           <Input
             type="text"
             value={branch.taxId}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               updateBranch({ taxId: e.target.value })
             }
-            placeholder="Optional"
+            placeholder={isJapan ? 'T1234567890123' : 'Optional'}
             className="w-full focus-visible:ring-primary"
           />
-          <p className="text-xs text-muted-foreground">
-            Optional, add this now or later.
-          </p>
+          {taxIdInvalid ? (
+            <p className="text-xs text-red-500">
+              登録番号は「T」と13桁の数字です（例：T1234567890123）。
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {isJapan
+                ? '会社に保存され、レシートに印字されます。店舗が複数あっても入力は1回だけです。空欄でも構いません（後から会社設定の Tax ID で追加できます）。'
+                : 'Optional, add this now or later.'}
+            </p>
+          )}
         </div>
       </div>
 

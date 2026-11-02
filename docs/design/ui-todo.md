@@ -15,11 +15,25 @@
 ## 相关
 - 多收银员模式下 `calculate_closing_amount` 与 `custom_closing_amount` 的问题见 `pos-closing.md` 5.1。
 
+## 高优先级（T7 完成后接着做）
+- **自定义支付方式没有科目**：初始化向导里新建的 Mode of Payment 一律是类型 General、不带公司科目（`business_setup.py` 第 6 步）。日本门店普遍使用信用卡、交通系 IC、PayPay 等，不修会导致无现金收款失败（收款时找不到账户）。要让向导为每个支付方式选择类型和科目（或自动用公司的默认科目），并在缺科目时报错提示。
+- **POS 默认选中默认顾客**：现在点单、收款前必须手动选顾客（后端 `sync_order` 要求有 customer）。T7 已在向导里建了默认顾客（日本「一般のお客様」，其他国家 Walk-in Customer）并写入 POS Profile 的 `customer`，但前端 `selectedCustomer` 初始为空。日本的餐厅大多数客人不留名字，每单都要手动选顾客会拖慢高峰期的点单和收款。要让 POS（收银台、Captain）默认选中 POS Profile 的 customer。
+- **自助点餐的默认顾客**：URY Self Ordering Profile 的 `default_customer` 没有设置时自助点餐下单直接报错（`self_ordering.py`）。向导只写了 POS Profile 的 `customer`，和自助点餐的工作一起处理（可复用向导建的默认顾客）。
+- **第二家分店的 POS Profile 与默认用户冲突**：向导为新分店的 POS Profile 把所有 URY Cashier 都设为默认用户，已有另一家分店的 POS Profile 时，ERPNext 报 “Already set default in pos profile …”。目前向导只用于第一家分店，增加分店前要处理。
+
+## 初始化向导的问题（T7 浏览器验证中发现，验证完一起处理）
+1. 登录后先显示「选择应用」画面（ERPNext / Frappe HR / URY），没有直接进向导。
+2. 第 1 步的语言只有 English、français、عربي，没有日本語、中文、한국어。
+3. 第 1 步的默认值是印度（India / INR / India - Chart of Accounts / 4 月开始的会计年度）。面向日本的产品应默认 Japan / JPY / Asia/Tokyo。
+4. 第 2 步菜单的价格表头显示「Price (INR)」，日本站点应该是 JPY。
+5. 第 2 步支付方式的说明写着 “add Card, UPI, or others”，UPI 是印度的支付方式。
+6. 验证站点的会计年度是 2026-01-04 ～ 2027-01-03（开始日是 1 月 4 日，不是月初），要查第 1 步日期的计算 / 填写方式（`calculateFyStartDate`、日期选择器）。
+
 ## 厨房屏幕（mosaic）
 - socket 断线时，在屏幕上显示明显的提示（例如顶部红条），连接恢复后自动消失。现在断线只在控制台记一条警告，厨房人员看不出画面已经不再实时更新。
 
 ## 技术待办（类型检查）
-- `frontend/` 有 39 个、`self-order/` 有 3 个类型错误（检查命令：`npx tsc -p tsconfig.app.json --noEmit`）。主要在 `frontend/src/components/setup/DynamicForm.tsx`（15）、`pages/Dashboard/*`、`pages/Reports/*`（`XxxRow[]` 缺索引签名）、`layout/Header.tsx`。**清掉之后，再给这两个应用的 `build` 脚本加 typecheck**（`pos/` 已经是 `yarn typecheck && vite build`）。
+- `frontend/` 有 23 个（T7 已清掉向导相关的 16 个）、`self-order/` 有 3 个类型错误（检查命令：`npx tsc -p tsconfig.app.json --noEmit`）。主要在 `pages/Dashboard/*`、`pages/Reports/*`（`XxxRow[]` 缺索引签名）、`layout/Header.tsx`。**清掉之后，再给这两个应用的 `build` 脚本加 typecheck**（`pos/` 已经是 `yarn typecheck && vite build`）。
 
 ## 部署与上线前待办
 - **旧版 POS（urypos，路由 `/urypos`）**：没有我们做的日本消费税（T4/T6）、合并账单、金额变更保护、找零等修改。正式上线前要决定关闭它的入口（`hooks.py` 的 `website_route_rules` 里 `/urypos/<path:app_path>`，以及 `ury/www/urypos.html`），避免员工用旧版收款。

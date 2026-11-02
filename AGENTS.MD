@@ -236,10 +236,10 @@ After building, run `bench build --app ury` to copy assets to the Frappe public 
 
 **To add a new doctype:**
 → Use `bench new-doctype` or create JSON in `ury/ury/doctype/<name>/`.
-→ Export fixtures after changes: `bench export-fixtures --app ury`.
+→ Export fixtures after changes: `bench --site ury.localhost export-fixtures --app ury`.
 
 **To add a custom field to a standard doctype:**
-→ Add via Frappe desk, then export with `bench export-fixtures --app ury`.
+→ Add via Frappe desk, then export with `bench --site ury.localhost export-fixtures --app ury`.
 → OR add programmatically in `ury/setup.py` `add_custom_fields()`.
 
 **To add a migration patch:**

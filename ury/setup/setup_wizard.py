@@ -6,18 +6,46 @@ from frappe import _
 from frappe.utils import cint
 from ury.setup.demo import process_masters, process_transactions
 from ury.setup.pos_demo import generate_pos_demo
+from ury.setup.wizard_defaults import apply_all_pos_profile_defaults, apply_company_defaults
 
 
 def get_setup_stages(args=None):
-	"""URY stages run only when the wizard asks for demo data.
+	"""Stages after ERPNext's: the regional defaults and the POS Profile defaults always run;
+	the demo stages sit between them and run only when the wizard asks for demo data.
 
 	Stages are synchronous so Frappe's setup_task progress ticks after each
 	one actually finishes, and demo records land on the company ERPNext just
 	created (args.company_name) rather than a second "(Demo)" company.
 	"""
+	company_stage = {
+		"status": _("Applying regional defaults"),
+		"fail_msg": _("Failed to apply regional defaults"),
+		"tasks": [
+			{
+				"fn": apply_company_defaults,
+				"args": args,
+				"fail_msg": _("Failed to apply regional defaults"),
+			}
+		],
+	}
+	profile_stage = {
+		"status": _("Preparing POS Profiles"),
+		"fail_msg": _("Failed to prepare POS Profiles"),
+		"tasks": [
+			{
+				"fn": apply_all_pos_profile_defaults,
+				"args": args,
+				"fail_msg": _("Failed to prepare POS Profiles"),
+			}
+		],
+	}
 	if not _wants_ury_demo(args):
-		return []
+		return [company_stage, profile_stage]
 
+	return [company_stage, *_demo_stages(args), profile_stage]
+
+
+def _demo_stages(args):
 	return [
 		{
 			"status": _("Loading restaurant demo masters"),

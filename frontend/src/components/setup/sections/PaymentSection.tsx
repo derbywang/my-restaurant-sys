@@ -4,7 +4,6 @@ import { call } from '@ury/core';
 import { SearchableSelect, Option } from '../../common/SearchableSelect';
 import { Button } from '@ury/ui';
 import { Plus, Trash2 } from 'lucide-react';
-import { nextId } from '../../../utils/id';
 
 const DEFAULTS = ['Cash', 'Card', 'UPI'];
 

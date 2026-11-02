@@ -15,6 +15,7 @@ export {
   SLOW_RETRY_MS,
 } from './realtime';
 export type { SocketUrlInput, ReconnectableSocket } from './realtime';
+export { isRegistrationNumber } from './registrationNumber';
 export { validateFieldValue } from './utils/validateField';
 export type { ValidationMessages } from './utils/validateField';
 export { setStaffLanguage } from './frappe/language';

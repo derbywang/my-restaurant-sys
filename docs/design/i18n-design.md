@@ -120,7 +120,7 @@
 ### 4.6 后端提示与字段名（`ury/`）— 阶段 3
 
 - 所有 `frappe.throw("…")` 改为 `frappe.throw(_("…"))`。
-- 用 `bench generate-pot-file --app ury` 生成模板 → 建立 `ury/locale/{ja,zh,ko}.po` → `bench compile-po-to-mo --app ury`。
+- 用 `bench --site ury.localhost generate-pot-file --app ury` 生成模板 → 建立 `ury/locale/{ja,zh,ko}.po` → `bench --site ury.localhost compile-po-to-mo --app ury`。
 
 ## 5. 顾客端改动（`self-order/` + `self_ordering.py`）— 阶段 5
 

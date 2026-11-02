@@ -87,6 +87,7 @@
     "processing": "Traitement...",
     "short_by": "Manque {{amount}}",
     "change_due": "Monnaie à rendre : {{amount}}",
+    "change_not_cash": "Le paiement dépasse le montant dû de {{amount}}. La monnaie ne peut être rendue qu'en espèces.",
     "success": "Paiement réussi : {{amount}} reçu"
   },
   "pos": {

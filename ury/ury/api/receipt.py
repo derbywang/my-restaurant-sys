@@ -28,6 +28,15 @@ def is_registration_number(value):
 	return bool(REGISTRATION_NUMBER.fullmatch((value or "").strip()))
 
 
+class ReceiptData(dict):
+	"""The data of the receipt. A field the template asks for and the data does not have prints
+	as empty: Jinja would print "{{ no such element: ... }}" on the receipt, and the template
+	(in the database, written by `bench migrate`) and this code can be out of step for a while."""
+
+	def __missing__(self, key):
+		return ""
+
+
 def jp_receipt_data(doc):
 	"""Everything the print format shows, for a POS Invoice (and the invoice merged into it)."""
 	invoices = [doc]
@@ -62,7 +71,7 @@ def jp_receipt_data(doc):
 	discount = sum(flt(i.discount_amount) for i in invoices)
 	change = sum(flt(i.change_amount) for i in invoices)
 
-	return {
+	return ReceiptData({
 		"title": "領収書" if paid else "ご請求明細",
 		"paid": paid,
 		"company": doc.company,
@@ -86,8 +95,26 @@ def jp_receipt_data(doc):
 			for rate, amounts in sorted(rates.items(), reverse=True)
 		],
 		"total": yen(sum(flt(i.rounded_total or i.grand_total) for i in invoices)),
-		"received": yen(sum(flt(p.amount) for i in invoices for p in i.payments)) if paid else "",
+		**(_payment_lines(invoices) if paid else {"cashless": [], "cash_received": "", "cash_label": ""}),
 		"change": yen(change) if paid and change else "",
+	})
+
+
+def _payment_lines(invoices):
+	"""How the bill was paid: one line per cashless method (its name and amount, the payments of
+	both invoices of a merged bill added up) and the cash handed over (the change is printed
+	separately). "お預かり" alone when everything was cash, "お預かり（現金）" next to cashless lines."""
+	cashless, cash = {}, 0
+	for invoice in invoices:
+		for payment in invoice.payments:
+			if frappe.db.get_value("Mode of Payment", payment.mode_of_payment, "type") == "Cash":
+				cash += flt(payment.amount)
+			else:
+				cashless[payment.mode_of_payment] = cashless.get(payment.mode_of_payment, 0) + flt(payment.amount)
+	return {
+		"cashless": [{"mode": mode, "amount": yen(amount)} for mode, amount in cashless.items()],
+		"cash_received": yen(cash) if cash else "",
+		"cash_label": "お預かり（現金）" if cashless else "お預かり",
 	}
 
 

@@ -44,9 +44,13 @@ export interface TaxConfigData {
   taxPercentage: number;
 }
 
+/** cash gives change; cashless (cards, QR payments) is settled by a company and booked on an account of its own */
+export type PaymentKind = 'cash' | 'cashless';
+
 export interface PaymentMethodData {
   id: string;
   name: string;
+  kind?: PaymentKind;
 }
 
 export interface UserData {
@@ -196,7 +200,7 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
   );
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>(
-    persisted?.paymentMethods || [{ id: nextId('pm'), name: 'Cash' }]
+    persisted?.paymentMethods || [{ id: nextId('pm'), name: 'Cash', kind: 'cash' }]
   );
 
   const [country, setCountry] = useState<string | null>(null);

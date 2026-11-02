@@ -88,6 +88,7 @@
     "processing": "処理中...",
     "short_by": "{{amount}} 不足",
     "change_due": "お釣り: {{amount}}",
+    "change_not_cash": "お支払いが請求額を {{amount}} 超えています。お釣りは現金でのみお渡しできます。",
     "success": "会計が完了しました: {{amount}} をお預かり"
   },
   "pos": {

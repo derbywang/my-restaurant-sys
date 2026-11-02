@@ -363,22 +363,19 @@ def submit_configure_data(data):
     elif frappe.db.exists("URY Menu", menu_name):
         results["menu"] = menu_name
 
-    # 6. Mode of Payment
+    # 6. Mode of Payment: each one gets an account for the company (cashless methods a
+    # settlement account of their own, see ury.setup.cashless)
+    from ury.setup.cashless import ensure_payment_mode
+
     results["payment_methods"] = []
     for p in data.get("paymentMethods", []):
         p_name = p.get("name")
         if not p_name:
             continue
-        if not frappe.db.exists("Mode of Payment", p_name):
-            pm_doc = frappe.get_doc({
-                "doctype": "Mode of Payment",
-                "mode_of_payment": p_name,
-                "type": "General"
-            })
-            pm_doc.insert(ignore_permissions=True)
-            results["payment_methods"].append(pm_doc.name)
-        else:
-            results["payment_methods"].append(p_name)
+        kind = p.get("kind")
+        if kind not in ("cash", "cashless"):
+            kind = "cash" if p_name == "Cash" or frappe.db.get_value("Mode of Payment", p_name, "type") == "Cash" else "cashless"
+        results["payment_methods"].append(ensure_payment_mode(p_name, kind, default_company))
 
     # 7. System Users
     results["users"] = []

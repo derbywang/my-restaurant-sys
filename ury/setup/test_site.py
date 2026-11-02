@@ -21,6 +21,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate, now_datetime, nowdate
 
+from ury.setup.cashless import apply_cashless_payments
 from ury.setup.jp_currency import apply_jpy_format
 from ury.setup.jp_tax import apply_jp_tax_setup
 
@@ -86,6 +87,7 @@ def setup_test_site():
     if not frappe.db.exists("POS Profile", POS_PROFILE):
         _configure_restaurant()
     _ensure_alcohol()
+    apply_cashless_payments()
     # now the restaurant exists: default tax template and the order-type tax categories
     apply_jp_tax_setup()
     missing_prices = ensure_prices()
@@ -393,6 +395,27 @@ def pay_order(invoice, user=CASHIER, discount=None):
             additionalDiscount=discount,
             table=doc.restaurant_table,
             invoice=invoice,
+        )
+    return frappe.get_doc("POS Invoice", invoice)
+
+
+def pay_with(invoice, payments, user=CASHIER, expected_total=None):
+    """Settle through `make_invoice` with the payment rows given as [(mode, amount), ...], as the
+    payment dialog sends them; returns the submitted POS Invoice."""
+    from ury.ury.doctype.ury_order.ury_order import make_invoice
+
+    doc = frappe.get_doc("POS Invoice", invoice)
+    print_bill(invoice, user)
+    with as_user(user):
+        make_invoice(
+            customer=doc.customer,
+            payments=[{"mode_of_payment": mode, "amount": amount} for mode, amount in payments],
+            cashier=user,
+            pos_profile=POS_PROFILE,
+            owner=user,
+            table=doc.restaurant_table,
+            invoice=invoice,
+            expected_total=expected_total,
         )
     return frappe.get_doc("POS Invoice", invoice)
 

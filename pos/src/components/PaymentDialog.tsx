@@ -5,6 +5,7 @@ import { formatCurrency, call, parseFrappeError } from '@ury/core';
 import { Button, Input, Dialog, DialogContent, showToast } from '@ury/ui';
 import { DEFAULT_PAYMENT_MODE } from '../data/order-types';
 import { t } from '../i18n';
+import { checkPayments, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
 
 
@@ -39,7 +40,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   clearSelectedOrder,
   discountPercentage
 }) => {
-  const { paymentModes, fetchPaymentModes, posProfile: storePosProfile } = usePOSStore();
+  const { paymentModes, paymentModeTypes, fetchPaymentModes, posProfile: storePosProfile } = usePOSStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -107,8 +108,11 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
     })
     .filter(Boolean);
   const paymentsTotal = payments.reduce((sum, p: any) => sum + p.amount, 0);
-  const shortfall = finalTotal - paymentsTotal;
+  // Money over the amount due is change, and change is only given in cash
+  const check = checkPayments(payments as PaymentRow[], finalTotal, paymentModeTypes);
+  const shortfall = check.short;
   const isShort = shortfall > 0.005;
+  const changeNotCash = check.error === 'change_not_cash';
 
   useEffect(()=>{
     const defaultPaymentModePresent=paymentModes.find((mode)=>mode===DEFAULT_PAYMENT_MODE)
@@ -256,10 +260,10 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
               <span className="font-medium">{t('payment.total_entered')}</span>
               <span className={`${isShort ? 'text-amber-700' : 'text-green-600'} font-semibold flex items-center gap-1`}>
                 {formatCurrency(paymentsTotal)} / {formatCurrency(finalTotal)}
-                {paymentsTotal > finalTotal && (
+                {check.change > 0 && !changeNotCash && (
                   <span className="text-yellow-700 font-semibold">
                     <Coins className="inline w-4 h-4 ml-1 text-yellow-500" />
-                    <span className="text-yellow-500 font-bold ml-1">{formatCurrency(paymentsTotal - finalTotal)}</span>
+                    <span className="text-yellow-500 font-bold ml-1">{formatCurrency(check.change)}</span>
                   </span>
                 )}
               </span>
@@ -269,9 +273,14 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 {t('payment.short_by', { amount: formatCurrency(shortfall) })}
               </p>
             )}
-            {paymentsTotal > finalTotal && (
+            {check.change > 0 && !changeNotCash && (
               <p className="text-yellow-700 text-sm font-medium">
-                {t('payment.change_due', { amount: formatCurrency(paymentsTotal - finalTotal) })}
+                {t('payment.change_due', { amount: formatCurrency(check.change) })}
+              </p>
+            )}
+            {changeNotCash && (
+              <p role="alert" className="text-red-600 text-sm font-medium">
+                {t('payment.change_not_cash', { amount: formatCurrency(check.change) })}
               </p>
             )}
           </div>
@@ -343,8 +352,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
           {/* Payment Button */}
           <Button
             onClick={handlePayment}
-            disabled={isProcessing || payments.length === 0 || isShort}
-            variant={isProcessing || payments.length === 0 || isShort ? "secondary" : "default"}
+            disabled={isProcessing || payments.length === 0 || isShort || changeNotCash}
+            variant={isProcessing || payments.length === 0 || isShort || changeNotCash ? "secondary" : "default"}
             className="w-full"
           >
             {isProcessing ? t('payment.processing') : t('payment.pay_button', { amount: formatCurrency(paymentsTotal > 0 ? paymentsTotal : finalTotal) })}

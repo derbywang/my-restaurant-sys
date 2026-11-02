@@ -193,6 +193,32 @@ class TestSubmitConfigureData(URYFlowTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			submit_configure_data(self._data(BRANCH, "12345"))
 
+	def test_payment_methods_get_their_accounts_and_go_into_the_pos_profile(self):
+		from ury.ury.api.minimal.business_setup import submit_configure_data
+
+		self.addCleanup(self._remove_payment_test_data)
+		data = self._data(self.NEW_BRANCH)
+		data["paymentMethods"] = [
+			{"name": "Cash", "kind": "cash"},
+			{"name": "クレジットカード", "kind": "cashless"},
+			{"name": "回数券テスト", "kind": "cashless"},
+		]
+		submit_configure_data(data)
+		profile = frappe.get_doc("POS Profile", self.NEW_BRANCH)
+		self.assertEqual([p.mode_of_payment for p in profile.payments], ["Cash", "クレジットカード", "回数券テスト"])
+		self.assertEqual([p.default for p in profile.payments], [1, 0, 0])
+		for mode, account in (("クレジットカード", f"未収入金（カード会社） - {ABBR}"), ("回数券テスト", f"未収入金（回数券テスト） - {ABBR}")):
+			self.assertEqual(
+				frappe.db.get_value("Mode of Payment Account", {"parent": mode, "company": COMPANY}, "default_account"), account
+			)
+			self.assertEqual(frappe.db.get_value("Account", account, "account_type"), "Bank")
+
+	def _remove_payment_test_data(self):
+		frappe.db.delete("Mode of Payment Account", {"parent": "回数券テスト"})
+		frappe.db.delete("Mode of Payment", {"name": "回数券テスト"})
+		frappe.db.delete("Account", {"name": f"未収入金（回数券テスト） - {ABBR}"})
+		frappe.db.commit()
+
 	def test_new_japan_branch_ignores_the_tax_rate_and_gets_the_defaults(self):
 		from ury.ury.api.minimal.business_setup import submit_configure_data
 

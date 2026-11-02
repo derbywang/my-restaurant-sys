@@ -77,6 +77,23 @@ def allocate_payments(invoice, target, payments):
 		cash_rows[-1].amount = flt(cash_rows[-1].amount) + left_over
 
 
+def check_change_is_cash(payments, due):
+	"""Money over the amount due is change, and change is only given in cash: refuse a payment
+	where the cashless methods alone, or the cash handed over, do not cover what goes back.
+	`payments` are the rows the cashier entered ({"mode_of_payment", "amount"})."""
+	paid = sum(flt(p["amount"]) for p in payments)
+	left_over = paid - flt(due)
+	if left_over <= 0.001:
+		return
+	cash_handed_over = sum(flt(p["amount"]) for p in payments if _is_cash(p["mode_of_payment"]))
+	if left_over > cash_handed_over + 0.001:
+		frappe.throw(
+			_("The payment is {0} more than the amount due. Change can only be given for cash.").format(
+				frappe.format(left_over, {"fieldtype": "Currency"})
+			)
+		)
+
+
 def _is_cash(mode_of_payment):
 	return frappe.db.get_value("Mode of Payment", mode_of_payment, "type") == "Cash"
 

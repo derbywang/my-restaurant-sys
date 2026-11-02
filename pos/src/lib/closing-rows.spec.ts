@@ -95,3 +95,39 @@ describe('changePaymentRow', () => {
     expect(changePaymentRow([bank], 'Nothing')).toBeUndefined();
   });
 });
+
+describe('a shift with cash and cashless payments', () => {
+  const openingModes = [
+    { mode_of_payment: 'Cash', opening_amount: 10000 },
+    { mode_of_payment: 'Card', opening_amount: 0 },
+  ];
+
+  it('takes the change off the cash row only; the cashless row is just what was paid', () => {
+    // 2,750 paid with 3,000 cash (250 change); 2,710 paid with cash 1,000 + card 1,710
+    const { expectedByMode } = aggregateInvoices([
+      invoice([cash(3000)], 250, 'Cash - A', 2750),
+      invoice([cash(1000), card(1710)], 0, 'Cash - A', 2710),
+    ]);
+    expect(expectedByMode).toEqual({ Cash: 3750, Card: 1710 });
+
+    const rows = buildRows(openingModes, expectedByMode);
+    expect(rows.map((r) => [r.mode_of_payment, r.opening_amount, r.expected_amount])).toEqual([
+      ['Cash', 10000, 13750],
+      ['Card', 0, 1710],
+    ]);
+  });
+
+  it('change on a mixed payment comes out of the cash row, not the card row', () => {
+    // 2,710 due: cash 1,200 + card 1,710 -> 200 change
+    const { expectedByMode } = aggregateInvoices([invoice([cash(1200), card(1710)], 200, 'Cash - A', 2710)]);
+    expect(expectedByMode).toEqual({ Cash: 1000, Card: 1710 });
+  });
+
+  it('a card-only shift still lists the cash row with just the opening amount', () => {
+    const { expectedByMode } = aggregateInvoices([invoice([card(2710)], 0, 'Cash - A', 2710)]);
+    const rows = buildRows(openingModes, expectedByMode);
+    expect(rows.find((r) => r.mode_of_payment === 'Cash')?.expected_amount).toBe(10000);
+    expect(rows.find((r) => r.mode_of_payment === 'Card')?.expected_amount).toBe(2710);
+  });
+});
+

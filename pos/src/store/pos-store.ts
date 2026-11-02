@@ -7,7 +7,7 @@ import { getMenuCourses } from '../lib/menu-course-api';
 import { getCustomerGroups, getCustomerTerritories } from '../lib/customer-api';
 import { DEFAULT_ORDER_TYPE, OrderType } from '../data/order-types';
 import { getTableOrder, TableOrder } from '../lib/order-api';
-import { getPaymentModes } from '../lib/payment-api';
+import { getPaymentModes, getPaymentModeTypes } from '../lib/payment-api';
 
 // Constants
 const MAX_QUANTITY = 99;
@@ -122,6 +122,7 @@ interface POSState {
   profileLoading: boolean;
   error: string | null;
   paymentModes: string[];
+  paymentModeTypes: Record<string, string>;
   orders: Order[];
   selectedAggregator: Aggregator | null;
   /** ISO code from the POS Profile (server); formatting uses it via setCurrency(). */
@@ -307,6 +308,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   profileLoading: false,
   error: null,
   paymentModes: ['Cash'],
+  paymentModeTypes: {},
   orders: [],
   posProfile: null,
   customerGroups: [],
@@ -458,8 +460,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   fetchPaymentModes: async () => {
     try {
-      const modes = await getPaymentModes();
-      set({ paymentModes: modes });
+      const [modes, types] = await Promise.all([getPaymentModes(), getPaymentModeTypes()]);
+      set({ paymentModes: modes, paymentModeTypes: types });
     } catch (error) {
       console.error('Failed to fetch payment modes:', error);
     }

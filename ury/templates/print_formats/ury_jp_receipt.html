@@ -54,7 +54,10 @@
 		{%- endfor %}
 		<tr class="total"><td>合計（税込）</td><td class="r">{{ r.total }}</td></tr>
 		{%- if r.paid %}
-		<tr><td>お預かり</td><td class="r">{{ r.received }}</td></tr>
+		{%- for pay in r.cashless %}
+		<tr><td>{{ pay.mode }}</td><td class="r">{{ pay.amount }}</td></tr>
+		{%- endfor %}
+		{%- if r.cash_received %}<tr><td>{{ r.cash_label }}</td><td class="r">{{ r.cash_received }}</td></tr>{% endif %}
 		{%- if r.change %}<tr><td>お釣り</td><td class="r">{{ r.change }}</td></tr>{% endif %}
 		{%- endif %}
 	</table>

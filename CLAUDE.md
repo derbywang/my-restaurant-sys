@@ -29,11 +29,12 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`
 - **`POS Invoice`**：`override_doctype_class` → `ury.overrides.pos_invoice.URYPOSInvoice`，`calculate_taxes_and_totals` 换成子类 `URYTaxesAndTotals`，只重写 `round_off_totals`（每个税率按账单合计只算一次税额，舍入方式取 POS Profile 的 `custom_tax_rounding`）。升级后对比 ERPNext `taxes_and_totals.py` 的 `calculate_taxes` / `round_off_totals` 以及 `AccountsController.calculate_taxes_and_totals`，并运行：
   `bench --site ury-test.localhost run-tests --module ury.overrides.test_pos_invoice`
-- **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。改了模板或 `receipt.py` 后运行：
+- **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。**改了模板或 `receipt.py` 的数据结构后，浏览器验证前必须先 `bench --site ury.localhost migrate`**（在开发站点 migrate 之前，先执行 `bench --site ury.localhost backup`；migrate 不会自动备份），否则站点里还是旧模板，新旧数据对不上（印出 `{{ no such element ... }}`）。`jp_receipt_data` 返回 `ReceiptData`，模板里缺失的字段按空字符串打印；新增字段时仍要这样写，不要把模板错误印到小票上。改了模板或 `receipt.py` 后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_receipt`
 - **合并账单（会計合算）**：改了 `merge_bills` / `make_invoice` / `cancel_order` / `preview_order_totals` 或列表接口后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`
 - **交班对话框的金额计算**（`pos/src/lib/closing-rows.ts`：Expected = 开班金额 + 当班收款 − 找零）：改了之后运行 `cd pos && yarn test`（Vitest，只运行 `*.spec.ts`），并运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`。
 - **生产单元（KOT 错误提示的频道）**：改了 `get_production_units_for_branch` 或 `create_kot_log` 的频道名后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_production_units`。
 - **实时连接（Socket.IO）的地址和重连规则**（`packages/core/src/realtime.ts`，mosaic 的副本是 `mosaic/src/lib/realtime.js`，两处要保持一致）：改了之后运行 `cd packages/core && yarn test` 和 `cd mosaic && yarn test`。
+- **无现金支付与找零规则**：改了 `ury/setup/cashless.py`、`make_invoice` 的找零检查（`merged_bill.check_change_is_cash`）、小票的付款行、`pos/src/lib/payment-change.ts` 后运行：`bench --site ury-test.localhost run-tests --module ury.setup.test_cashless`、`--module ury.ury.api.test_cashless_payment`、`--module ury.ury.api.test_receipt`，以及 `cd pos && yarn test`。设计见 `docs/design/cashless-payment-design.md`。
 - **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。

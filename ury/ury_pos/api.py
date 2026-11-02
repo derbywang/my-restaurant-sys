@@ -221,7 +221,11 @@ def getModeOfPayment():
     modeOfPayments = []
     for mop in mode_of_payments:
         modeOfPayments.append(
-            {"mode_of_payment": mop.mode_of_payment, "opening_amount": float(0)}
+            {
+                "mode_of_payment": mop.mode_of_payment,
+                "opening_amount": float(0),
+                "type": frappe.db.get_value("Mode of Payment", mop.mode_of_payment, "type"),
+            }
         )
     return modeOfPayments
 

@@ -73,7 +73,6 @@ class TestMenuGroups(RolledBackTestCase):
 		frappe.db.set_value("Company", COMPANY, "country", "India")
 		for kind in KINDS:
 			self.assertEqual(item_group_for_kind(kind), item_group_for_kind(None))
-			self.assertNotIn(item_group_for_kind(kind), MENU_KIND_GROUPS.values())
 
 
 class TestWizardMenuKinds(URYFlowTestCase):

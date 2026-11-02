@@ -8,7 +8,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from erpnext.controllers.queries import item_query
 from ury.ury_pos.api import getBranch, getBranchRoom, getRoom, posOpening
-from ury.ury.api.merged_bill import allocate_payments, check_expected_total, lock_for_payment
+from ury.ury.api.merged_bill import allocate_payments, check_change_is_cash, check_expected_total, lock_for_payment
 from ury.ury.api.ury_kot_generate import kot_execute
 from ury.ury.api.ury_kot_generate import process_items_for_cancel_kot
 
@@ -2103,6 +2103,7 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
         invoice.flags.ignore_payment_sync = True
     else:
         check_expected_total(expected_total, invoice.rounded_total)
+        check_change_is_cash(payments, invoice.rounded_total or invoice.grand_total)
         for d in payments:
             invoice.append(
                 "payments", dict(mode_of_payment=d["mode_of_payment"], amount=d["amount"])

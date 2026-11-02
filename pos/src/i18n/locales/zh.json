@@ -88,6 +88,7 @@
     "processing": "处理中...",
     "short_by": "差 {{amount}}",
     "change_due": "应找零：{{amount}}",
+    "change_not_cash": "付款金额超出应收 {{amount}}。只有现金可以找零。",
     "success": "结账成功：已收 {{amount}}"
   },
   "pos": {

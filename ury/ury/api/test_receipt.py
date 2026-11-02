@@ -18,6 +18,7 @@ from ury.setup.test_site import (
 	as_user,
 	open_pos,
 	pay_order,
+	pay_with,
 	place_order,
 )
 from ury.ury.api.receipt import is_registration_number
@@ -118,6 +119,76 @@ class TestJPReceipt(URYFlowTestCase):
 		self.assertIn("※8%対象（税抜） | ¥1,000", out)
 		self.assertIn("消費税等 8% | ¥80", out)
 		self.assertIn("合計（税込） | ¥2,730", out)
+
+	def _bill(self):
+		from ury.setup.cashless import apply_cashless_payments
+
+		apply_cashless_payments()
+		frappe.db.commit()
+		return place_order(CASHIER, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=TABLES[0])  # 1,650
+
+	def test_a_card_payment_prints_the_method_and_no_change_lines(self):
+		order = self._bill()
+		pay_with(order, [("クレジットカード", 1650)])
+		out = text(render(order))
+		self.assertIn("クレジットカード | ¥1,650", out)
+		self.assertNotIn("お預かり", out)
+		self.assertNotIn("お釣り", out)
+
+	def test_cash_and_a_wallet_print_both(self):
+		order = self._bill()
+		pay_with(order, [("Cash", 1000), ("PayPay", 650)])
+		out = text(render(order))
+		self.assertIn("PayPay | ¥650", out)
+		self.assertIn("お預かり（現金） | ¥1,000", out)
+		self.assertNotIn("お釣り", out)
+
+	def test_change_is_printed_with_the_cash_handed_over(self):
+		order = self._bill()
+		pay_with(order, [("Cash", 1200), ("クレジットカード", 600)])
+		out = text(render(order))
+		self.assertIn("クレジットカード | ¥600", out)
+		self.assertIn("お預かり（現金） | ¥1,200", out)
+		self.assertIn("お釣り | ¥150", out)
+
+	def test_data_without_the_payment_fields_prints_no_template_error(self):
+		"""New template with older data (code and migrate out of step): no error text on the receipt."""
+		from ury.ury.api.receipt import jp_receipt_data
+
+		order = self._bill()
+		pay_with(order, [("Cash", 2000)])
+		doc = frappe.get_doc("POS Invoice", order)
+		data = jp_receipt_data(doc)
+		for key in ("cashless", "cash_received", "cash_label", "change", "subtotal"):
+			data.pop(key)
+		path = frappe.get_app_path("ury", "templates", "print_formats", "ury_jp_receipt.html")
+		with open(path, encoding="utf-8") as f:
+			template = f.read()
+		out = text(frappe.render_template(template, {"doc": doc, "jp_receipt_data": lambda d: data}))
+		self.assertNotIn("no such element", out)
+		self.assertNotIn("Undefined", out)
+		self.assertIn("小計（税抜） | |", out)  # printed fields that are missing print as empty
+		self.assertIn("合計（税込）", out)
+
+	def test_cash_only_keeps_the_plain_label(self):
+		order = self._bill()
+		pay_with(order, [("Cash", 2000)])
+		out = text(render(order))
+		self.assertIn("お預かり | ¥2,000", out)
+		self.assertIn("お釣り | ¥350", out)
+		self.assertNotIn("お預かり（現金）", out)
+
+	def test_a_merged_bill_adds_the_payments_of_both_invoices_by_method(self):
+		from ury.ury_pos.api import merge_bills
+
+		first = self._bill()
+		second = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLES[1], order_type="Take Away")  # 1,080
+		with as_user(CASHIER):
+			merge_bills(first, second)
+		pay_with(first, [("クレジットカード", 2000), ("Cash", 730)], expected_total=2730)
+		out = text(render(first))
+		self.assertEqual(out.count("クレジットカード | ¥2,000"), 1)
+		self.assertIn("お預かり（現金） | ¥730", out)
 
 	def test_a_missing_or_wrong_registration_number_still_prints(self):
 		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])

@@ -93,10 +93,10 @@ const cases: Case[] = [
     },
   },
   {
-    label: 'Captain: canRemoveSentItems/showItemImages/canReprintKOT follow profile flags',
+    label: 'Captain: showItemImages/canReprintKOT follow profile flags',
     run: () => {
       const caps = derivePOSCapabilities(captainUser, baseProfile);
-      return caps.canRemoveSentItems && caps.showItemImages && caps.canReprintKOT;
+      return caps.showItemImages && caps.canReprintKOT;
     },
   },
   {

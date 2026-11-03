@@ -1,6 +1,7 @@
 import frappe
 from datetime import datetime
 from frappe.utils import now_datetime, get_time, now, get_datetime
+from ury.ury.api.pos_permissions import can_reduce_sent_items
 from ury.ury.doctype.ury_order.ury_order import release_merge_cluster_tables
 
 
@@ -70,9 +71,8 @@ def validate_invoice(doc, method):
         doc.waiter = doc.modified_by
     if getattr(frappe.flags, "ury_bill_split", False):
         return
-    remove_items = frappe.db.get_value("POS Profile", doc.pos_profile, "remove_items")
-    
-    if doc.invoice_printed == 1 and remove_items == 0:
+    # a bill that is printed may only be changed by someone who may take dishes back
+    if doc.invoice_printed == 1 and doc.pos_profile and not can_reduce_sent_items(doc.pos_profile):
         # Get the original items from db
         original_doc = frappe.get_doc("POS Invoice", doc.name)
         

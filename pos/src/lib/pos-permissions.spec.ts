@@ -16,6 +16,7 @@ const CASHIER = {
   merge_bills: true,
   unmerge_bills: true,
   split_bill: true,
+  reduce_sent_items: true,
   open_shift: true,
   close_shift: true,
 };

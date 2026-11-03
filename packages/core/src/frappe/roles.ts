@@ -58,8 +58,6 @@ export interface POSCapabilities {
   canTakeTableOrders: boolean;
   /** Elevated access to tables/orders owned by other captains — via transfer role or billing role. */
   canAccessOtherCaptainsTables: boolean;
-  /** Can remove/reduce already-sent order items, per `remove_items`. */
-  canRemoveSentItems: boolean;
   /** Whether menu item images should be shown, per `show_image`. */
   showItemImages: boolean;
   /**
@@ -106,7 +104,6 @@ export const derivePOSCapabilities = (
   return {
     canTakeTableOrders: !isUserRestrictedFromTableOrders(user, posProfile),
     canAccessOtherCaptainsTables,
-    canRemoveSentItems: Boolean(posProfile?.remove_items),
     showItemImages: Boolean(posProfile?.show_image),
     canSettlePayment: billingCapability,
     canApplyDiscount: billingCapability,

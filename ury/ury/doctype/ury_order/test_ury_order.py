@@ -426,8 +426,10 @@ class TestGetTableOrderContext(FrappeTestCase):
         self.assertTrue(result["assignment"]["is_mine"])
         self.assertTrue(result["permissions"]["view"])
         self.assertTrue(result["permissions"]["modify"])
-        self.assertTrue(result["permissions"]["reduce_items"])
-        self.assertTrue(result["permissions"]["remove_items"])
+        # Taking a sent dish back needs the POS Profile switch and the cancel permission; this
+        # captain has the switch but no cancel permission (see TestReduceSentItems for the real rule).
+        self.assertFalse(result["permissions"]["reduce_items"])
+        self.assertFalse(result["permissions"]["remove_items"])
         # No submit/cancel DocType permission and not a billing user.
         self.assertFalse(result["permissions"]["settle"])
         self.assertFalse(result["permissions"]["cancel"])

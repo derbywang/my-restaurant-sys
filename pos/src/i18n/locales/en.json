@@ -254,6 +254,7 @@
     "dine_in_restricted": "Dine In is not available for your role",
     "payment_failed": "Payment could not be completed. Please try again.",
     "not_permitted_billing": "Only a cashier can do this. Ask the cashier to take the payment or change the bill.",
+    "not_permitted_reduce": "Only a cashier or the manager can reduce or remove a dish that was already ordered. Ask the cashier.",
     "order_modified": "This order has been modified. Please reload the page to retrieve the latest edits.",
     "order_sync_failed": "Could not sync this order. Please reload the page and try again.",
     "table_occupied": "This table already has an order that has not been printed. Please refresh the page.",

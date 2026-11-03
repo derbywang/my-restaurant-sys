@@ -58,6 +58,8 @@ export interface OrderItem extends MenuItem {
   selectedAddons?: { id: string; name: string; price: number }[];
   uniqueId?: string;
   comment?: string;
+  /** The quantity the server had when the order was loaded (dishes already sent to the kitchen). */
+  sentQuantity?: number;
 }
 
 export interface PaymentMode {
@@ -788,6 +790,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
             special_dish: 0 as 0 | 1,
             tax_rate: 0,
             comment: item.comment || '',
+            sentQuantity: item.qty,
           };
           return {
             ...orderItem,

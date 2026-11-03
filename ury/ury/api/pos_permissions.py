@@ -29,6 +29,28 @@ def require_billing_permission(doc=None):
 		)
 
 
+def can_reduce_sent_items(pos_profile):
+	"""Taking back a dish that already went to the kitchen (fewer, or none at all).
+
+	Both must hold: the store allows it (the POS Profile switch `remove_items`) and the user may
+	cancel POS Invoices (the cashier and the manager; a captain may add dishes but not take them back).
+	"""
+	if not pos_profile or not frappe.has_permission("POS Invoice", "cancel"):
+		return False
+	return bool(frappe.db.get_value("POS Profile", pos_profile, "remove_items"))
+
+
+def _profile_of_user():
+	"""The POS Profile of the user's branch (what `get_captain_context` also uses); None when there is none."""
+	from ury.ury_pos.api import getBranch
+
+	try:
+		branch = getBranch()
+	except frappe.ValidationError:
+		return None
+	return frappe.db.exists("POS Profile", {"branch": branch}) if branch else None
+
+
 @frappe.whitelist()
 def get_pos_permissions():
 	"""What the current user may do in the POS; the POS shows only these actions."""
@@ -42,6 +64,7 @@ def get_pos_permissions():
 		"merge_bills": billing,
 		"unmerge_bills": billing,
 		"split_bill": billing,
+		"reduce_sent_items": can_reduce_sent_items(_profile_of_user()),
 		"open_shift": bool(frappe.has_permission("POS Opening Entry", "create")),
 		"close_shift": bool(frappe.has_permission("POS Closing Entry", "create")),
 	}

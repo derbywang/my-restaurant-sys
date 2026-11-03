@@ -74,7 +74,10 @@ class TestPosPermissions(URYTestCase):
 
 	def permissions(self, user):
 		with as_user(user):
-			return get_pos_permissions()
+			permissions = get_pos_permissions()
+		# depends on the POS Profile switch of the site; TestReduceSentItems covers it
+		permissions.pop("reduce_sent_items")
+		return permissions
 
 	def test_the_cashier_may_do_everything_at_the_register(self):
 		self.assertEqual(self.permissions(CASHIER), CASHIER_ONLY)
@@ -325,3 +328,114 @@ class TestNewCashier(URYFlowTestCase):
 		closing = close_shift(opening, strict=True)
 		self.assertEqual(closing.docstatus, 1)
 		self.assertEqual({row.pos_invoice for row in closing.pos_transactions}, {first, second, new_bill})
+
+
+class TestReduceSentItems(URYFlowTestCase):
+	"""Taking a dish back after it went to the kitchen: the cashier and the manager may, a captain may not.
+
+	Two things must both be true: the POS Profile allows it (`remove_items`, for the whole store) and
+	the user may cancel POS Invoices (the DocType permission; no role name is checked).
+	"""
+
+	def setUp(self):
+		super().setUp()
+		from ury.setup.test_site import open_pos
+
+		open_pos(CASHIER)
+		original = frappe.db.get_value("POS Profile", POS_PROFILE, "remove_items")
+		self.addCleanup(self._switch, original)
+		self._switch(1)
+
+	def _switch(self, value):
+		frappe.db.set_value("POS Profile", POS_PROFILE, "remove_items", value)
+		frappe.db.commit()
+		frappe.clear_document_cache("POS Profile", POS_PROFILE)
+
+	def _quantity(self, name):
+		return frappe.db.get_value("POS Invoice Item", {"parent": name, "item_code": FOOD_ITEM}, "qty")
+
+	def _order_of(self, user, quantity=2):
+		name = place_order(user, [(FOOD_ITEM, quantity)], table=TABLES[0])
+		frappe.db.commit()  # as the request does; the refused change below is rolled back on its own
+		return name
+
+	def _reduce(self, user, name, quantity=1):
+		return place_order(user, [(FOOD_ITEM, quantity)], table=TABLES[0], invoice=name)
+
+	def test_the_permission_map_says_who_may_reduce(self):
+		for user in (CASHIER, MANAGER, "Administrator"):
+			with as_user(user):
+				self.assertTrue(get_pos_permissions()["reduce_sent_items"], user)
+		with as_user(CAPTAIN):
+			self.assertFalse(get_pos_permissions()["reduce_sent_items"])
+
+	def test_with_the_switch_off_nobody_may(self):
+		self._switch(0)
+		for user in (CASHIER, MANAGER, CAPTAIN, "Administrator"):
+			with as_user(user):
+				self.assertFalse(get_pos_permissions()["reduce_sent_items"], user)
+
+	def test_a_captain_cannot_take_a_sent_dish_back_and_the_order_stays(self):
+		name = self._order_of(CAPTAIN)
+		with self.assertRaises(frappe.PermissionError):
+			self._reduce(CAPTAIN, name)
+		frappe.db.rollback()
+		self.assertEqual(self._quantity(name), 2)
+
+	def test_a_captain_can_still_add_a_dish(self):
+		name = self._order_of(CAPTAIN)
+		self._reduce(CAPTAIN, name, quantity=3)
+		self.assertEqual(self._quantity(name), 3)
+
+	def test_the_cashier_can_take_a_dish_back(self):
+		name = self._order_of(CASHIER)
+		self._reduce(CASHIER, name)
+		self.assertEqual(self._quantity(name), 1)
+
+	def test_the_cashier_can_take_back_a_dish_the_captain_ordered(self):
+		name = self._order_of(CAPTAIN)
+		self._reduce(CASHIER, name)
+		self.assertEqual(self._quantity(name), 1)
+
+	def test_the_manager_can_take_a_dish_back(self):
+		name = self._order_of(MANAGER)
+		self._reduce(MANAGER, name)
+		self.assertEqual(self._quantity(name), 1)
+
+	def test_with_the_switch_off_the_cashier_cannot_either(self):
+		name = self._order_of(CASHIER)
+		self._switch(0)
+		with self.assertRaises(frappe.PermissionError):
+			self._reduce(CASHIER, name)
+		frappe.db.rollback()
+		self.assertEqual(self._quantity(name), 2)
+
+	def test_the_order_screen_of_a_captain_offers_no_reducing(self):
+		from ury.ury.doctype.ury_order.ury_order import get_table_order_context
+
+		self._order_of(CAPTAIN)
+		with as_user(CAPTAIN):
+			captain = get_table_order_context(TABLES[0])["permissions"]
+		with as_user(CASHIER):
+			cashier = get_table_order_context(TABLES[0])["permissions"]
+		self.assertFalse(captain["reduce_items"])
+		self.assertFalse(captain["remove_items"])
+		self.assertTrue(captain["modify"])  # adding and noting stay possible
+		self.assertTrue(cashier["reduce_items"])
+		self.assertTrue(cashier["remove_items"])
+
+	def test_after_the_bill_is_printed_a_captain_cannot_change_the_quantity_directly_either(self):
+		from ury.setup.test_site import print_bill
+		from ury.ury.hooks.ury_pos_invoice import validate_invoice
+
+		name = self._order_of(CASHIER)
+		print_bill(name, CASHIER)
+		for user, may in ((CAPTAIN, False), (CASHIER, True)):
+			doc = frappe.get_doc("POS Invoice", name)
+			doc.items[0].qty = 1
+			with as_user(user):
+				if may:
+					validate_invoice(doc, None)
+				else:
+					with self.assertRaises(frappe.ValidationError):
+						validate_invoice(doc, None)

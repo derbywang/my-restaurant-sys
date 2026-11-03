@@ -33,3 +33,8 @@ export function syncFailureMessageKey(response: unknown, updating: boolean): str
   }
   return updating ? 'errors.order_modified' : 'errors.order_sync_failed';
 }
+
+/** The server refused to take back a dish that was already sent (`sync_order` throws with this title). */
+export function refusedTakingBack(response: unknown): boolean {
+  return serverTitles(response).includes('reduce not permitted');
+}

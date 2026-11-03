@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { syncFailureMessageKey } from './order-sync';
+import { refusedTakingBack, syncFailureMessageKey } from './order-sync';
 
 const withTitle = (title: string) => ({
   message: { status: 'Failure' },
@@ -29,5 +29,17 @@ describe('syncFailureMessageKey', () => {
   it('is not fooled by a broken or unknown message', () => {
     expect(syncFailureMessageKey({ _server_messages: 'not json' }, false)).toBe('errors.order_sync_failed');
     expect(syncFailureMessageKey(withTitle('Something else'), false)).toBe('errors.order_sync_failed');
+  });
+});
+
+describe('refusedTakingBack', () => {
+  it('knows the server refused to take a sent dish back (it throws, with that title)', () => {
+    expect(refusedTakingBack(withTitle('Reduce not permitted'))).toBe(true);
+  });
+
+  it('is not fooled by other refusals or by something that is not a server answer', () => {
+    expect(refusedTakingBack(withTitle('Table occupied '))).toBe(false);
+    expect(refusedTakingBack(new Error('x'))).toBe(false);
+    expect(refusedTakingBack(undefined)).toBe(false);
   });
 });

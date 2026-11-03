@@ -11,6 +11,8 @@ export interface PosPermissions {
   merge_bills: boolean;
   unmerge_bills: boolean;
   split_bill: boolean;
+  /** Take back a dish that already went to the kitchen (cashier, manager; not a captain). */
+  reduce_sent_items: boolean;
   open_shift: boolean;
   close_shift: boolean;
 }
@@ -24,6 +26,7 @@ export const NO_PERMISSIONS: PosPermissions = {
   merge_bills: false,
   unmerge_bills: false,
   split_bill: false,
+  reduce_sent_items: false,
   open_shift: false,
   close_shift: false,
 };

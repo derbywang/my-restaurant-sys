@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 import { OrderItem, usePOSStore } from '../store/pos-store';
+import { useRootStore } from '../store/root-store';
 import { cn } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
 import { Button, Dialog, DialogContent, Input } from '@ury/ui';
@@ -118,6 +119,9 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
   const [quantity, setQuantity] = useState<string>(editMode ? initialQuantity?.toString() || '0' : '0');
   const [comments, setComments] = useState<string>(itemToReplace?.comment || '');
   const dialogRef = useRef<HTMLDivElement>(null);
+  // editing a line that was already sent: not below what was sent, unless the user may take dishes back
+  const mayTakeBack = useRootStore((state) => Boolean(state.permissions?.reduce_sent_items));
+  const quantityFloor = editMode && !mayTakeBack ? itemToReplace?.sentQuantity ?? 0 : 0;
 
   // Find existing item in cart based on current selections and comments
   const existingCartItem = selectedItem ? activeOrders.find(
@@ -230,7 +234,7 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
 
   const handleDecrement = () => {
     const currentNum = quantity === '' ? 0 : parseFloat(quantity);
-    if (currentNum > 0) {
+    if (currentNum > quantityFloor) {
       setQuantity(Math.round((currentNum - 1) * 1000) / 1000 + '');
     }
   };
@@ -239,6 +243,10 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
     const numericQuantity = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
     if (isNaN(numericQuantity) || numericQuantity <= 0) {
       return; // Don't add to order if quantity is 0 or invalid
+    }
+    if (numericQuantity < quantityFloor) {
+      setQuantity(String(quantityFloor)); // a sent dish cannot be taken back here
+      return;
     }
 
     if (editMode && itemToReplace?.uniqueId) {

@@ -9,7 +9,7 @@ from frappe.utils import flt
 from erpnext.controllers.queries import item_query
 from ury.ury_pos.api import getBranch, getBranchRoom, getRoom, posOpening
 from ury.ury.api.merged_bill import allocate_payments, check_change_is_cash, check_expected_total, lock_for_payment
-from ury.ury.api.pos_permissions import DISCOUNT_ROLES, require_billing_permission
+from ury.ury.api.pos_permissions import DISCOUNT_ROLES, can_reduce_sent_items, require_billing_permission
 from ury.ury.api.ury_kot_generate import kot_execute
 from ury.ury.api.ury_kot_generate import process_items_for_cancel_kot
 
@@ -1159,8 +1159,9 @@ def get_table_order_context(table):
     invoice_billed = bool(order) and order.get("invoice_printed") == 1
     can_modify = can_view and (not order or not invoice_billed or is_billing_user)
 
-    can_reduce_items = can_modify and bool(pos_profile.remove_items)
-    can_remove_items = can_modify and bool(pos_profile.remove_items)
+    # taking a sent dish back: the store allows it (POS Profile) and the user may cancel POS Invoices
+    can_reduce_items = can_modify and can_reduce_sent_items(pos_profile.name)
+    can_remove_items = can_reduce_items
 
     can_transfer_table = can_modify and has_elevated_access
 
@@ -1566,9 +1567,10 @@ def sync_order(
         items = json.loads(items)
 
     # Reduction/removal permission: gate any decrease in a previously-sent
-    # item's quantity (including full removal) by POS Profile `remove_items`,
+    # item's quantity (including full removal) by can_reduce_sent_items (the
+    # POS Profile `remove_items` switch and the user's cancel permission),
     # matching Phase 2's can_reduce_items/can_remove_items derivation.
-    if past_item and not bool(posprofile.remove_items):
+    if past_item and not can_reduce_sent_items(posprofile.name):
         requested_qty_by_item = {}
         for d in items:
             requested_qty_by_item[d.get("item")] = requested_qty_by_item.get(
@@ -1591,6 +1593,7 @@ def sync_order(
                 frappe.throw(
                     _("You are not permitted to reduce or remove items from this order."),
                     frappe.PermissionError,
+                    title="Reduce not permitted",  # the POS recognises the refusal by this title
                 )
 
     invoice.items = []

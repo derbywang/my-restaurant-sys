@@ -18,7 +18,8 @@ import { DINE_IN } from '../data/order-types';
 import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
-import { syncFailureMessageKey } from '../lib/order-sync';
+import { refusedTakingBack, syncFailureMessageKey } from '../lib/order-sync';
+import { canClearOrder, canDecrease, canRemoveLine } from '../lib/sent-items';
 import { tableForSubmit } from '../lib/order-tabs';
 
 const OrderPanel = () => {
@@ -47,6 +48,8 @@ const OrderPanel = () => {
     lastModifiedTime
   } = usePOSStore();
   const user = useRootStore((state: RootState) => state.user);
+  // taking back a dish that was already sent: the cashier and the manager (the server decides)
+  const mayTakeBack = useRootStore((state: RootState) => Boolean(state.permissions?.reduce_sent_items));
   const [editingItem, setEditingItem] = useState<typeof activeOrders[0] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCommentDialog, setShowCommentDialog] = useState(false);
@@ -158,7 +161,11 @@ const OrderPanel = () => {
       showToast.success(isUpdatingOrder ? t('success.order_updated') : t('success.order_created'));
     } catch (error) {
       console.error('Failed to sync order:', error);
-      showToast.error(parseFrappeError(error, t('errors.failed_process_order')));
+      showToast.error(
+        refusedTakingBack(error)
+          ? t('errors.not_permitted_reduce')
+          : parseFrappeError(error, t('errors.failed_process_order'))
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -290,7 +297,9 @@ const OrderPanel = () => {
                     <div className="flex items-center gap-2">
                       <Button
                         onClick={() => {
-                          const newQuantity = Math.max(0, Math.round((item.quantity - 1) * 1000) / 1000);
+                          // below what was sent only for those who may take dishes back
+                          const floor = mayTakeBack ? 0 : item.sentQuantity ?? 0;
+                          const newQuantity = Math.max(floor, Math.round((item.quantity - 1) * 1000) / 1000);
                           if (newQuantity <= 0) {
                             removeFromOrder(item.uniqueId!);
                           } else {
@@ -300,7 +309,7 @@ const OrderPanel = () => {
                         variant="outline"
                         size="icon"
                         className="w-8 h-8 rounded-full"
-                        disabled={isInteractionDisabled}
+                        disabled={isInteractionDisabled || !canDecrease(item, mayTakeBack)}
                       >
                         -
                       </Button>
@@ -316,20 +325,22 @@ const OrderPanel = () => {
                       </Button>
                     </div>
                     
-                    <Button
-                      onClick={() => removeFromOrder(item.uniqueId!)}
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-500 hover:text-red-600"
-                      disabled={isInteractionDisabled}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </Button>
+                    {canRemoveLine(item, mayTakeBack) && (
+                      <Button
+                        onClick={() => removeFromOrder(item.uniqueId!)}
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-600"
+                        disabled={isInteractionDisabled}
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
-            {activeOrders.length > 0 && (
+            {activeOrders.length > 0 && canClearOrder(activeOrders, mayTakeBack) && (
               <Button
                 onClick={clearOrder}
                 variant="ghost"

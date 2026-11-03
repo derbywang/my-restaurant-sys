@@ -16,7 +16,7 @@
 - 许可证：LICENSE 是 AGPL v3（hooks.py 和 AGENTS.MD 中写的 MIT 不对）；修改后的代码同样适用 AGPL
 - yarn workspaces 成员还包括 self-order（自助点餐，React，路由 /order，目前还在开发中）
 - 开发环境**没有默认站点**（`common_site_config.json` 里没有 `default_site`），`bench serve` 按 Host 头区分站点：`ury.localhost`（开发）、`ury-test.localhost`（测试）、`ury-wizard.localhost`（向导验证，临时）。所有需要站点的 bench 命令（`migrate`、`execute`、`export-fixtures`、`run-tests`、`console` 等）都要带 `--site`；浏览器要用站点域名访问（`http://ury.localhost:8000`），`localhost` / `127.0.0.1` 找不到站点。
-- 开发环境中实时推送（Socket.IO）连不上，因为 8000 端口没有转发 /socket.io，厨房屏幕需要手动刷新；正式环境由 nginx 转发，没有这个问题
+- 开发环境中实时推送（Socket.IO）可以用：`common_site_config.json` 里设了 `webserver_host = 127.0.0.1`（Socket.IO 认证回调 web 服务器用），`socketio_port = 9000`，pos / mosaic 在开发环境（`window.dev_server`）直接连 9000 端口，不经过 8000。厨房屏幕会自动更新，KOT 出错提醒（`KotAlertListener`）也可以在开发站点上测试；正式环境由 nginx 转发 /socket.io
 
 ## 操作规则（站点数据与单据）
 - **不要用“先执行再回滚”的方式试运行。** URY 的钩子里有 `frappe.db.commit()`（例如取消 POS Invoice 时的 `release_merge_cluster_tables`），回滚不一定有效；试运行也可能真的改了数据。要预览影响，只读代码和查询数据，或者只在测试里使用事务（测试结束时回滚）。

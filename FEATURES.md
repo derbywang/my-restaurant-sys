@@ -5,7 +5,7 @@ A POS Closing Entry must be created at the end of each day to complete the daily
 
 > :information_source: **Note**  
 > This version is currently designed for **POS machines/Desktop** to handle **cashiers and fast checkout**.  
-> For **order takers and mobile support**, use **Version 1 POS**, which is available at the path `/urypos/Table`.
+> The old Version 1 POS (`/urypos`) has been closed: it lacks the Japan tax, merged-bill and change rules. Waiters use the Captain screen of this POS.
 
 - **Key Features**
 	- All Major POS Features from Version 1 Retained

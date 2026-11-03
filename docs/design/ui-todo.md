@@ -40,6 +40,20 @@
 - 日本站点向导新建 POS Profile 时默认打开折扣：「Enable Discount」（`custom_enable_discount`，URY POS 看的是它）和「Allow User to Edit Discount」（`allow_discount_change`，ERPNext 自带 POS 用）；只在两个开关都关着时补上，已有的选择不覆盖，其他国家不变。
 - 未处理：`pos/src/store/pos-store.ts` 里 `paymentModes` 的初始值 `['Cash']` 只在支付方式加载前出现；向导文字本身仍是英文（见向导 i18n）。
 
+## 收银员与服务员的权限（已实现，等浏览器验证）
+- 门店规则：只有收银员收款，服务员（只有 URY Captain）点单、加菜、打印账单。后端 `get_pos_permissions` 按 DocType 权限返回各操作的可否，前端只显示被允许的；`make_invoice` / 会計合算 / 解除 / 会計分割在后端也先检查 submit 权限。
+- 权限错误显示翻译后的文言（`errors.not_permitted_billing`，ja / zh / ko / en / fr），不显示英文异常。
+- 收银员的 POS Invoice `print` 权限：新站点来自 `role_permissions.py`，已有站点靠补丁 `cashier_print_permission`（`bench migrate`）。打印本来就能用：打印视图接受 read 或 print，URY 的打印接口检查 write。
+
+## 登录与标签页（待做）
+- 店长只想看订单、帮忙点单时，一登录就被要求开班，不合理。和多收银员的 5.1 / 5.2 一起考虑（谁必须开班、谁可以直接进来看订单和点单）。
+- 关闭有未保存修改的标签页时，“Unsaved Changes” 对话框只有 Cancel，没有“放弃修改并关闭”的按钮，标签页关不掉。要加放弃修改的选项：确认后丢弃购物车里的修改，不影响已保存的订单。
+
+## 外带单的桌号与取消 KOT（待做，服务员加菜修复验证并提交后一起做）
+- 外带单带着上一次选的桌号：`setSelectedOrderType` 不清 `selectedTable` / `selectedRoom`，提交时无论订单类型都发送 `table`，`sync_order` 末尾又把未打印订单的桌子标成占用（收银员也一样，与角色无关）。方案：切到非堂食类型时清掉桌号和桌台订单（正在编辑的桌台订单除外）；提交时只在堂食时发送 `table`；后端对“非堂食且不是外带桌（`is_take_away=1`）”的订单不占桌。先写测试：切换类型后桌号被清、非堂食不发 `table`、后端外带单带普通桌号不占桌、外带桌照旧。
+- 取消 KOT 汇总重复行时数量翻倍：INV-00052 有两行 Sake（各 1），`CNCL-KOT-URY-00010` 写了 Sake ×4（应为 2）。看起来 `cancel_kot` / `process_items_for_cancel_kot` 对相同商品的多行汇总了两次。其余 5 张取消 KOT 数量正确。先写测试：同一商品有两行时，取消 KOT 的数量等于订单的数量。
+- 开发站点的 6 张已取消的测试单（INV-00050 ~ 00055）的 `cancel_reason` 写成了“重複の測試订单”，是测试数据，保持现状。
+
 ## 界面整理
 - **报表里的 `IndianRupee` 图标**：`pages/Reports/*.tsx`（十几个）和 `reportsRegistry.ts` 用的是印度卢比图案，日本站点显示不对。以后换成通用图标（如 `Banknote` / `Coins`）。
 - **向导画面本身的多语言**：向导（`SetupPage`、`ConfigurePage` 及各 Section、`setup.json` / `configure.json` 的标签和说明）的文字都是写死的英文，没有接 i18n，所选语言不会让向导画面本身变语言。做 i18n 时一起处理。

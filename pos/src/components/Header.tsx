@@ -22,6 +22,7 @@ const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const user = useRootStore((state: RootState) => state.user);
+  const permissions = useRootStore((state: RootState) => state.permissions);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const { searchQuery, setSearchQuery, setShowVoluntaryClosing } = usePOSStore();
@@ -167,14 +168,16 @@ const Header = () => {
                   <p className="text-sm text-gray-500">{user?.name || ''}</p>
                 </div>
                 <div className="py-2">
-                  <Button
-                    variant="ghost"
-                    className="flex justify-start items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                    onClick={handleCloseShift}
-                  >
-                    <Lock className="w-4 h-4 me-3" />
-                    {t('header.close_shift')}
-                  </Button>
+                  {permissions?.close_shift && (
+                    <Button
+                      variant="ghost"
+                      className="flex justify-start items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      onClick={handleCloseShift}
+                    >
+                      <Lock className="w-4 h-4 me-3" />
+                      {t('header.close_shift')}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     className="flex justify-start items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"

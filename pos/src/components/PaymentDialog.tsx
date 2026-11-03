@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Percent, Coins } from 'lucide-react';
 import { usePOSStore } from '../store/pos-store';
-import { formatCurrency, call, parseFrappeError } from '@ury/core';
+import { formatCurrency, call } from '@ury/core';
 import { Button, Input, Dialog, DialogContent, showToast } from '@ury/ui';
 import { defaultCashMode } from '../lib/payment-change';
+import { canShowDiscount, friendlyError } from '../lib/pos-permissions';
+import { useRootStore } from '../store/root-store';
 import { t } from '../i18n';
 import { checkPayments, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
@@ -41,6 +43,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   discountPercentage
 }) => {
   const { paymentModes, paymentModeTypes, fetchPaymentModes, posProfile: storePosProfile } = usePOSStore();
+  const permissions = useRootStore((state) => state.permissions);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -70,7 +73,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(parseFrappeError(err, t('errors.payment_failed')));
+        if (!cancelled) setError(friendlyError(err, t('errors.payment_failed'), (key: string) => t(key)));
       });
     return () => {
       cancelled = true;
@@ -181,7 +184,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         return;
       }
       // parseFrappeError extracts human-readable message from _server_messages (e.g. stock validation error)
-      setError(parseFrappeError(err, t('errors.payment_failed')));
+      setError(friendlyError(err, t('errors.payment_failed'), (key: string) => t(key)));
     } finally {
       setIsProcessing(false);
     }
@@ -205,7 +208,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
           </div>
 
           {/* Discount Section (conditional) */}
-          {storePosProfile?.enable_discount === 1 && (
+          {canShowDiscount(permissions, storePosProfile?.enable_discount) && (
             <div className="space-y-4 mb-6">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Percent className="w-5 h-5" />

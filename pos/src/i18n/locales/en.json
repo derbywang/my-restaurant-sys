@@ -245,8 +245,11 @@
     "enter_cancel_reason": "Please enter a reason for cancellation.",
     "dine_in_restricted": "Dine In is not available for your role",
     "payment_failed": "Payment could not be completed. Please try again.",
+    "not_permitted_billing": "Only a cashier can do this. Ask the cashier to take the payment or change the bill.",
     "order_modified": "This order has been modified. Please reload the page to retrieve the latest edits.",
     "order_sync_failed": "Could not sync this order. Please reload the page and try again.",
+    "table_occupied": "This table already has an order that has not been printed. Please refresh the page.",
+    "order_already_billed": "This order has already been printed for payment. Only the cashier can change it.",
     "posOpening": {
       "permission_denied": "You don't have permission to open a session. Contact your manager.",
       "daily_close_pending": "Yesterday's session was never closed. Contact your manager to close it before opening today.",

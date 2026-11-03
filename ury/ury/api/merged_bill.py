@@ -179,8 +179,10 @@ def unmerge_pair(first, second):
 @frappe.whitelist()
 def unmerge_bills(invoice):
 	"""会計合算を解除: both bills stay, as ordinary bills again."""
+	from ury.ury.api.pos_permissions import require_billing_permission
 	from ury.ury_pos.api import getBranch
 
+	require_billing_permission()
 	doc = frappe.get_doc("POS Invoice", invoice)
 	if not frappe.has_permission("POS Invoice", "write", doc=doc):
 		frappe.throw(_("You do not have permission to unmerge this bill."), frappe.PermissionError)

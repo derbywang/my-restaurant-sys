@@ -57,7 +57,7 @@ permissions_map = {
 		("Item Price", {"permlevel": 0, "select": 1, "read": 1}),
 		("Mode of Payment", {"permlevel": 0, "select": 1, "read": 1}),
 		("POS Closing Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1}),
-		("POS Invoice", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1}),
+		("POS Invoice", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1}),
 		("POS Invoice Merge Log", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1}),
 		("POS Opening Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1}),
 		("POS Profile", {"permlevel": 0, "select": 1, "read": 1}),

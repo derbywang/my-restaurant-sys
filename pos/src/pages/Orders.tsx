@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { showToast } from '@ury/ui';
 import OrderStatusSidebar from '../components/OrderStatusSidebar';
 import { useRootStore } from '../store/root-store';
+import { friendlyError } from '../lib/pos-permissions';
 import { formatCurrency, parseFrappeError } from '@ury/core';
 import { Spinner } from '@ury/ui';
 import { Textarea } from '@ury/ui';
@@ -72,7 +73,8 @@ export default function Orders() {
     goToPreviousPage,
     selectOrder,
     clearSelectedOrder,
-    orderSearchQuery
+    orderSearchQuery,
+    permissions
   } = useRootStore();
 
   const posStore = usePOSStore();
@@ -214,7 +216,7 @@ export default function Orders() {
       clearSelectedOrder();
       fetchOrders();
     } catch (err) {
-      showToast.error(parseFrappeError(err, t('errors.failed_cancel_order')));
+      showToast.error(friendlyError(err, t('errors.failed_cancel_order'), (key: string) => t(key)));
     } finally {
       setCancelLoading(false);
     }
@@ -256,6 +258,7 @@ export default function Orders() {
         table: order.restaurant_table || null,
         room: order.custom_restaurant_room || null,
         items,
+        modified: order.modified || null,
       });
 
       // Redirect to POS page
@@ -353,7 +356,7 @@ export default function Orders() {
       setShowUnmergeDialog(false);
       clearSelectedOrder();
     } catch (err) {
-      showToast.error(parseFrappeError(err, t('bill_merge.unmerge_failed')));
+      showToast.error(friendlyError(err, t('bill_merge.unmerge_failed'), (key: string) => t(key)));
       setShowUnmergeDialog(false);
     } finally {
       setUnmergeLoading(false);
@@ -581,11 +584,11 @@ export default function Orders() {
                       <OrderActionsMenu
                         isOpen={orderActionsMenuOpen}
                         onOpenChange={setOrderActionsMenuOpen}
-                        showMergeBill={canMergeBill}
+                        showMergeBill={canMergeBill && Boolean(permissions?.merge_bills)}
                         onMergeBill={() => setShowMergeDialog(true)}
-                        showUnmergeBill={canUnmergeBill}
+                        showUnmergeBill={canUnmergeBill && Boolean(permissions?.unmerge_bills)}
                         onUnmergeBill={() => setShowUnmergeDialog(true)}
-                        showSplitBill={canSplitBill}
+                        showSplitBill={canSplitBill && Boolean(permissions?.split_bill)}
                         onSplitBill={() => setShowSplitDialog(true)}
                       />
                       <button
@@ -772,7 +775,7 @@ export default function Orders() {
                   {isPrinting ? <Spinner className="w-5 h-5" hideMessage  message={t('common.loading')} /> : <Printer className="w-5 h-5" />}
                 </Button>
                 {/* Payment Button - only for orders that are not paid yet */}
-                {(selectedOrder.status === 'Draft' || selectedOrder.status === 'Unbilled') && (
+                {permissions?.settle_payment && (selectedOrder.status === 'Draft' || selectedOrder.status === 'Unbilled') && (
                   <Button
                     className="flex-1"
                     onClick={() => {

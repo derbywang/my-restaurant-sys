@@ -10,6 +10,7 @@ import {
 } from '@ury/ui';
 import { Button } from '@ury/ui';
 import { cn } from '@ury/ui';
+import { friendlyError } from '../lib/pos-permissions';
 import { formatCurrency } from '@ury/core';
 import { t } from '../i18n';
 import { CustomerPicker } from './CustomerPicker';
@@ -134,7 +135,7 @@ const BillSplitDialog = ({
       resetState();
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('bill_split.split_failed'));
+      setError(friendlyError(err, t('bill_split.split_failed'), (key: string) => t(key)));
     } finally {
       setIsSubmitting(false);
     }

@@ -10,6 +10,7 @@ import {
 import { Button } from '@ury/ui';
 import { cn } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
+import { friendlyError } from '../lib/pos-permissions';
 import { t } from '../i18n';
 import { showToast } from '@ury/ui';
 import { Spinner } from '@ury/ui';
@@ -168,7 +169,7 @@ const BillMergeDialog = ({
       await onConfirm(selected);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('bill_merge.merge_failed'));
+      setError(friendlyError(err, t('bill_merge.merge_failed'), (key: string) => t(key)));
     } finally {
       setIsSubmitting(false);
     }

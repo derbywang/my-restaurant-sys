@@ -18,6 +18,7 @@ import { DINE_IN } from '../data/order-types';
 import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
+import { syncFailureMessageKey } from '../lib/order-sync';
 
 const OrderPanel = () => {
   const { 
@@ -147,7 +148,7 @@ const OrderPanel = () => {
       // write is rejected (stale last_modified_time, table already occupied,
       // or the invoice was already billed by another user).
       if (result?.message && typeof result.message === 'object' && 'status' in result.message && result.message.status === 'Failure') {
-        showToast.error(isUpdatingOrder ? t('errors.order_modified') : t('errors.order_sync_failed'));
+        showToast.error(t(syncFailureMessageKey(result, isUpdatingOrder)));
         return;
       }
 

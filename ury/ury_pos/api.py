@@ -1552,7 +1552,9 @@ def submit_checklist(pos_profile, checklist_type, items, pos_opening_entry=None)
 @frappe.whitelist()
 
 def merge_bills(primary_invoice, secondary_invoice):
+    from ury.ury.api.pos_permissions import require_billing_permission
 
+    require_billing_permission()
     try:
 
         if primary_invoice == secondary_invoice:

@@ -28,6 +28,7 @@ import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
 import { t } from '../../i18n';
 import { customerId } from '../../lib/default-customer';
+import { syncFailureMessageKey } from '../../lib/order-sync';
 
 type Mode = 'menu' | 'order';
 
@@ -256,10 +257,13 @@ export default function CaptainOrder() {
       const result = await syncOrder(orderData);
 
       if (result?.message && typeof result.message === 'object' && 'status' in result.message && result.message.status === 'Failure') {
+        const reason = syncFailureMessageKey(result, isUpdatingOrder);
         showToast.error(
-          isUpdatingOrder
+          reason === 'errors.order_modified' && isUpdatingOrder
             ? t('captain.order_modified_by_other')
-            : t('captain.send_failed')
+            : reason === 'errors.order_sync_failed'
+              ? t('captain.send_failed')
+              : t(reason)
         );
         return;
       }

@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand';
 import { AuthSlice } from './auth-slice';
 import { getCombinedPosProfile, PosProfileCombined } from '../../lib/pos-profile-api';
+import { getPosPermissions, PosPermissions } from '../../lib/pos-permissions';
 
 interface RolePermission {
   name: string;
@@ -23,6 +24,8 @@ export interface ConfigState {
   error: string | null;
   hasAccess: boolean;
   posProfile: PosProfileCombined | null;
+  /** What the user may do (from the server); null until loaded, and then no cashier action is shown. */
+  permissions: PosPermissions | null;
 }
 
 /**
@@ -72,6 +75,7 @@ export interface ConfigActions {
   checkAccess: () => void;
   setAllowedRoles: (roles: string[]) => void;
   fetchPosProfile: (forceRefresh?: boolean) => Promise<void>;
+  fetchPermissions: () => Promise<void>;
 }
 
 export type ConfigSlice = ConfigState & ConfigActions;
@@ -82,6 +86,7 @@ const initialState: ConfigState = {
   error: null,
   hasAccess: false,
   posProfile: null,
+  permissions: null,
 };
 
 export const createConfigSlice: StateCreator<
@@ -92,7 +97,17 @@ export const createConfigSlice: StateCreator<
 > = (set, get) => ({
   ...initialState,
 
+  // Never cached: a role changed on the server counts at the next page load.
+  fetchPermissions: async () => {
+    try {
+      set({ permissions: await getPosPermissions() });
+    } catch (error) {
+      console.error('Failed to load the POS permissions', error);
+    }
+  },
+
   fetchPosProfile: async (forceRefresh = false) => {
+    void get().fetchPermissions();
     try {
       set({ isLoading: true, error: null });
 

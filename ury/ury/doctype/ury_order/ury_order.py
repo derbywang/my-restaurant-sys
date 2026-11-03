@@ -9,6 +9,7 @@ from frappe.utils import flt
 from erpnext.controllers.queries import item_query
 from ury.ury_pos.api import getBranch, getBranchRoom, getRoom, posOpening
 from ury.ury.api.merged_bill import allocate_payments, check_change_is_cash, check_expected_total, lock_for_payment
+from ury.ury.api.pos_permissions import DISCOUNT_ROLES, require_billing_permission
 from ury.ury.api.ury_kot_generate import kot_execute
 from ury.ury.api.ury_kot_generate import process_items_for_cancel_kot
 
@@ -545,6 +546,7 @@ def _copy_invoice_item_fields(item_row, qty):
 @frappe.whitelist()
 def split_bill(source_invoice, items_to_move, customer=None):
     """Move selected line items from a printed draft bill to a new sibling POS Invoice."""
+    require_billing_permission()
     if isinstance(items_to_move, str):
         items_to_move = json.loads(items_to_move)
 
@@ -1342,6 +1344,7 @@ def sync_order(
         )
         return {"status": "Failure"}
 
+    updating_invoice = bool(invoice)  # the caller names the order it changes
     invoice = get_order_invoice(table, invoice,order_type)
 
     if invoice.name and not frappe.has_permission("POS Invoice", "write", doc=invoice):
@@ -1441,7 +1444,10 @@ def sync_order(
                 ),
             )
             return {"status": "Failure"}
-    else:
+    elif not updating_invoice:
+        # A new order for a table that already has an unprinted order. Not for a change of the order
+        # the caller names: the order list sends no modified time, and a captain or a manager (not a
+        # billing user of the POS Profile) changing their own order is no second order on the table.
         if invoice.name and invoice.invoice_printed == 0 and not billing_user:
             frappe.msgprint(
                 title="Table occupied ",
@@ -2043,6 +2049,7 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
     """Settle an order. `expected_total` is the amount due the terminal showed (after the
     discount; both bills of a merged bill); when the bill has changed since, nothing is
     paid and AmountChanged is raised so the POS can show the new amount."""
+    require_billing_permission()
     additionalDiscount = _validate_additional_discount(additionalDiscount, pos_profile)
 
     order_type =  invoice_name = frappe.get_value("POS Invoice",invoice , "order_type")
@@ -2065,7 +2072,7 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
         if not pos_prof.get("allow_discount_change") and not pos_prof.get("custom_enable_discount"):
             frappe.throw(_("Discount is not allowed for this POS Profile"))
         
-        allowed_roles = {"Administrator", "System Manager", "URY Admin", "URY Manager", "URY Cashier"}
+        allowed_roles = DISCOUNT_ROLES
         user_roles = set(frappe.get_roles(frappe.session.user))
         if not allowed_roles.intersection(user_roles):
             frappe.throw(_("Not permitted to apply discounts"), frappe.PermissionError)
@@ -2113,6 +2120,8 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
     invoice.save()
     try:
         invoice.submit()
+    except frappe.PermissionError:
+        raise
     except Exception as e:
         frappe.throw(f"Error while settling order: {e}")
         

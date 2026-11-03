@@ -306,8 +306,9 @@ def as_user(user):
         frappe.set_user(previous)
 
 
-def open_pos(user=CASHIER):
-    """Open the shift of `user` (a submitted POS Opening Entry); reuses an open one."""
+def open_pos(user=CASHIER, strict=False):
+    """Open the shift of `user` (a submitted POS Opening Entry); reuses an open one.
+    `strict`: the DocType permission of the user is checked (what the POS does), not ignored."""
     require_test_site()
     existing = frappe.db.get_value(
         "POS Opening Entry",
@@ -330,12 +331,12 @@ def open_pos(user=CASHIER):
                 "balance_details": [{"mode_of_payment": "Cash", "opening_amount": 0}],
             }
         )
-        opening.insert(ignore_permissions=True)
+        opening.insert(ignore_permissions=not strict)
         opening.submit()
     return opening
 
 
-def place_order(user, items, table=None, order_type="Dine In", invoice=None, customer=CUSTOMER, no_of_pax=1, room=ROOM):
+def place_order(user, items, table=None, order_type="Dine In", invoice=None, customer=CUSTOMER, no_of_pax=1, room=ROOM, last_modified_time=None):
     """Take (or update) an order through `sync_order`. `items` is [(item_code, qty), ...];
     prices are set by the server from the menu. Returns the draft POS Invoice name."""
     require_test_site()
@@ -352,6 +353,7 @@ def place_order(user, items, table=None, order_type="Dine In", invoice=None, cus
             customer=customer,
             no_of_pax=no_of_pax,
             last_invoice=invoice,
+            last_modified_time=last_modified_time,
             waiter=user,
             pos_profile=POS_PROFILE,
             table=table,
@@ -477,14 +479,15 @@ def _not_before_last_posting(now):
     return max(now, last) if last else now
 
 
-def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None):
+def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None, strict=False):
     """Close the shift the way the URY POS dialog does: list the invoices with
     `ury.ury.api.pos_closing.get_pos_invoices`, create the POS Closing Entry as a draft
     with them as `pos_transactions`, then submit it.
 
     keep_transactions=False sends no invoice list (what the POS used to do), `only`
     restricts the list to the given invoice names, `extra` adds names that were not listed,
-    `end` is the closing time (default: now).
+    `end` is the closing time (default: now), `strict` checks the DocType permission of the
+    user instead of ignoring it.
     """
     require_test_site()
     from ury.ury.api.pos_closing import get_pos_invoices
@@ -525,7 +528,7 @@ def close_shift(opening, keep_transactions=True, only=None, extra=(), end=None):
                 **totals,
             }
         )
-        closing.insert(ignore_permissions=True)
+        closing.insert(ignore_permissions=not strict)
         closing.submit()
     return closing
 

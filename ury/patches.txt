@@ -16,3 +16,4 @@ ury.patches.v2_0.jp_receipt_format
 ury.patches.v2_0.cashless_payments
 ury.patches.v2_0.jp_date_format
 ury.patches.v2_0.default_app
+ury.patches.v2_0.cashier_print_permission

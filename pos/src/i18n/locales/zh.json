@@ -245,8 +245,11 @@
     "enter_cancel_reason": "请输入取消原因。",
     "dine_in_restricted": "您的角色无法使用堂食",
     "payment_failed": "结账未能完成，请重试。",
+    "not_permitted_billing": "此操作只有收银员可以进行。请让收银员来收款、合并或拆分账单。",
     "order_modified": "此订单已被修改，请重新加载页面以获取最新内容。",
     "order_sync_failed": "无法同步此订单，请重新加载页面后重试。",
+    "table_occupied": "该桌已有未打印的订单，请刷新页面。",
+    "order_already_billed": "此订单已打印账单，只有收银员可以修改。",
     "posOpening": {
       "permission_denied": "您没有开班权限，请联系店长。",
       "daily_close_pending": "昨日的班次从未交班。请联系店长先完成交班，再开始今天的班次。",

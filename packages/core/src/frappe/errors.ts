@@ -148,3 +148,18 @@ export function parseFrappeError(err: unknown, fallback = 'An unexpected error o
 
   return fallback;
 }
+
+/**
+ * True when the server refused because the user lacks a permission (Frappe's PermissionError, HTTP
+ * 403). The server text for it is English and meant for developers; show a translated message of
+ * your own instead.
+ */
+export function isPermissionError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as Record<string, unknown>;
+  const response = (e.response ?? {}) as Record<string, unknown>;
+  if (e.exc_type === 'PermissionError' || response.exc_type === 'PermissionError') return true;
+  if (e.httpStatus === 403 || response.httpStatus === 403) return true;
+  const exception = typeof e.exception === 'string' ? e.exception : typeof e.exc === 'string' ? e.exc : '';
+  return /frappe\.exceptions\.PermissionError/.test(exception);
+}

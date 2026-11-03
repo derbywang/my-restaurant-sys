@@ -25,7 +25,7 @@
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </div>
-          <span class="text-sm font-semibold">{{ userName }}</span>
+          <span class="text-sm font-semibold">{{ userName || $t('header.user') }}</span>
           <svg class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
@@ -33,7 +33,7 @@
 
         <div v-if="showUserMenu" class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
           <div class="p-4 border-b border-gray-200">
-            <p class="text-sm font-semibold text-gray-900">{{ userName }}</p>
+            <p class="text-sm font-semibold text-gray-900">{{ userName || $t('header.user') }}</p>
             <p class="text-sm font-semibold text-gray-500">{{ userId }}</p>
           </div>
           <div class="py-2">
@@ -46,7 +46,7 @@
                 <line x1="8" x2="16" y1="21" y2="21"/>
                 <line x1="12" x2="12" y1="17" y2="21"/>
               </svg>
-              Switch to Dashboard
+              {{ $t('header.switch_dashboard') }}
             </button>
             
             <button
@@ -58,7 +58,7 @@
                 <polyline points="16 17 21 12 16 7"/>
                 <line x1="21" x2="9" y1="12" y2="12"/>
               </svg>
-              Logout
+              {{ $t('header.logout') }}
             </button>
           </div>
         </div>
@@ -76,8 +76,8 @@ export default {
     return {
       imagePath: urimosaicImage,
       showUserMenu: false,
-      userName: "User",
-      userId: "user@example.com"
+      userName: "",
+      userId: ""
     };
   },
   methods: {

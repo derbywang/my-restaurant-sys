@@ -20,7 +20,7 @@
         </h2>
 
         <p class="text-sm text-gray-500">
-          Production Unit
+          {{ $t('production.unit') }}
         </p>
       </div>
     </div>
@@ -35,7 +35,7 @@
         </div>
 
         <div class="text-xs text-gray-500 mt-1">
-          Active
+          {{ $t('production.active') }}
         </div>
       </div>
 
@@ -46,7 +46,7 @@
         </div>
 
         <div class="text-xs text-gray-500 mt-1">
-          Served
+          {{ $t('production.served') }}
         </div>
       </div>
 
@@ -57,7 +57,7 @@
         </div>
 
         <div class="text-xs text-gray-500 mt-1">
-          Total
+          {{ $t('production.total') }}
         </div>
       </div>
 
@@ -66,7 +66,7 @@
     <!-- Footer -->
     <div class="mt-6 border-t pt-4">
       <span class="text-xs text-gray-400">
-        Click to view KOTs
+        {{ $t('production.click_to_view') }}
       </span>
     </div>
 

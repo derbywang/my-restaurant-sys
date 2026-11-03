@@ -13,12 +13,12 @@
             <span
               class="w-3 h-3 rounded-full inline-block mr-1 bg-red-500"
             ></span>
-            Not Permitted
+            {{ $t('auth.not_permitted') }}
           </p>
           <hr class="border-gray-200" />
 
           <p class="text-left text-xl mt-6 font-medium text-gray-500">
-            Log in to access this page.
+            {{ $t('auth.login_required') }}
           </p>
 
           <div class="flex justify">
@@ -29,7 +29,7 @@
               "
               class="mt-8 rounded bg-blue-500 px-3 py-2 text-white hover:bg-blue-600"
             >
-              Login
+              {{ $t('auth.login') }}
             </button>
           </div>
         </div>
@@ -38,7 +38,7 @@
     <!-- Alert Modal div end-->
 
     <div v-if="kot.filter(k => k.production === production).length === 0 && !loadingKots" class="text-center py-10 text-gray-500 text-xl">
-      No active orders for {{ production }}
+      {{ $t('kot.no_active_orders', { production }) }}
     </div>
 
     <div
@@ -68,8 +68,8 @@
               >
                 {{
                   kot.type === "Cancelled" || kot.type === "Partially cancelled"
-                    ? "Confirm"
-                    : "Serve"
+                    ? $t('kot.confirm')
+                    : $t('kot.serve')
                 }}
               </button>
             </div>
@@ -82,24 +82,24 @@
                 <div class="text-sm w-48">
                   <span
                     v-if="kot.tableortakeaway !== 'Takeaway'"
-                    class="text-sm font-medium text-[#6B7280]"
-                    >Table
+                    class="text-sm font-medium text-[#6B7280] mr-1"
+                    >{{ $t('kot.table') }}
                   </span>
                   <span class="text-black-500 font-semibold">
-                    {{ kot.tableortakeaway }}
+                    {{ tableLabel(kot.tableortakeaway) }}
                     <span class="text-sm font-medium text-[#6B7280]"
                       >( {{ kot.user }} )</span
                     ></span
                   ><br />
-                  <span v-if="kot.is_aggregator" class="text-sm font-medium text-[#6B7280]">Aggregator</span>
+                  <span v-if="kot.is_aggregator" class="text-sm font-medium text-[#6B7280]">{{ $t('kot.aggregator') }}</span>
                   <span v-if="kot.is_aggregator" class="text-black-500 ml-2 font-semibold"
                     >{{ kot.customer_name }}
                   </span><br v-if="kot.is_aggregator" />
-                  <span v-if="kot.is_aggregator" class="text-sm font-medium text-[#6B7280]">Aggregator ID</span>
+                  <span v-if="kot.is_aggregator" class="text-sm font-medium text-[#6B7280]">{{ $t('kot.aggregator_id') }}</span>
                   <span v-if="kot.is_aggregator" class="text-black-500 ml-2 font-semibold"
                     >{{ kot.aggregator_id }}
                   </span><br v-if="kot.is_aggregator"/>
-                  <span class="text-sm font-medium text-[#6B7280]">Order</span>
+                  <span class="text-sm font-medium text-[#6B7280]">{{ $t('kot.order') }}</span>
                   <span class="text-black-500 ml-2 font-semibold"
                     >{{ this.daily_order_number ? kot.order_no : kot.invoice.slice(-4) }}
                     
@@ -111,7 +111,7 @@
                       kot.type === 'Cancelled'
                     "
                   >
-                    ( {{ kot.type }} )</span
+                    ( {{ $tOr('kot.type.' + kot.type, kot.type) }} )</span
                   >
                 </div>
                 <div
@@ -125,7 +125,7 @@
                 v-if="kot.type === 'Duplicate'"
                 class="text-[#DC0000] font-medium"
               >
-                ( Duplicate KOT ( CHECK WITH CAPTAIN ) )
+                ( {{ $t('kot.duplicate') }} )
               </div>
               <div v-show="kot.comments" class="text-[#6B7280] font-medium">
                 ( {{ kot.comments }} )
@@ -160,7 +160,7 @@
                           kot.type === 'Partially cancelled' ||
                           kot.type === 'Cancelled'
                         "
-                        >[Old Qty = {{ kotitem.quantity }}]</span
+                        >{{ $t('kot.old_qty', { qty: kotitem.quantity }) }}</span
                       >
                     </div>
                     <div>
@@ -190,7 +190,7 @@
       v-if="showAudioAlertMessage"
       class="absolute top-1 left-1/2 transform -translate-x-1/2 p-2 font-bold text-2xl text-red-500 text-center"
     >
-      Audio notifications disabled. Click anywhere to enable.
+      {{ $t('kot.audio_disabled') }}
     </div>
 
     <!-- KOT Delay Error Alert Banner -->
@@ -203,11 +203,11 @@
           <span class="text-3xl">⚠️</span>
         </div>
         <div class="flex-1">
-          <p class="font-bold text-red-700">Order Delayed</p>
+          <p class="font-bold text-red-700">{{ $t('kot.order_delayed') }}</p>
           <p class="text-red-600 text-sm mt-1">
-            <span v-if="!daily_order_number">Invoice: {{ kotErrorAlert.invoice.slice(-4) }}</span>
-            <span v-else>Order #: {{ kotErrorAlert.order_no }}</span>
-            | Table: {{ kotErrorAlert.tableortakeaway }} | Time: {{ kotErrorAlert.timestamp }}
+            <span v-if="!daily_order_number">{{ $t('kot.invoice') }}: {{ kotErrorAlert.invoice.slice(-4) }}</span>
+            <span v-else>{{ $t('kot.order_no') }}: {{ kotErrorAlert.order_no }}</span>
+            | {{ $t('kot.table') }}: {{ tableLabel(kotErrorAlert.tableortakeaway) }} | {{ $t('kot.time') }}: {{ kotErrorAlert.timestamp }}
           </p>
         </div>
       </div>
@@ -245,6 +245,7 @@ import { FrappeApp } from "frappe-js-sdk";
 import Masonry from "masonry-layout";
 import io from "socket.io-client";
 import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from "../lib/realtime";
+import { t, timeNow } from "../lib/language";
 
 let host = window.location.hostname;
 let port = window.location.port;
@@ -383,7 +384,7 @@ export default {
     },
     confirmOrder(kot) {
       const now = new Date();
-      this.currentTime = now.toLocaleTimeString();
+      this.currentTime = timeNow(now);
       this.call
         .post("ury.ury.api.ury_kot_display.confirm_cancel_kot", {
           name: kot.name,
@@ -400,7 +401,7 @@ export default {
     },
     async serveOrder(kot) {
       const now = new Date();
-      this.currentTime = now.toLocaleTimeString();
+      this.currentTime = timeNow(now);
 
       this.call
         .post("ury.ury.api.ury_kot_display.serve_kot", {
@@ -420,7 +421,7 @@ export default {
 
     async orderDelayNotify(kot) {
       const now = new Date();
-      this.currentTime = now.toLocaleTimeString();
+      this.currentTime = timeNow(now);
 
       this.call
         .post(
@@ -499,6 +500,10 @@ export default {
           );
         });
       });
+    },
+    // "Takeaway" is the value the ticket carries; the words on the screen follow the language
+    tableLabel(value) {
+      return value === "Takeaway" ? t("kot.takeaway") : value;
     },
     calculateQty(kotitem, qty, type, cancelled_qty) {
       kotitem.qty = qty;
@@ -588,7 +593,7 @@ export default {
     },
     handleOnline() {
       this.isOnline = true;
-      this.setStatusMessage("You are online");
+      this.setStatusMessage(t("status.online"));
       this.hideStatusMessageAfterDelay();
       this.fetchKOT().then(() => {
         this.masonryLoading();
@@ -596,7 +601,7 @@ export default {
     },
     handleOffline() {
       this.isOnline = false;
-      this.setStatusMessage("You are Offline");
+      this.setStatusMessage(t("status.offline"));
     },
     setStatusMessage(message) {
       this.statusMessage = message;
@@ -660,9 +665,9 @@ export default {
 
             this.kotErrorAlert = {
               invoice: doc.invoice,
-              tableortakeaway: matchingKot?.tableortakeaway || 'Table/Takeaway info unavailable',
-              order_no: matchingKot?.order_no || 'N/A',
-              timestamp: new Date().toLocaleTimeString()
+              tableortakeaway: matchingKot?.tableortakeaway || t('kot.table_unknown'),
+              order_no: matchingKot?.order_no || t('kot.not_available'),
+              timestamp: timeNow()
             };
             this.showKotErrorAlert = true;
             // Auto-hide after 8 seconds

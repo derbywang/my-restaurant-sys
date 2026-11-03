@@ -73,7 +73,10 @@ def confirm_cancel_kot(name):
 
 @frappe.whitelist(allow_guest=True)
 def get_site_name():
-    return {"site_name": frappe.local.site}
+    # `lang`: the kitchen screen shows its own words in the language of the user (dish names are not translated)
+    from ury.ury.api.language import staff_ui_language
+
+    return {"site_name": frappe.local.site, "lang": staff_ui_language()}
 
 def build_dashboard_summary(kot_list):
     summary = {}

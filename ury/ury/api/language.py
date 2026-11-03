@@ -14,6 +14,20 @@ STAFF_LANGUAGES = [
 STAFF_LANGUAGE_CODES = tuple(option["code"] for option in STAFF_LANGUAGES)
 
 
+def staff_ui_language(user=None):
+	"""The staff language code (ja / zh / ko / en) of a user: their own language, else the site's.
+
+	A regional code (zh-TW, en-GB) is the staff language it belongs to; a language the staff
+	screens do not have (fr, ar) is Japanese, the language of the store.
+	"""
+	user = user or frappe.session.user
+	lang = (user != "Guest" and frappe.db.get_value("User", user, "language")) or frappe.db.get_single_value(
+		"System Settings", "language"
+	)
+	code = (lang or "").split("-")[0]
+	return code if code in STAFF_LANGUAGE_CODES else "ja"
+
+
 def setup_language_options():
 	"""The languages of the setup wizard: the staff languages. `value` is the Language's name, which
 	is what Frappe's setup maps back to a code (ko is named "한국의" there, not the label)."""

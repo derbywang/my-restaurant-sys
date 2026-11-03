@@ -161,3 +161,96 @@ describe('opening a draft order from the order list', () => {
     expect(reloaded.usePOSStore.getState().lastModifiedTime).toBe('2026-11-03 11:00:00.123456');
   });
 });
+
+describe('the table of a take away order', () => {
+  const dineIn = (overrides: Record<string, unknown> = {}) =>
+    savedWhileEditing({
+      selectedOrderType: 'Dine In',
+      selectedTable: 'MD-03',
+      selectedRoom: 'Main Dining',
+      orderId: null,
+      isUpdatingOrder: false,
+      lastModifiedTime: null,
+      ...overrides,
+    });
+
+  it('is dropped when the order type changes from dine in to take away', async () => {
+    const { usePOSStore } = await loadStore(dineIn());
+    usePOSStore.setState({ tableOrder: { message: { name: 'x' } } as never });
+    usePOSStore.getState().setSelectedOrderType('Take Away');
+    const state = usePOSStore.getState();
+    expect(state.selectedOrderType).toBe('Take Away');
+    expect(state.selectedTable).toBeNull();
+    expect(state.selectedRoom).toBeNull();
+    expect(state.tableOrder).toBeNull();
+  });
+
+  it.each(['Delivery', 'Phone In'] as const)('is dropped for %s too', async (type) => {
+    const { usePOSStore } = await loadStore(dineIn());
+    usePOSStore.getState().setSelectedOrderType(type);
+    expect(usePOSStore.getState().selectedTable).toBeNull();
+  });
+
+  it('stays for a dine in order', async () => {
+    const { usePOSStore } = await loadStore(dineIn());
+    usePOSStore.getState().setSelectedOrderType('Dine In');
+    expect(usePOSStore.getState().selectedTable).toBe('MD-03');
+  });
+
+  it('stays with an order being edited that is switched between take away and delivery', async () => {
+    const { usePOSStore } = await loadStore(
+      dineIn({ selectedOrderType: 'Take Away', orderId: 'INV-00051', isUpdatingOrder: true })
+    );
+    usePOSStore.setState({ posProfile: { edit_order_type: 1 } as never });
+    usePOSStore.getState().setSelectedOrderType('Delivery');
+    expect(usePOSStore.getState().selectedOrderType).toBe('Delivery');
+    expect(usePOSStore.getState().selectedTable).toBe('MD-03');
+    expect(usePOSStore.getState().orderId).toBe('INV-00051');
+  });
+
+  it('is left behind by a page saved earlier with a table on a take away order', async () => {
+    const { usePOSStore } = await loadStore(dineIn({ selectedOrderType: 'Take Away' }));
+    const state = usePOSStore.getState();
+    expect(state.selectedOrderType).toBe('Take Away');
+    expect(state.selectedTable).toBeNull();
+    expect(state.selectedRoom).toBeNull();
+  });
+
+  it('is kept on reload for a dine in order, and for an existing order that has one', async () => {
+    expect((await loadStore(dineIn())).usePOSStore.getState().selectedTable).toBe('MD-03');
+    const editing = await loadStore(
+      dineIn({ selectedOrderType: 'Take Away', orderId: 'INV-00051', isUpdatingOrder: true })
+    );
+    expect(editing.usePOSStore.getState().selectedTable).toBe('MD-03');
+  });
+});
+
+describe('closing a tab with unsaved changes', () => {
+  it('throws the changes away and leaves the saved order alone', async () => {
+    const fetchSpy = vi.fn();
+    const { usePOSStore } = await loadStore(savedWhileEditing());
+    vi.stubGlobal('fetch', fetchSpy);
+    const store = usePOSStore.getState();
+    const editingTab = store.activeTabId;
+    // a second tab to land on
+    store.addTab();
+    usePOSStore.getState().switchTab(editingTab);
+    usePOSStore.getState().closeTab(editingTab);
+    const state = usePOSStore.getState();
+    expect(state.tabOrder.map((tab) => tab.id)).not.toContain(editingTab);
+    expect(state.tabOrder).toHaveLength(1);
+    expect(state.activeOrders).toEqual([]);
+    expect(state.isUpdatingOrder).toBe(false);
+    expect(state.orderId).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('closing the only tab leaves one clean tab', async () => {
+    const { usePOSStore } = await loadStore(savedWhileEditing());
+    usePOSStore.getState().closeTab(usePOSStore.getState().activeTabId);
+    const state = usePOSStore.getState();
+    expect(state.tabOrder).toHaveLength(1);
+    expect(state.isUpdatingOrder).toBe(false);
+    expect(state.activeOrders).toEqual([]);
+  });
+});

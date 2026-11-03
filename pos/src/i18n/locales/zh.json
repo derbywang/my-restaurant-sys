@@ -1,4 +1,12 @@
 {
+  "order_tabs": {
+    "remove_cart_title": "移除购物车",
+    "remove_cart_message": "此购物车中有商品，要移除吗？",
+    "remove": "移除",
+    "unsaved_title": "未保存的修改",
+    "unsaved_message": "此购物车有尚未保存到订单的修改。放弃后，订单保持上次保存的状态。",
+    "discard_changes": "放弃修改并关闭"
+  },
   "common": {
     "loading": "加载中...",
     "cancel": "取消",

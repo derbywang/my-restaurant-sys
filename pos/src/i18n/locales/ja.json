@@ -1,4 +1,12 @@
 {
+  "order_tabs": {
+    "remove_cart_title": "カートを削除",
+    "remove_cart_message": "このカートには商品が入っています。削除しますか？",
+    "remove": "削除",
+    "unsaved_title": "未保存の変更",
+    "unsaved_message": "このカートには注文に保存されていない変更があります。破棄しても、注文は最後に保存された状態のままです。",
+    "discard_changes": "変更を破棄して閉じる"
+  },
   "common": {
     "loading": "読み込み中...",
     "cancel": "キャンセル",

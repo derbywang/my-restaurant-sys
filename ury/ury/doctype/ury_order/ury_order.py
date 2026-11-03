@@ -1303,6 +1303,16 @@ def get_captain_context():
     }
 
 
+def _order_uses_table(invoice):
+    """True when the table of this order is in use because of it: a dine in order, or any order on a
+    take away table (`is_take_away`)."""
+    if not invoice.restaurant_table:
+        return False
+    return invoice.order_type == "Dine In" or bool(
+        frappe.db.get_value("URY Table", invoice.restaurant_table, "is_take_away")
+    )
+
+
 @frappe.whitelist()
 def sync_order(
     items,
@@ -1605,8 +1615,9 @@ def sync_order(
         error_msg = f"KOT Creation Failes {str(e)}"            
         frappe.log_error(error_msg, "KOT Error")
 
-    # table status
-    if invoice.invoice_printed == 0:
+    # table status: a table is in use for a dine in order, or when it is a take away table; a take away
+    # (delivery, phone) order that was sent with a table of the dining room leaves that table free
+    if invoice.invoice_printed == 0 and _order_uses_table(invoice):
         frappe.db.set_value(
             "URY Table", invoice.restaurant_table, {"occupied": 1, "latest_invoice_time": invoice.creation}
         )

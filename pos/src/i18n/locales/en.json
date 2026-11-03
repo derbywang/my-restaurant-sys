@@ -1,4 +1,12 @@
 {
+  "order_tabs": {
+    "remove_cart_title": "Remove Cart",
+    "remove_cart_message": "This cart contains items. Do you want to remove it?",
+    "remove": "Remove",
+    "unsaved_title": "Unsaved Changes",
+    "unsaved_message": "This cart has changes that are not saved to the order. If you discard them, the order stays as it was last saved.",
+    "discard_changes": "Discard changes and close"
+  },
   "common": {
     "loading": "Loading...",
     "cancel": "Cancel",

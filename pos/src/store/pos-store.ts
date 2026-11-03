@@ -281,6 +281,16 @@ const getInitialTabsState = () => {
           // an order being edited stays an edit after a reload; pages saved by an older version lack some of these
           orderId: active.orderId ?? null,
           isUpdatingOrder: Boolean(active.orderId && active.isUpdatingOrder),
+          // a table belongs to a dine in order, or to an existing order that has one; pages saved by an
+          // older version may still hold the table picked before the order type was changed
+          selectedTable:
+            active.selectedOrderType === 'Dine In' || (active.orderId && active.isUpdatingOrder)
+              ? active.selectedTable ?? null
+              : null,
+          selectedRoom:
+            active.selectedOrderType === 'Dine In' || (active.orderId && active.isUpdatingOrder)
+              ? active.selectedRoom ?? null
+              : null,
           orderComment: active.orderComment ?? '',
           lastModifiedTime: active.lastModifiedTime ?? null,
           noOfPax: active.noOfPax ?? 1,
@@ -620,12 +630,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
             defaultCustomerOf(defaultCustomer, posProfile?.customer),
             type
           ),
-          orderId: null
     });
     const isCurrentTypeToggleable = selectedOrderType === 'Take Away' || selectedOrderType === 'Delivery';
     const isNewTypeToggleable = type === 'Take Away' || type === 'Delivery';
 
     if (isUpdatingOrder && posProfile?.edit_order_type && isCurrentTypeToggleable && isNewTypeToggleable) {
+      // the order being edited stays that order (and keeps the table it already has)
       set({ 
         selectedOrderType: type,
       });
@@ -634,7 +644,9 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         activeOrders: [],
         selectedOrderType: type,
         isUpdatingOrder: false,
-        orderId: null
+        orderId: null,
+        // only a dine in order has a table: do not carry the table picked earlier into another type
+        ...(type === 'Dine In' ? {} : { selectedTable: null, selectedRoom: null, tableOrder: null }),
       });
     }
     

@@ -1,4 +1,12 @@
 {
+  "order_tabs": {
+    "remove_cart_title": "Supprimer le panier",
+    "remove_cart_message": "Ce panier contient des articles. Voulez-vous le supprimer ?",
+    "remove": "Supprimer",
+    "unsaved_title": "Modifications non enregistrées",
+    "unsaved_message": "Ce panier contient des modifications non enregistrées dans la commande. Si vous les abandonnez, la commande reste telle qu'elle a été enregistrée.",
+    "discard_changes": "Abandonner les modifications et fermer"
+  },
   "common": {
     "loading": "Chargement...",
     "cancel": "Annuler",

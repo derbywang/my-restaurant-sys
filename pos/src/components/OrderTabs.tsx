@@ -4,6 +4,7 @@ import { cn, Button } from '@ury/ui';
 import { useRef, useEffect } from 'react';
 import { useState } from 'react';
 import { generateCartHash } from '../store/pos-store';
+import { tabCloseAction } from '../lib/order-tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@ury/ui';
 import { t } from '../i18n';
 
@@ -52,19 +53,17 @@ const OrderTabs = ({ disabled }: { disabled?: boolean }) => {
       state = usePOSStore.getState();
     }
     
-    if (state.activeOrders.length === 0) {
+    const action = tabCloseAction({
+      cartIsEmpty: state.activeOrders.length === 0,
+      isUpdatingOrder: state.isUpdatingOrder,
+      cartHash: generateCartHash(state),
+      originalCartHash: state.originalCartHash,
+    });
+    if (action === 'close') {
       closeTab(tabId);
-    } else if (!state.isUpdatingOrder) {
-      setCloseActionType('discard');
-      setConfirmCloseTabId(tabId);
     } else {
-      const currentHash = generateCartHash(state);
-      if (currentHash !== state.originalCartHash) {
-        setCloseActionType('unsaved');
-        setConfirmCloseTabId(tabId);
-      } else {
-        closeTab(tabId);
-      }
+      setCloseActionType(action === 'remove_cart' ? 'discard' : 'unsaved');
+      setConfirmCloseTabId(tabId);
     }
   };
   
@@ -197,12 +196,12 @@ const OrderTabs = ({ disabled }: { disabled?: boolean }) => {
         <DialogContent size="sm" showCloseButton onClose={() => setConfirmCloseTabId(null)}>
           <DialogHeader>
             <DialogTitle>
-              {closeActionType === 'discard' ? 'Remove Cart' : 'Unsaved Changes'}
+              {closeActionType === 'discard' ? t('order_tabs.remove_cart_title') : t('order_tabs.unsaved_title')}
             </DialogTitle>
             <DialogDescription>
               {closeActionType === 'discard'
-                ? 'This cart contains items. Do you want to remove it?'
-                : 'This cart has unsaved changes. Please verify.'}
+                ? t('order_tabs.remove_cart_message')
+                : t('order_tabs.unsaved_message')}
             </DialogDescription>
           </DialogHeader>
 
@@ -221,13 +220,27 @@ const OrderTabs = ({ disabled }: { disabled?: boolean }) => {
                     }
                   }}
                 >
-                  Remove
+                  {t('order_tabs.remove')}
                 </Button>
               </>
             ) : (
-              <Button variant="outline" onClick={() => setConfirmCloseTabId(null)}>
-                {t('common.cancel')}
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setConfirmCloseTabId(null)}>
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    // throws the unsaved changes of this tab away; the order saved on the server is not touched
+                    if (confirmCloseTabId) {
+                      closeTab(confirmCloseTabId);
+                      setConfirmCloseTabId(null);
+                    }
+                  }}
+                >
+                  {t('order_tabs.discard_changes')}
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>

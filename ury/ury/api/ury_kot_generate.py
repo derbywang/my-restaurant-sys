@@ -310,21 +310,32 @@ def create_cancel_kot_doc(
         
     else:
         menu = frappe.db.get_value("URY Restaurant", {"branch": branch}, "active_menu")
+    # One row for each item to cancel, with the quantity of the order line it belongs to. A dish that is
+    # on two lines has two items to cancel: each takes the next line of that dish that no row has used,
+    # so the ticket shows two rows (it used to show four, every item against every line).
+    used_lines = set()
     for cancelItem in cancel_items:
         course = frappe.db.get_value("URY Menu Item", {"item": cancelItem["item_code"],"parent":menu}, "course")
-        for item in invoiceItems:
-            if cancelItem["item_code"] == item["item_code"]:
-                kot_cancel_doc.append(
-                    "kot_items",
-                    {
-                        "item": cancelItem["item_code"],
-                        "item_name": cancelItem["item_name"],
-                        "cancelled_qty": abs(int(cancelItem["qty"])),
-                        "quantity": item["qty"],
-                        "comments": cancelItem["comments"],
-                        "course":course
-                    },
-                )
+        lines = [
+            (index, item)
+            for index, item in enumerate(invoiceItems)
+            if cancelItem["item_code"] == item["item_code"]
+        ]
+        if not lines:
+            continue
+        index, item = next(((i, line) for i, line in lines if i not in used_lines), lines[0])
+        used_lines.add(index)
+        kot_cancel_doc.append(
+            "kot_items",
+            {
+                "item": cancelItem["item_code"],
+                "item_name": cancelItem["item_name"],
+                "cancelled_qty": abs(int(cancelItem["qty"])),
+                "quantity": item["qty"],
+                "comments": cancelItem["comments"],
+                "course":course
+            },
+        )
 
     kot_cancel_doc.insert()
     kot_cancel_doc.submit()

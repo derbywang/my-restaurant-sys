@@ -19,6 +19,7 @@ import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
 import { syncFailureMessageKey } from '../lib/order-sync';
+import { tableForSubmit } from '../lib/order-tabs';
 
 const OrderPanel = () => {
   const { 
@@ -128,7 +129,7 @@ const OrderPanel = () => {
         no_of_pax: noOfPax,
         pos_profile: posProfile.name,
         order_type: selectedOrderType,
-        table: selectedTable || undefined,
+        table: tableForSubmit(selectedOrderType, selectedTable),
         room: selectedRoom || undefined,
         customer: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : customerId(selectedCustomer),
         aggregator_id: selectedOrderType === 'Aggregators' ? selectedAggregator?.customer : undefined,

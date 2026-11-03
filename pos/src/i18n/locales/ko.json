@@ -1,4 +1,12 @@
 {
+  "order_tabs": {
+    "remove_cart_title": "장바구니 삭제",
+    "remove_cart_message": "이 장바구니에 상품이 있습니다. 삭제하시겠습니까?",
+    "remove": "삭제",
+    "unsaved_title": "저장되지 않은 변경",
+    "unsaved_message": "이 장바구니에는 주문에 저장되지 않은 변경이 있습니다. 버려도 주문은 마지막으로 저장된 상태로 유지됩니다.",
+    "discard_changes": "변경을 버리고 닫기"
+  },
   "common": {
     "loading": "불러오는 중...",
     "cancel": "취소",

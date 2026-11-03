@@ -25,7 +25,7 @@
   - 推断出的后果（读代码，没有在两家店上实际跑过）：KOT 按 `pos_profile.branch` 找生产单位（`ury_kot_generate.py`），第二家店的订单会给登记在第一家名下的所有生产单位各出一张 KOT，两家厨房屏幕都会收到；`get_production_units_for_branch` 按用户的分店（Branch 的用户表）找生产单位，第二家店的用户得到空列表，POS 听不到 KOT 出错通知，第一家店的用户却会得到两家的生产单位；发票的 `branch` 来自用户的分店，POS Profile 的却是第一家，开班 / 交班和报表按分店统计会不一致。
   - 目前向导只用于第一家分店，增加分店前要处理：每家分店要有自己的 URY Restaurant（或让 POS Profile 的分店不被 `restaurant.branch` 覆盖）、默认用户只给一个 POS Profile、生产单位随分店。先写测试：用向导加第二家分店后，它的 POS Profile 和生产单位的分店是第二家，两家的订单只出到各自的厨房。
 
-## 初始化向导的问题（已修复，等临时站点浏览器验证）
+## 初始化向导的问题（已完成）
 1. ~~登录后先显示「选择应用」画面~~：服务端重定向本身是通的（模拟验证过），没抓到当时没生效的原因；改为 `default_app = ury`（`apply_default_app`，安装、向导公司阶段、补丁都会设置，已有别的选择则不改），登录后直接进 URY。验证时确认 `/apps` 不再出现。注意：`ury.permission.check_app_permission` 只让 Administrator 看到 URY，其他用户登录后仍进 `/app`，要改成按角色判断时另做。
 2. ~~语言只有 English、français、عربي~~：改为员工语言（日本語、中文、한국어、English），值取 Language 表的 `language_name`（`ko` 在 Frappe 里叫「한국의」）。写入 System Settings 的 language。
 3. ~~默认值是印度~~：默认 Japan / JPY / Asia/Tokyo / 日本語，国家变化时币种、时区、科目表、会计年度联动。
@@ -35,7 +35,7 @@
 - 临时的 `console.log('[setup] payload')` 已删除（会计年度的值已在临时站点确认：2026-01-01 ~ 2026-12-31）。
 - **日期格式的影响**：改的是 System Settings 的显示 / 解析格式，库里存的日期不变（一律 ISO）。受影响的是 Desk 里的日期显示和输入、调用 `formatdate` / 日期字段 `get_formatted` 的打印格式（`Merged POS Invoice Format` 等旧格式）；小票 `URY JP Receipt` 自己用 `strftime` 格式化（`2026年11月02日 12:34`），POS 前端也自己格式化，都不受影响（有测试 `test_the_site_date_format_does_not_change_the_receipt`）。
 
-## 非英文站点的默认名称（已修复，等临时站点浏览器验证）
+## 非英文站点的默认名称（已完成）
 - 现象：日文站点装好后，向导的「デフォルト設定」阶段失败，原因是 ERPNext 用 `_()` 创建的根节点叫「全てのアイテムグループ」，URY 按 `All Item Groups` 查找。同类问题还有 `Individual`、`Consumable`、Mode of Payment `Cash`（「現金」）、`Standard Selling`、`Nos`，以及**会计科目**（Accounts Receivable → 「売掛金」、Debtors → 「債務者」、Cash In Hand → 「手持ちの現金」、Bank Accounts → 「銀行口座」、Duties and Taxes → 「関税と税金」；第一次修复时误以为科目不翻译，第 2 步 Launch 因此失败）。现在科目父组一律按 account_type 找，「売掛金」本身没有类型，取 Receivable 类型科目的上级。
 - 修法和规则见 CLAUDE.md「非英文站点的默认名称」；工具是 `ury/setup/names.py`，测试是 `test_localized_site.py`（ja / zh / ko）和 `test_names.py`。
 - 向导失败时不再关闭弹窗：显示红色错误和「閉じる / 再試行」（`ProgressModal` 的 `onClose` / `onRetry`）。
@@ -44,16 +44,15 @@
 - 日本站点向导新建 POS Profile 时默认打开折扣：「Enable Discount」（`custom_enable_discount`，URY POS 看的是它）和「Allow User to Edit Discount」（`allow_discount_change`，ERPNext 自带 POS 用）；只在两个开关都关着时补上，已有的选择不覆盖，其他国家不变。
 - 未处理：`pos/src/store/pos-store.ts` 里 `paymentModes` 的初始值 `['Cash']` 只在支付方式加载前出现；向导文字本身仍是英文（见向导 i18n）。
 
-## 收银员与服务员的权限（已实现，等浏览器验证）
+## 收银员与服务员的权限（已完成）
 - 门店规则：只有收银员收款，服务员（只有 URY Captain）点单、加菜、打印账单。后端 `get_pos_permissions` 按 DocType 权限返回各操作的可否，前端只显示被允许的；`make_invoice` / 会計合算 / 解除 / 会計分割在后端也先检查 submit 权限。
 - 权限错误显示翻译后的文言（`errors.not_permitted_billing`，ja / zh / ko / en / fr），不显示英文异常。
 - 收银员的 POS Invoice `print` 权限：新站点来自 `role_permissions.py`，已有站点靠补丁 `cashier_print_permission`（`bench migrate`）。打印本来就能用：打印视图接受 read 或 print，URY 的打印接口检查 write。
 
 ## 登录与标签页（待做）
 - 店长只想看订单、帮忙点单时，一登录就被要求开班，不合理。和多收银员的 5.1 / 5.2 一起考虑（谁必须开班、谁可以直接进来看订单和点单）。
-- 关闭有未保存修改的标签页时，“Unsaved Changes” 对话框只有 Cancel，没有“放弃修改并关闭”的按钮，标签页关不掉。要加放弃修改的选项：确认后丢弃购物车里的修改，不影响已保存的订单。
 
-## 外带单的桌号、取消 KOT、关闭标签页（已实现，等浏览器验证）
+## 外带单的桌号、取消 KOT、关闭标签页（已完成）
 - 外带单带着上一次选的桌号：切换到非堂食类型时清掉桌号、房间和桌台订单（正在编辑的已有订单除外）；提交时只在堂食时发送 `table`；刷新后恢复的存档里，非堂食且不是在编辑已有订单的桌号也会丢掉；后端 `sync_order` 只在“堂食订单，或桌子是外带桌（`is_take_away=1`）”时占用桌子。开发站点上现有的相关数据：只有 INV-00051（外带挂 MD-03，已取消），目前没有桌子被这类单据占着。
 - 取消 KOT 数量翻倍：`create_cancel_kot_doc` 对每个待取消项再遍历所有订单行，同一道菜在两行时每项和每行配对，两行 Sake 就写成四行。现在每个待取消项只配一行（用过的行不再用）。普通的加菜 KOT（`create_kot_doc`）是单层循环，没有这个问题。
 - 修了顺手发现的一个问题：编辑中的订单在外带 / 外卖之间切换（POS Profile 的“允许改订单类型”）时，`setSelectedOrderType` 先把 `orderId` 清成了空，提交会当成新订单；现在只在换成新订单时才清。

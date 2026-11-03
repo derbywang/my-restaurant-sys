@@ -177,6 +177,8 @@ class TestSubmitConfigureData(URYFlowTestCase):
 
 	def tearDown(self):
 		for doctype, filters in (
+			# the unit is named after the new branch but its `branch` field is the first branch, so find it by name
+			("URY Production Unit", {"name": f"Kitchen - {self.NEW_BRANCH}"}),
 			("URY Production Unit", {"branch": self.NEW_BRANCH}),
 			("POS Profile", {"name": self.NEW_BRANCH}),
 			("Branch", {"name": self.NEW_BRANCH}),

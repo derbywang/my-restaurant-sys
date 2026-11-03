@@ -96,6 +96,8 @@ class TestWizardMenuKinds(URYFlowTestCase):
 			if frappe.db.exists("Item", item):
 				frappe.delete_doc("Item", item, force=1, ignore_permissions=True)
 		for doctype, filters in (
+			# the unit is named after the new branch but its `branch` field is the first branch, so find it by name
+			("URY Production Unit", {"name": f"Kitchen - {self.BRANCH}"}),
 			("URY Production Unit", {"branch": self.BRANCH}),
 			("POS Profile", {"name": self.BRANCH}),
 			("Branch", {"name": self.BRANCH}),

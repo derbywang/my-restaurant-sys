@@ -19,7 +19,11 @@
 - ~~自定义支付方式没有科目~~：已处理（クレジットカード・PayPay・楽天ペイ 预设，其他支付方式自动建科目），见 `cashless-payment-design.md`。
 - ~~**POS 默认选中默认顾客**~~（已处理：新建订单 / 下一单 / 选空桌 / 切换到堂食、外带时选中 POS Profile 的 customer；外卖、电话订餐不默认；提交用顾客 id；顾客报表排除默认顾客。逻辑在 `pos/src/lib/default-customer.ts`）：现在点单、收款前必须手动选顾客（后端 `sync_order` 要求有 customer）。T7 已在向导里建了默认顾客（日本「一般のお客様」，其他国家 Walk-in Customer）并写入 POS Profile 的 `customer`，但前端 `selectedCustomer` 初始为空。日本的餐厅大多数客人不留名字，每单都要手动选顾客会拖慢高峰期的点单和收款。要让 POS（收银台、Captain）默认选中 POS Profile 的 customer。
 - **自助点餐的默认顾客**：URY Self Ordering Profile 的 `default_customer` 没有设置时自助点餐下单直接报错（`self_ordering.py`）。向导只写了 POS Profile 的 `customer`，和自助点餐的工作一起处理（可复用向导建的默认顾客）。
-- **第二家分店的 POS Profile 与默认用户冲突**：向导为新分店的 POS Profile 把所有 URY Cashier 都设为默认用户，已有另一家分店的 POS Profile 时，ERPNext 报 “Already set default in pos profile …”。目前向导只用于第一家分店，增加分店前要处理。
+- **用向导添加第二家分店不可用（两个问题，要一起处理）**：
+  1. 默认用户冲突：向导为新分店的 POS Profile 把所有 URY Cashier 都设为默认用户，已有另一家分店的 POS Profile 时，ERPNext 报 “Already set default in pos profile …”。
+  2. 分店登记到第一家名下：`submit_configure_data` 的 URY Restaurant 一家公司只有一个（名字是公司名，`branch` 是第一家分店），新分店的 POS Profile 填了 `restaurant`，而 POS Profile 的 `branch` 字段是 `fetch_from: restaurant.branch`（不是仅在为空时取），保存时会被改成第一家分店。生产单位的 `branch` 又是 `fetch_from: pos_profile.branch`，所以第二家的生产单位 `Kitchen - <第二家>` 的分店也是第一家。测试里看到的就是这个（`Kitchen - テスト店2` 的 `branch` 是テスト店），不是测试写法的问题。
+  - 推断出的后果（读代码，没有在两家店上实际跑过）：KOT 按 `pos_profile.branch` 找生产单位（`ury_kot_generate.py`），第二家店的订单会给登记在第一家名下的所有生产单位各出一张 KOT，两家厨房屏幕都会收到；`get_production_units_for_branch` 按用户的分店（Branch 的用户表）找生产单位，第二家店的用户得到空列表，POS 听不到 KOT 出错通知，第一家店的用户却会得到两家的生产单位；发票的 `branch` 来自用户的分店，POS Profile 的却是第一家，开班 / 交班和报表按分店统计会不一致。
+  - 目前向导只用于第一家分店，增加分店前要处理：每家分店要有自己的 URY Restaurant（或让 POS Profile 的分店不被 `restaurant.branch` 覆盖）、默认用户只给一个 POS Profile、生产单位随分店。先写测试：用向导加第二家分店后，它的 POS Profile 和生产单位的分店是第二家，两家的订单只出到各自的厨房。
 
 ## 初始化向导的问题（已修复，等临时站点浏览器验证）
 1. ~~登录后先显示「选择应用」画面~~：服务端重定向本身是通的（模拟验证过），没抓到当时没生效的原因；改为 `default_app = ury`（`apply_default_app`，安装、向导公司阶段、补丁都会设置，已有别的选择则不改），登录后直接进 URY。验证时确认 `/apps` 不再出现。注意：`ury.permission.check_app_permission` 只让 Administrator 看到 URY，其他用户登录后仍进 `/app`，要改成按角色判断时另做。
@@ -54,7 +58,7 @@
 - 取消 KOT 数量翻倍：`create_cancel_kot_doc` 对每个待取消项再遍历所有订单行，同一道菜在两行时每项和每行配对，两行 Sake 就写成四行。现在每个待取消项只配一行（用过的行不再用）。普通的加菜 KOT（`create_kot_doc`）是单层循环，没有这个问题。
 - 修了顺手发现的一个问题：编辑中的订单在外带 / 外卖之间切换（POS Profile 的“允许改订单类型”）时，`setSelectedOrderType` 先把 `orderId` 清成了空，提交会当成新订单；现在只在换成新订单时才清。
 - “Unsaved Changes” 对话框加了「变更を破棄して閉じる」按钮（ja / zh / ko / en / fr），关闭标签页只丢弃购物车里的修改，已保存的订单不受影响；同一对话框的其他文字也改成多语言。
-- 未处理（原有问题）：`compare_two_array` 对“同一道菜在两行”处理不对：已有一行 Sake，再加一行 Sake（数量相同）时，加菜 KOT 里没有这道菜；两行 Sake 删掉一行时，也不会产生取消 KOT，厨房不会得到通知。购物车一般会把同一道菜合并成一行，所以不常出现，但库里的 INV-00052 就出现过。要修的话先写测试。
+- 厨房漏做 / 多做（`compare_two_array`，已修，等浏览器验证）：同一道菜在两行时按两行的合计比较。已有一行 Sake 再加一行，加菜 KOT 里原来没有这道菜；两行 Sake 删掉一行，原来不会产生取消 KOT；两行合并成一行（合计不变）原来还会发出一张错误的取消 KOT。现在发送 / 取消的数量等于合计的差，新增的行带自己的备注；整道菜被删掉的仍由 `get_removed_items` 处理。自助点餐那边原来为绕开这个问题已经按菜品合计后再调用，结果不变。
 
 ## 界面整理
 - **报表里的 `IndianRupee` 图标**：`pages/Reports/*.tsx`（十几个）和 `reportsRegistry.ts` 用的是印度卢比图案，日本站点显示不对。以后换成通用图标（如 `Banknote` / `Coins`）。

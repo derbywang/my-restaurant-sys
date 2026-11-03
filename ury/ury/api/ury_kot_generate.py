@@ -416,21 +416,35 @@ def kot_execute(
         print_combined_waiter_order_slip(invoice_id, created_kot_names, restaurant_table)
 
 
-# Compare two arrays and return the items that are different
+# Compare two arrays and return the items that are different.
+# `array_1` is what the order is now, `array_2` what it was. A dish can be on several lines, so it is
+# compared by the total of its lines: a positive quantity is what to send to the kitchen, a negative
+# one what to take back. A dish that is on no line of `array_1` any more is left to get_removed_items.
 def compare_two_array(array_1, array_2):
+    previous_total = {}
+    for row in array_2:
+        previous_total[row["item_code"]] = previous_total.get(row["item_code"], 0) + int(row["qty"])
+
+    lines_by_item = {}
+    for row in array_1:
+        lines_by_item.setdefault(row["item_code"], []).append(row)
+
     finalarray = []
-    for index, x in enumerate(array_1):
-        a = list(
-            filter(
-                lambda y: y["item_code"] == x["item_code"] and y["qty"] == x["qty"],
-                array_2,
-            )
-        )
-        if len(a) == 0:
-            b = list(filter(lambda z: z["item_code"] == x["item_code"], array_2))
-            for qtb in b:
-                x["qty"] = int(x["qty"]) - int(qtb["qty"])
-            finalarray.append(x)
+    for item_code, lines in lines_by_item.items():
+        difference = sum(int(line["qty"]) for line in lines) - previous_total.get(item_code, 0)
+        if difference > 0:
+            # the extra quantity is on the lines added last, each keeping its own note
+            left = difference
+            added = []
+            for line in reversed(lines):
+                if left <= 0:
+                    break
+                quantity = min(int(line["qty"]), left)
+                added.append({**line, "qty": quantity})
+                left -= quantity
+            finalarray.extend(reversed(added))
+        elif difference < 0:
+            finalarray.append({**lines[-1], "qty": difference})
     return finalarray
 
 

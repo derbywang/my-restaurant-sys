@@ -45,6 +45,8 @@ class TestPosProfileDefaults(RolledBackTestCase):
 				"apply_discount_on": "Grand Total",
 				"print_format": None,
 				"view_all_status": 0,
+				"custom_enable_discount": 0,
+				"allow_discount_change": 0,
 			},
 		)
 
@@ -59,6 +61,21 @@ class TestPosProfileDefaults(RolledBackTestCase):
 		self.assertEqual(p.print_format, "URY JP Receipt")
 		self.assertEqual(p.custom_tax_rounding, "Round Down")
 		self.assertFalse(p.view_all_status)
+
+	def test_japan_shops_discount_so_discounts_are_on(self):
+		self._blank()
+		apply_pos_profile_defaults(POS_PROFILE)
+		# "Enable Discount" is what the URY POS looks at, "Allow User to Edit Discount" what ERPNext's own POS does
+		p = frappe.get_doc("POS Profile", POS_PROFILE)
+		self.assertEqual(p.custom_enable_discount, 1)
+		self.assertEqual(p.allow_discount_change, 1)
+
+	def test_a_discount_choice_already_made_is_kept(self):
+		self._blank()
+		frappe.db.set_value("POS Profile", POS_PROFILE, {"allow_discount_change": 1, "custom_enable_discount": 0})
+		apply_pos_profile_defaults(POS_PROFILE)
+		p = frappe.get_doc("POS Profile", POS_PROFILE)
+		self.assertEqual((p.allow_discount_change, p.custom_enable_discount), (1, 0))
 
 	def test_values_already_set_are_kept(self):
 		self._blank()
@@ -77,6 +94,7 @@ class TestPosProfileDefaults(RolledBackTestCase):
 		self.assertEqual(p.paid_limit, 0)
 		self.assertEqual(p.apply_discount_on, "Grand Total")
 		self.assertFalse(p.print_format)
+		self.assertEqual((p.custom_enable_discount, p.allow_discount_change), (0, 0))
 
 	def test_no_cash_account_is_an_error_with_a_hint(self):
 		self._blank()
@@ -236,4 +254,5 @@ class TestSubmitConfigureData(URYFlowTestCase):
 		self.assertEqual(p.print_format, "URY JP Receipt")
 		self.assertEqual(p.paid_limit, 20)
 		self.assertFalse(p.view_all_status)
+		self.assertEqual((p.custom_enable_discount, p.allow_discount_change), (1, 1))
 		self.assertEqual(frappe.db.get_value("Customer", p.customer, "customer_name"), JP_CUSTOMER)

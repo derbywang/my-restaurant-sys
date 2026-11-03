@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPayments } from './payment-change';
+import { checkPayments, defaultCashMode } from './payment-change';
 
 const types = { Cash: 'Cash', クレジットカード: 'Bank', PayPay: 'Bank' };
 
@@ -78,5 +78,21 @@ describe('checkPayments', () => {
       change: 290,
       error: null,
     });
+  });
+});
+
+describe('defaultCashMode', () => {
+  it('is the mode of type Cash, whatever it is called (「現金」 on a Japanese site)', () => {
+    expect(defaultCashMode(['クレジットカード', '現金'], { クレジットカード: 'Bank', 現金: 'Cash' })).toBe('現金');
+    expect(defaultCashMode(['Cash', 'PayPay'], { Cash: 'Cash', PayPay: 'Bank' })).toBe('Cash');
+  });
+
+  it('is undefined when the profile has no cash mode: nothing is filled in', () => {
+    expect(defaultCashMode(['PayPay'], { PayPay: 'Bank' })).toBeUndefined();
+  });
+
+  it('falls back to the mode called Cash when the types are not known (an old session)', () => {
+    expect(defaultCashMode(['PayPay', 'Cash'], {})).toBe('Cash');
+    expect(defaultCashMode(['PayPay', '現金'], {})).toBeUndefined();
   });
 });

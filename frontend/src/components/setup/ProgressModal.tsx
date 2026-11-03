@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 import { subscribeRealtimeEvent } from '../../lib/realtimeClient';
 import { PROGRESS_STEPS } from './constants';
 
@@ -16,6 +16,9 @@ interface ProgressModalProps {
   /** Frappe setup_task status === "ok" (background setup) */
   onComplete?: () => void;
   onFail?: (message: string) => void;
+  /** With an error the modal stays open and offers 閉じる / 再試行 */
+  onClose?: () => void;
+  onRetry?: () => void;
 }
 
 type SetupTaskPayload = {
@@ -49,6 +52,8 @@ export function ProgressModal({
   onReady,
   onComplete,
   onFail,
+  onClose,
+  onRetry,
 }: ProgressModalProps) {
   const onStepChangeRef = useRef(onStepChange);
   const onReadyRef = useRef(onReady);
@@ -132,6 +137,8 @@ export function ProgressModal({
                   <div className="w-6 h-6 flex items-center justify-center shrink-0">
                     {isDone ? (
                       <CheckCircle2 className="w-6 h-6 text-white fill-green-500" />
+                    ) : isActive && error ? (
+                      <XCircle className="w-6 h-6 text-white fill-red-500" />
                     ) : isActive ? (
                       <Loader2 className="w-6 h-6 text-primary animate-spin" />
                     ) : (
@@ -147,8 +154,32 @@ export function ProgressModal({
           </div>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200">
-              {error}
+            <div role="alert" className="mt-4 p-4 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200">
+              <p className="font-medium">{error}</p>
+              <p className="mt-1 text-red-500">Details are in the Error Log of the site (Setup failed).</p>
+            </div>
+          )}
+
+          {error && (onClose || onRetry) && (
+            <div className="mt-4 flex justify-end gap-3">
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="h-10 px-4 rounded-md border border-input bg-background text-sm font-medium hover:bg-gray-50"
+                >
+                  閉じる
+                </button>
+              )}
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+                >
+                  再試行
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -12,6 +12,8 @@ The only setting that does it is System Settings `number_format`:
 import frappe
 
 NUMBER_FORMAT = "#,###"
+# ERPNext's data for Japan says dd-mm-yyyy, which reads as month-day to many people.
+DATE_FORMAT = "yyyy-mm-dd"
 
 
 def is_jpy_site():
@@ -41,5 +43,26 @@ def apply_jpy_format():
             changed.append("Currency JPY")
 
     if changed:
+        frappe.clear_cache()
+    return {"applied": True, "changed": changed}
+
+
+def has_japan_company():
+    return bool(frappe.db.exists("Company", {"country": "Japan"}))
+
+
+def apply_jp_date_format():
+    """Idempotent. Dates in the Desk, in the print formats that format them (formatdate) and in the
+    date fields show as year-month-day. Stored dates, the receipt (it formats its own date) and the
+    POS (it formats its own) do not depend on it."""
+    if not has_japan_company():
+        return {"applied": False, "changed": []}
+
+    changed = []
+    if frappe.db.get_single_value("System Settings", "date_format") != DATE_FORMAT:
+        settings = frappe.get_doc("System Settings")
+        settings.date_format = DATE_FORMAT
+        settings.save(ignore_permissions=True)
+        changed.append("System Settings.date_format")
         frappe.clear_cache()
     return {"applied": True, "changed": changed}

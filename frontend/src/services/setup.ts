@@ -2,7 +2,8 @@ import { call } from '@ury/core';
 
 export interface SetupDefaults {
   languages: { value: string; label: string }[];
-  detected_country: string;
+  default_language: string;
+  default_country: string;
   countries: string[];
   currencies: { value: string; label: string; symbol: string }[];
   timezones: string[];

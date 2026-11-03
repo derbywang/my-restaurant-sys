@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
-import { call } from '@ury/core';
+import { call, setCurrency } from '@ury/core';
 import { nextId } from '../utils/id';
 import { MenuKind } from '../utils/menuKind';
 import { uniqueShortCode, generateTableNames, isAutoTableName } from '../utils/shortCode';
@@ -34,7 +34,8 @@ export interface MenuItemData {
   id: string;
   name: string;
   course: string;
-  price: number;
+  /** null while the price box is empty: the wizard asks for it before it submits. */
+  price: number | null;
   /** 種類 (Japanese sites only): decides the item group and so the consumption tax. */
   kind?: MenuKind;
 }
@@ -95,6 +96,9 @@ export interface ConfigureState {
 export interface ConfigureContextType extends ConfigureState {
   /** Country of the company the first step created (null until loaded). */
   country: string | null;
+  currency: string | null;
+  /** The Mode of Payment of type Cash ("Cash"; 「現金」 on a Japanese site), null until loaded. */
+  cashMode: string | null;
   isJapan: boolean;
   setActiveSection: (section: SectionId) => void;
   markSectionCompleted: (section?: SectionId) => void;
@@ -204,6 +208,8 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
   );
 
   const [country, setCountry] = useState<string | null>(null);
+  const [currency, setCurrencyCode] = useState<string | null>(null);
+  const [cashMode, setCashMode] = useState<string | null>(null);
   const [users, setUsers] = useState<UserData[]>(
     persisted?.users || [
       {
@@ -223,6 +229,10 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
         const companyName = res?.message?.company || res?.company || res?.message?.data?.company || res?.data?.company;
         const data = res?.message?.data || res?.data || {};
         setCountry(data.country || null);
+        // the company's currency, not the one the page was loaded with (the boot data predates the company)
+        setCurrencyCode(data.currency || null);
+        setCashMode(data.cash_mode || null);
+        if (data.currency) setCurrency(data.currency);
         if (companyName && !persisted?.branch?.branchName) {
           setBranch((prev) => ({ ...prev, branchName: companyName }));
         }
@@ -495,6 +505,8 @@ export function ConfigureProvider({ children }: { children: ReactNode }) {
     <ConfigureContext.Provider
       value={{
         country,
+        currency,
+        cashMode,
         isJapan: country === 'Japan',
         activeSection,
         visitedSections,

@@ -6,19 +6,21 @@ import { Button } from '@ury/ui';
 import { Plus, Trash2 } from 'lucide-react';
 import type { PaymentKind } from '../../../context/ConfigureContext';
 
-const DEFAULTS = ['Cash', 'Card', 'UPI'];
+const DEFAULTS = ['Cash', 'Card'];
 
 // Japan: cash plus the cashless methods the shop supports; each gets a settlement account
 // (未収入金) of its own when the setup runs.
-const JAPAN_DEFAULTS: { name: string; kind: PaymentKind }[] = [
-  { name: 'Cash', kind: 'cash' },
+const japanDefaults = (cash: string): { name: string; kind: PaymentKind }[] => [
+  { name: cash, kind: 'cash' },
   { name: 'クレジットカード', kind: 'cashless' },
   { name: 'PayPay', kind: 'cashless' },
   { name: '楽天ペイ', kind: 'cashless' },
 ];
 
 export function PaymentSection() {
-  const { paymentMethods, addPaymentMethod, updatePaymentMethod, deletePaymentMethod, isJapan, country } = useConfigure();
+  const { paymentMethods, addPaymentMethod, updatePaymentMethod, deletePaymentMethod, isJapan, country, cashMode } = useConfigure();
+  // The cash Mode of Payment is "Cash" only on a site installed in English (「現金」 on a Japanese one)
+  const cashName = cashMode || 'Cash';
   const [allModes, setAllModes] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -38,7 +40,8 @@ export function PaymentSection() {
         // Pre-select defaults that exist in the list and aren't already selected (not in Japan,
         // where the preset below is used)
         const currentNames = new Set(paymentMethods.map((m) => m.name));
-        DEFAULTS.forEach((d) => {
+        DEFAULTS.forEach((preset) => {
+          const d = preset === 'Cash' ? cashName : preset;
           if (!isJapan && names.includes(d) && !currentNames.has(d)) {
             addPaymentMethod({ name: d });
           }
@@ -51,15 +54,25 @@ export function PaymentSection() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The cash method starts as "Cash"; once the site's cash Mode of Payment is known it takes its name
+  useEffect(() => {
+    if (cashName === 'Cash') return;
+    paymentMethods.forEach((m) => {
+      if (m.name === 'Cash' && m.kind !== 'cashless') updatePaymentMethod(m.id, { name: cashName });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cashName]);
+
   // Japan: preset the cashless methods once the country is known (nothing is added twice)
   useEffect(() => {
     if (!isJapan) return;
-    const present = new Set(paymentMethods.map((m) => m.name));
-    JAPAN_DEFAULTS.forEach((d) => {
+    // the first "Cash" is being renamed to the site's cash mode in the effect above
+    const present = new Set(paymentMethods.map((m) => (m.name === 'Cash' ? cashName : m.name)));
+    japanDefaults(cashName).forEach((d) => {
       if (!present.has(d.name)) addPaymentMethod(d);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country]);
+  }, [country, cashName]);
 
   const handleAdd = () => {
     addPaymentMethod({ name: '', kind: 'cashless' });

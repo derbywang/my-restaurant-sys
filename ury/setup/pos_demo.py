@@ -20,6 +20,13 @@ def generate_pos_demo():
     opening2 = create_pos_opening(company)
     create_pos_invoices(company, opening2, count=5)
 
+def cash_mode():
+    """The Mode of Payment of type Cash (named 「現金」 on a Japanese site)."""
+    from ury.setup.names import cash_mode_name
+
+    return cash_mode_name() or "Cash"
+
+
 def get_pos_profile(company):
     profiles = frappe.get_all(
         "POS Profile", filters={"company": company}, pluck="name"
@@ -58,7 +65,7 @@ def create_pos_opening(company):
         "posting_date": nowdate(),
         "balance_details": [
             {
-                "mode_of_payment": "Cash",
+                "mode_of_payment": cash_mode(),
                 "opening_amount": 1000
             }
         ]
@@ -96,7 +103,7 @@ def create_pos_invoices(company, opening, count=5):
 
         
         invoice.append("payments", {
-            "mode_of_payment": "Cash",
+            "mode_of_payment": cash_mode(),
             "amount": 1
         })
         invoice.insert(ignore_permissions=True)

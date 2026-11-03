@@ -1,7 +1,7 @@
 import React from 'react';
 import { useConfigure } from '../../../context/ConfigureContext';
 import { Input, Button } from '@ury/ui';
-import { getCurrency } from '@ury/core';
+import { parsePriceInput, priceColumnLabel as priceColumnLabelFor, priceInputValue } from '../../../utils/setupWizard';
 import { Plus, Trash2 } from 'lucide-react';
 import { SearchableSelect } from '../../common/SearchableSelect';
 import { Switch } from '../../ui/switch';
@@ -31,16 +31,16 @@ export function MenuSection() {
     setMenuFile,
     taxConfig,
     updateTaxConfig,
+    currency,
   } = useConfigure();
 
-  const currencyLabel = getCurrency();
-  const priceColumnLabel = currencyLabel ? `Price (${currencyLabel})` : 'Price';
+  const priceColumnLabel = priceColumnLabelFor(currency);
 
   const handleAdd = () => {
     addMenuItem({
       name: '',
       course: 'Main Course',
-      price: 0,
+      price: null,
       kind: '食品',
     });
   };
@@ -163,11 +163,11 @@ export function MenuSection() {
                   <Input
                     type="number"
                     min={0}
-                    value={item.price}
+                    value={priceInputValue(item.price)}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      updateMenuItem(item.id, { price: parseFloat(e.target.value) || 0 })
+                      updateMenuItem(item.id, { price: parsePriceInput(e.target.value) })
                     }
-                    placeholder="0.00"
+                    placeholder="0"
                     className="w-full text-sm bg-white"
                   />
                 </div>

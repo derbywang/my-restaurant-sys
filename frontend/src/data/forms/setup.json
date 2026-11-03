@@ -6,7 +6,7 @@
       "type": "text",
       "placeholder": "e.g. URY Restaurant",
       "required": true,
-      "validations": ["required", "minLength:3"],
+      "validations": ["required"],
       "triggers": ["company_abbr"]
     },
     {

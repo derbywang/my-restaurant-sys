@@ -1,6 +1,9 @@
 import frappe
 from frappe import _
 
+from ury.setup.names import cash_mode_name
+
+
 def item_group_for_kind(kind=None):
     """Item group for an item created by the wizard. On Japanese sites it comes from the item's
     種類 (食品 / 酒類 / 非食品) and sits under the group that carries its consumption tax (the
@@ -9,7 +12,23 @@ def item_group_for_kind(kind=None):
 
     if is_japan_site():
         return menu_group_for_kind(kind)
-    return frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "All Item Groups"
+    from ury.setup.names import root_of
+
+    return frappe.db.get_value("Item Group", {"is_group": 0}, "name") or root_of("Item Group")
+
+
+def payment_kind(name, kind=None):
+    """"cash" or "cashless" for a payment method of the wizard. The wizard says which; without it a
+    Mode of Payment that exists is what its type says, and a new one is cash only when it is the
+    "Cash" ERPNext makes (in any language)."""
+    from ury.setup.names import candidates
+
+    if kind in ("cash", "cashless"):
+        return kind
+    mode_type = frappe.db.get_value("Mode of Payment", name, "type")
+    if mode_type:
+        return "cash" if mode_type == "Cash" else "cashless"
+    return "cash" if name in candidates("Cash") else "cashless"
 
 
 def _site_default_currency():
@@ -64,6 +83,9 @@ def get_business_setup():
             "restaurant": restaurant.as_dict() if restaurant else None,
             "company": company_name,
             "country": frappe.db.get_value("Company", company_name, "country"),
+            "currency": frappe.db.get_value("Company", company_name, "default_currency"),
+            # the Mode of Payment of type Cash: named 「現金」 on a Japanese site, not "Cash"
+            "cash_mode": cash_mode_name(),
             "tax_id": frappe.db.get_value("Company", company_name, "tax_id"),
         }
     }
@@ -298,9 +320,12 @@ def submit_configure_data(data):
     menu_items_table = []
     item_groups = []  # every group an item was put in; the kitchen must cover them
     
-    if not frappe.db.exists("UOM", "Unit"):
-        frappe.get_doc({"doctype": "UOM", "uom_name": "Unit", "must_be_whole_number": 0}).insert(ignore_permissions=True)
-    uom = "Unit"
+    from ury.setup.names import unit_of_measure
+
+    uom = unit_of_measure("Unit")  # ERPNext's own, 「ユニット」 on a Japanese site
+    if not uom:
+        uom = "Unit"
+        frappe.get_doc({"doctype": "UOM", "uom_name": uom, "must_be_whole_number": 0}).insert(ignore_permissions=True)
 
     results["created_items"] = []
     existing_courses = set(frappe.get_all("URY Menu Course", pluck="name"))
@@ -372,9 +397,7 @@ def submit_configure_data(data):
         p_name = p.get("name")
         if not p_name:
             continue
-        kind = p.get("kind")
-        if kind not in ("cash", "cashless"):
-            kind = "cash" if p_name == "Cash" or frappe.db.get_value("Mode of Payment", p_name, "type") == "Cash" else "cashless"
+        kind = payment_kind(p_name, p.get("kind"))
         results["payment_methods"].append(ensure_payment_mode(p_name, kind, default_company))
 
     # 7. System Users
@@ -464,7 +487,9 @@ def submit_configure_data(data):
             elif frappe.db.exists("URY Menu", "Default Menu"):
                 menu_price_list = frappe.db.get_value("URY Menu", "Default Menu", "price_list") or "Default Menu"
 
-            selling_price_list = menu_price_list or frappe.db.get_value("Price List", {"selling": 1}, "name") or "Standard Selling"
+            from ury.setup.names import selling_price_list as site_selling_price_list
+
+            selling_price_list = menu_price_list or site_selling_price_list() or "Standard Selling"
             
             from ury.setup.wizard_defaults import ensure_default_customer
 

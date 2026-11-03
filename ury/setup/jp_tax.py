@@ -9,6 +9,8 @@ prices or existing documents.
 import frappe
 from frappe.utils.nestedset import get_ancestors_of
 
+from ury.setup.names import existing_name, group_account, root_of
+
 TEMPLATE_TITLE = "消費税（日本）"
 TAX_CATEGORIES = ("店内飲食", "テイクアウト")
 VALID_FROM = "2019-10-01"
@@ -203,7 +205,7 @@ def _ensure_parent_group(name):
             {
                 "doctype": "Item Group",
                 "item_group_name": name,
-                "parent_item_group": "All Item Groups",
+                "parent_item_group": root_of("Item Group"),
                 "is_group": 1,
             }
         ).insert(ignore_permissions=True)
@@ -211,8 +213,10 @@ def _ensure_parent_group(name):
 
 def _move_groups():
     moved = []
-    for group, parent in GROUPS_TO_MOVE.items():
-        if frappe.db.get_value("Item Group", group, "parent_item_group") == "All Item Groups":
+    root = root_of("Item Group")
+    for english, parent in GROUPS_TO_MOVE.items():
+        group = existing_name("Item Group", english)  # ERPNext names it with _(), 「消耗品」 on a Japanese site
+        if group and frappe.db.get_value("Item Group", group, "parent_item_group") == root:
             doc = frappe.get_doc("Item Group", group)
             doc.parent_item_group = parent
             doc.save(ignore_permissions=True)
@@ -225,9 +229,9 @@ def _ensure_tax_account(company, row):
     if frappe.db.exists("Account", name):
         return name
 
-    parent = f"Duties and Taxes - {company.abbr}"
-    if not frappe.db.exists("Account", parent):
-        frappe.throw(f"Account {parent} not found: create the tax accounts for {company.name} first.")
+    parent = group_account(company.name, "Tax")
+    if not parent:
+        frappe.throw(f"No tax group account (Duties and Taxes) found for {company.name}: create the tax accounts first.")
 
     frappe.get_doc(
         {

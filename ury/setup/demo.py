@@ -16,6 +16,7 @@ from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_i
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
 from erpnext.stock.doctype.material_request.material_request import make_purchase_order
 from erpnext.stock.doctype.material_request.material_request import make_stock_entry
+from ury.setup.names import existing_name, unit_of_measure
 from ury.setup.pos_demo import generate_pos_demo
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
 from frappe.utils.telemetry import capture
@@ -61,8 +62,9 @@ def setup_ury_demo_data(company):
 
 def ensure_master_records_exist():
     # Avoid N+1 queries by fetching existing records in bulk
+    # "Nos" and the price lists are made by ERPNext with _(): on a Japanese site they have local names
     for uom in ["Nos", "Kg", "Box", "Gram", "Piece"]:
-        if not frappe.db.exists("UOM", uom):
+        if not frappe.db.exists("UOM", uom) and not unit_of_measure(uom):
             try:
                 frappe.get_doc({
                     "doctype": "UOM",
@@ -73,7 +75,7 @@ def ensure_master_records_exist():
                 pass
             
     for pl in ["Standard Buying", "Standard Selling"]:
-        if not frappe.db.exists("Price List", pl):
+        if not existing_name("Price List", pl):
             try:
                 frappe.get_doc({
                     "doctype": "Price List",

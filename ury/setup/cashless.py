@@ -15,6 +15,7 @@ import frappe
 from frappe import _
 
 from ury.setup.jp_tax import japan_companies
+from ury.setup.names import candidates, cash_mode_name, group_account
 
 # preset mode -> the account it is settled on (Japan)
 CASHLESS_MODES = {
@@ -38,9 +39,14 @@ def apply_cashless_payments():
 
 def ensure_payment_mode(name, kind, company):
 	"""The Mode of Payment `name` with an account for `company` (`kind`: "cash" or "cashless").
-	Cash itself is left as ERPNext made it. Returns the name."""
-	if name != "Cash":
-		_ensure(name, kind, company)
+	Cash itself is left as ERPNext made it: "Cash" (or its translation) stands for the site's cash
+	Mode of Payment, which is named 「現金」 on a Japanese site. Returns the name to use."""
+	if kind == "cash" and name in candidates("Cash"):
+		existing = cash_mode_name()
+		if existing:
+			return existing
+		name = _("Cash")
+	_ensure(name, kind, company)
 	return name
 
 
@@ -112,11 +118,11 @@ def _parent_label(kind, japan):
 def _find_parent(company, kind, japan):
 	"""The group account the new account goes under: Cash In Hand (cash), Accounts Receivable
 	(cashless, Japan) or Bank Accounts (cashless elsewhere)."""
-	abbr = frappe.db.get_value("Company", company, "abbr")
-	name = f"{_parent_label(kind, japan)} - {abbr}"
-	if frappe.db.get_value("Account", {"name": name, "company": company, "is_group": 1}):
-		return name
-	return None
+	if kind == "cash":
+		return group_account(company, "Cash")
+	if japan:
+		return group_account(company, "Receivable")
+	return group_account(company, "Bank")
 
 
 def _add_to_pos_profiles(company, modes):

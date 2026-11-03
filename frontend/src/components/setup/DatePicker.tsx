@@ -8,6 +8,7 @@ import {
   endOfMonth,
   format,
 } from 'date-fns';
+import { formatIsoDate } from '../../utils/setupWizard';
 
 export interface DateRangeValue {
   from: Date;
@@ -103,7 +104,7 @@ function useDropdownPosition(
 export function DatePicker({
   id = 'date-picker',
   value,
-  placeholder = 'dd-mm-yyyy',
+  placeholder = 'yyyy-mm-dd',
   error,
   maxDate,
   onChange,
@@ -136,15 +137,8 @@ export function DatePicker({
     setViewDate(selectedDate);
   }, [selectedDate]);
 
-  // Display text formatted as DD-MM-YYYY
-  const displayText = useMemo(() => {
-    if (!value) return '';
-    const parts = value.split('-');
-    if (parts.length === 3) {
-      return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
-    }
-    return value;
-  }, [value]);
+  // Display text as YYYY-MM-DD, the one form that cannot be read as month-day
+  const displayText = useMemo(() => formatIsoDate(value), [value]);
 
   // Close calendar popup on outside click
   useEffect(() => {

@@ -18,6 +18,7 @@ import { PaymentSection } from '../../components/setup/sections/PaymentSection';
 import { UserSection } from '../../components/setup/sections/UserSection';
 import { setupService } from '../../services/setup';
 import { call, isRegistrationNumber } from '@ury/core';
+import { missingPriceMessage, missingPriceNames, paymentHint } from '../../utils/setupWizard';
 import { CONFIGURE_PROGRESS_STEPS } from '../../components/setup/constants';
 import { ProgressModal } from '../../components/setup/ProgressModal';
 
@@ -243,11 +244,17 @@ function ConfigurePageContent() {
       setError('登録番号は「T」と13桁の数字で入力してください（例：T1234567890123）。');
       return;
     }
+    const unpriced = missingPriceNames(menuItems);
+    if (unpriced.length > 0) {
+      setError(missingPriceMessage(unpriced));
+      return;
+    }
     const payload = {
       branch,
       rooms,
       tables,
-      menuItems,
+      // an empty row has no price and is skipped by the server; the named ones were checked above
+      menuItems: menuItems.map((item) => ({ ...item, price: item.price ?? 0 })),
       taxConfig,
       paymentMethods,
       users,
@@ -346,7 +353,7 @@ function ConfigurePageContent() {
           <div className="flex-1 min-w-0">
             <SectionShell
               title={config.title}
-              description={config.description}
+              description={activeSection === 'payment' ? paymentHint(isJapan) : config.description}
             >
               {renderSection()}
             </SectionShell>

@@ -27,7 +27,7 @@
     "id": "mode-of-payment",
     "label": "Mode of Payment",
     "route": "/app/mode-of-payment/new-mode-of-payment-1",
-    "description": "Set up payment methods like Cash, Card, UPI."
+    "description": "Set up payment methods like Cash and Card."
   },
   {
     "id": "user",

@@ -22,7 +22,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate, now_datetime, nowdate
 
 from ury.setup.cashless import apply_cashless_payments
-from ury.setup.jp_currency import apply_jpy_format
+from ury.setup.jp_currency import apply_jp_date_format, apply_jpy_format
 from ury.setup.jp_tax import apply_jp_tax_setup
 
 SITE_FLAG = "ury_test_site"
@@ -84,6 +84,7 @@ def setup_test_site():
     # The tax groups must exist before the wizard creates items: it puts them under 食品.
     apply_jp_tax_setup()
     apply_jpy_format()
+    apply_jp_date_format()
     if not frappe.db.exists("POS Profile", POS_PROFILE):
         _configure_restaurant()
     _ensure_alcohol()

@@ -107,6 +107,22 @@ export const PosProfilePage: React.FC = () => {
     try {
       let defaultCurrency = '';
       let defaultCostCenter = '';
+      // the selling Price List the site has ("Standard Selling" only on a site installed in English)
+      let sellingPriceList = addForm.selling_price_list;
+      if (!sellingPriceList) {
+        try {
+          const plList = await call<any>('frappe.client.get_list', {
+            doctype: 'Price List',
+            filters: [['selling', '=', 1], ['enabled', '=', 1]],
+            fields: ['name'],
+            order_by: 'creation asc',
+            limit: 1
+          });
+          sellingPriceList = (plList.message || plList || [])[0]?.name || '';
+        } catch (e) {
+          console.error('Failed to fetch the selling price list', e);
+        }
+      }
       if (addForm.company) {
         try {
           const compDoc = await call<any>('frappe.client.get', {
@@ -146,7 +162,7 @@ export const PosProfilePage: React.FC = () => {
           company: addForm.company,
           warehouse: addForm.warehouse,
           branch: addForm.branch || undefined,
-          selling_price_list: addForm.selling_price_list || 'Standard Selling',
+          selling_price_list: sellingPriceList || undefined,
           currency: defaultCurrency || undefined,
           cost_center: defaultCostCenter || undefined,
           print_format: addForm.print_format || undefined,
@@ -446,7 +462,7 @@ export const PosProfilePage: React.FC = () => {
                         disabled={!isEditMode}
                         value={profileForm.selling_price_list || ''}
                         onChange={(e) => setProfileForm(p => ({ ...p, selling_price_list: e.target.value }))}
-                        placeholder="Standard Selling"
+                        placeholder="Price List"
                       />
                     </div>
                     <div>
@@ -744,7 +760,7 @@ export const PosProfilePage: React.FC = () => {
                 >
                   <td className="px-6 py-4 font-semibold text-gray-900">{p.name}</td>
                   <td className="px-6 py-4 text-gray-600">{p.warehouse || p.company || '-'}</td>
-                  <td className="px-6 py-4 text-gray-600">{p.selling_price_list || 'Standard Selling'}</td>
+                  <td className="px-6 py-4 text-gray-600">{p.selling_price_list || '-'}</td>
                   <td className="px-6 py-4">
                     <Badge variant={!p.disabled ? "success" : "outline"} size="sm">
                       {!p.disabled ? 'Active' : 'Inactive'}
@@ -844,7 +860,7 @@ export const PosProfilePage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-gray-700 mb-1.5">Price List</label>
-              <Input value={addForm.selling_price_list} onChange={e => setAddForm({...addForm, selling_price_list: e.target.value})} placeholder="Standard Selling" />
+              <Input value={addForm.selling_price_list} onChange={e => setAddForm({...addForm, selling_price_list: e.target.value})} placeholder="Price List" />
             </div>
             <div>
               <label className="block font-semibold text-gray-700 mb-1.5">Print Format</label>

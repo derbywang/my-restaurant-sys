@@ -982,8 +982,8 @@ def getAggregatorMOP(aggregator):
     return modeOfPaymentsList
 def _leaf_default(doctype, value, preferred=None):
     """ERPNext rejects group nodes as a Customer's group/territory, but the
-    Selling Settings defaults ship as the root group ("All Customer Groups").
-    Fall back to a leaf node when the resolved value is a group."""
+    Selling Settings defaults ship as the root group ("All Customer Groups", or its
+    translation). Fall back to a leaf node when the resolved value is a group."""
     if value and not frappe.db.get_value(doctype, value, "is_group"):
         return value
     if preferred and frappe.db.exists(doctype, {"name": preferred, "is_group": 0}):
@@ -992,21 +992,30 @@ def _leaf_default(doctype, value, preferred=None):
     return leaves[0] if leaves else value
 
 
-@frappe.whitelist()
-def create_customer(customer_name, mobile_number=None, customer_group=None, territory=None):
+def customer_group_and_territory(customer_group=None, territory=None):
+    """The group and territory of a new customer: the given ones, else the Selling Settings
+    defaults, else 「個人」 (the "Individual" group ERPNext made) -- always a leaf, not a root."""
+    from ury.setup.names import existing_name, root_of
+
     customer_group = _leaf_default(
         "Customer Group",
         customer_group
         or frappe.db.get_single_value("Selling Settings", "customer_group")
-        or "All Customer Groups",
-        preferred="Individual",
+        or root_of("Customer Group"),
+        preferred=existing_name("Customer Group", "Individual"),
     )
     territory = _leaf_default(
         "Territory",
         territory
         or frappe.db.get_single_value("Selling Settings", "territory")
-        or "All Territories",
+        or root_of("Territory"),
     )
+    return customer_group, territory
+
+
+@frappe.whitelist()
+def create_customer(customer_name, mobile_number=None, customer_group=None, territory=None):
+    customer_group, territory = customer_group_and_territory(customer_group, territory)
     if not frappe.has_permission("Customer", "create"):
         frappe.throw("Not permitted to create customers", frappe.PermissionError)
         

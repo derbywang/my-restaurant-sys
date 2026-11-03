@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Input } from '@ury/ui';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { DatePicker } from './DatePicker';
+import { fiscalYearLabel } from '../../utils/setupWizard';
 import { validateFieldValue } from '@ury/core';
 import { SetupPayload } from '../../services/setup';
 import validationMessages from '../../data/validations.json';
@@ -123,10 +124,14 @@ const { registry } = defineRegistry(formCatalog, {
               <DatePicker
                 id={field.id}
                 value={val || ''}
-                placeholder="dd-mm-yyyy"
+                placeholder="yyyy-mm-dd"
                 error={!!props.error}
                 onChange={(_fieldId, newVal) => handleChange(newVal)}
               />
+            ) : null}
+
+            {field.id === 'fy_start_date' && val ? (
+              <p className="text-sm font-medium text-gray-700 pt-1">{fiscalYearLabel(val)}</p>
             ) : null}
 
             {props.error ? (

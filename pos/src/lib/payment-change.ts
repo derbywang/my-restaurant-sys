@@ -17,6 +17,16 @@ export interface PaymentCheck {
 const EPSILON = 0.005;
 
 /**
+ * The Mode of Payment the amount is filled in for: a mode of type Cash, never one found by its
+ * name (ERPNext names it 「現金」 on a Japanese site). Without the types (an old session) the
+ * mode called "Cash" is used if there is one.
+ */
+export function defaultCashMode(modes: string[], types: Record<string, string>): string | undefined {
+  if (Object.keys(types).length === 0) return modes.find((mode) => mode === 'Cash');
+  return modes.find((mode) => types[mode] === 'Cash');
+}
+
+/**
  * `types` maps a Mode of Payment to its type ("Cash", "Bank", ...). When it is empty (an old
  * session that cached the modes without types) the rule is not checked here.
  */

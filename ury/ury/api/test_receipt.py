@@ -170,6 +170,27 @@ class TestJPReceipt(URYFlowTestCase):
 		self.assertIn("小計（税抜） | |", out)  # printed fields that are missing print as empty
 		self.assertIn("合計（税込）", out)
 
+	def test_the_site_date_format_does_not_change_the_receipt(self):
+		"""The receipt formats its date itself: changing System Settings.date_format leaves it alone."""
+		order = self._bill()
+		pay_with(order, [("Cash", 2000)])
+		previous = frappe.db.get_single_value("System Settings", "date_format")
+
+		def restore():
+			frappe.db.set_single_value("System Settings", "date_format", previous)
+			frappe.db.commit()
+			frappe.clear_cache()
+
+		self.addCleanup(restore)
+		outs = []
+		for date_format in ("dd-mm-yyyy", "yyyy-mm-dd", "mm/dd/yyyy"):
+			frappe.db.set_single_value("System Settings", "date_format", date_format)
+			frappe.clear_cache()
+			outs.append(text(render(order)))
+		self.assertEqual(outs[0], outs[1])
+		self.assertEqual(outs[1], outs[2])
+		self.assertRegex(outs[0], r"\d{4}年\d{2}月\d{2}日 \d{2}:\d{2}")
+
 	def test_cash_only_keeps_the_plain_label(self):
 		order = self._bill()
 		pay_with(order, [("Cash", 2000)])

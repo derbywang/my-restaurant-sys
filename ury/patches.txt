@@ -14,3 +14,5 @@ ury.patches.v2_0.tax_rounding
 ury.patches.v2_0.jp_discount_on_net_total
 ury.patches.v2_0.jp_receipt_format
 ury.patches.v2_0.cashless_payments
+ury.patches.v2_0.jp_date_format
+ury.patches.v2_0.default_app

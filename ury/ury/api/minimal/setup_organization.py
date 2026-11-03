@@ -7,23 +7,18 @@ import json
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 
+DEFAULT_COUNTRY = "Japan"
+
+
 @frappe.whitelist()
 def get_setup_defaults():
     if frappe.session.user == "Guest":
         frappe.throw("Not permitted")
         
-    languages = load_languages()
-    country_data = load_country()
-    if isinstance(country_data, str):
-        detected_country = country_data
-    elif isinstance(country_data, dict):
-        detected_country = country_data.get("country", "")
-    else:
-        detected_country = ""
-        
-    if not detected_country:
-        detected_country = frappe.db.get_single_value("System Settings", "country") or "India"
-    
+    from ury.ury.api.language import setup_language_options
+
+    # a Japan-first product: the country is not guessed from the IP address
+    languages = setup_language_options()
     countries_dict = get_all()
     countries = list(countries_dict.keys())
     
@@ -45,7 +40,8 @@ def get_setup_defaults():
                 
     return {
         "languages": languages,
-        "detected_country": detected_country,
+        "default_language": languages[0]["value"],
+        "default_country": DEFAULT_COUNTRY,
         "countries": countries,
         "currencies": currencies,
         "timezones": timezones

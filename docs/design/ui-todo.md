@@ -21,13 +21,29 @@
 - **自助点餐的默认顾客**：URY Self Ordering Profile 的 `default_customer` 没有设置时自助点餐下单直接报错（`self_ordering.py`）。向导只写了 POS Profile 的 `customer`，和自助点餐的工作一起处理（可复用向导建的默认顾客）。
 - **第二家分店的 POS Profile 与默认用户冲突**：向导为新分店的 POS Profile 把所有 URY Cashier 都设为默认用户，已有另一家分店的 POS Profile 时，ERPNext 报 “Already set default in pos profile …”。目前向导只用于第一家分店，增加分店前要处理。
 
-## 初始化向导的问题（T7 浏览器验证中发现，验证完一起处理）
-1. 登录后先显示「选择应用」画面（ERPNext / Frappe HR / URY），没有直接进向导。
-2. 第 1 步的语言只有 English、français、عربي，没有日本語、中文、한국어。
-3. 第 1 步的默认值是印度（India / INR / India - Chart of Accounts / 4 月开始的会计年度）。面向日本的产品应默认 Japan / JPY / Asia/Tokyo。
-4. 第 2 步菜单的价格表头显示「Price (INR)」，日本站点应该是 JPY。
-5. 第 2 步支付方式的说明写着 “add Card, UPI, or others”，UPI 是印度的支付方式。
-6. 验证站点的会计年度是 2026-01-04 ～ 2027-01-03（开始日是 1 月 4 日，不是月初），要查第 1 步日期的计算 / 填写方式（`calculateFyStartDate`、日期选择器）。
+## 初始化向导的问题（已修复，等临时站点浏览器验证）
+1. ~~登录后先显示「选择应用」画面~~：服务端重定向本身是通的（模拟验证过），没抓到当时没生效的原因；改为 `default_app = ury`（`apply_default_app`，安装、向导公司阶段、补丁都会设置，已有别的选择则不改），登录后直接进 URY。验证时确认 `/apps` 不再出现。注意：`ury.permission.check_app_permission` 只让 Administrator 看到 URY，其他用户登录后仍进 `/app`，要改成按角色判断时另做。
+2. ~~语言只有 English、français、عربي~~：改为员工语言（日本語、中文、한국어、English），值取 Language 表的 `language_name`（`ko` 在 Frappe 里叫「한국의」）。写入 System Settings 的 language。
+3. ~~默认值是印度~~：默认 Japan / JPY / Asia/Tokyo / 日本語，国家变化时币种、时区、科目表、会计年度联动。
+4. ~~价格表头 Price (INR)~~：第 2 步用公司的币种（`get_business_setup` 返回 `currency`）。
+5. ~~支付方式说明提到 UPI~~：日本写「クレジットカード、PayPay など」，其他国家不提具体国家，非日本的预设去掉 UPI。
+6. ~~会计年度 2026-01-04~~：日期的解析没有月日颠倒，是显示格式 `DD-MM-YYYY` 有歧义（04-01-2026 是 1 月 4 日）。选择器改为显示 `YYYY-MM-DD`，下面显示「2026年1月1日 〜 2026年12月31日」，日本默认 1 月 1 日；日本站点的 System Settings 日期格式设为 `yyyy-mm-dd`（`apply_jp_date_format`，补丁 `jp_date_format`）。那次值怎么变成 1 月 4 日没查出来（默认值不可能是它，可能是在日历里点的）。
+- 临时的 `console.log('[setup] payload')` 已删除（会计年度的值已在临时站点确认：2026-01-01 ~ 2026-12-31）。
+- **日期格式的影响**：改的是 System Settings 的显示 / 解析格式，库里存的日期不变（一律 ISO）。受影响的是 Desk 里的日期显示和输入、调用 `formatdate` / 日期字段 `get_formatted` 的打印格式（`Merged POS Invoice Format` 等旧格式）；小票 `URY JP Receipt` 自己用 `strftime` 格式化（`2026年11月02日 12:34`），POS 前端也自己格式化，都不受影响（有测试 `test_the_site_date_format_does_not_change_the_receipt`）。
+
+## 非英文站点的默认名称（已修复，等临时站点浏览器验证）
+- 现象：日文站点装好后，向导的「デフォルト設定」阶段失败，原因是 ERPNext 用 `_()` 创建的根节点叫「全てのアイテムグループ」，URY 按 `All Item Groups` 查找。同类问题还有 `Individual`、`Consumable`、Mode of Payment `Cash`（「現金」）、`Standard Selling`、`Nos`，以及**会计科目**（Accounts Receivable → 「売掛金」、Debtors → 「債務者」、Cash In Hand → 「手持ちの現金」、Bank Accounts → 「銀行口座」、Duties and Taxes → 「関税と税金」；第一次修复时误以为科目不翻译，第 2 步 Launch 因此失败）。现在科目父组一律按 account_type 找，「売掛金」本身没有类型，取 Receivable 类型科目的上级。
+- 修法和规则见 CLAUDE.md「非英文站点的默认名称」；工具是 `ury/setup/names.py`，测试是 `test_localized_site.py`（ja / zh / ko）和 `test_names.py`。
+- 向导失败时不再关闭弹窗：显示红色错误和「閉じる / 再試行」（`ProgressModal` 的 `onClose` / `onRetry`）。
+- 向导第 1 步公司名不再要求至少 3 个字符（「中華」两个字是常见名称）；第 2 步菜单价格框可以清空，空价格在 Launch 时提示；支付说明统一为英文（向导界面文字目前都是英文，见向导 i18n）。
+- 登录后先出现白页、刷新后才显示向导（控制台无错误）：用无痕窗口登录**未能重现**。再出现时记录 Network 里失败或很慢的请求。
+- 日本站点向导新建 POS Profile 时默认打开折扣：「Enable Discount」（`custom_enable_discount`，URY POS 看的是它）和「Allow User to Edit Discount」（`allow_discount_change`，ERPNext 自带 POS 用）；只在两个开关都关着时补上，已有的选择不覆盖，其他国家不变。
+- 未处理：`pos/src/store/pos-store.ts` 里 `paymentModes` 的初始值 `['Cash']` 只在支付方式加载前出现；向导文字本身仍是英文（见向导 i18n）。
+
+## 界面整理
+- **报表里的 `IndianRupee` 图标**：`pages/Reports/*.tsx`（十几个）和 `reportsRegistry.ts` 用的是印度卢比图案，日本站点显示不对。以后换成通用图标（如 `Banknote` / `Coins`）。
+- **向导画面本身的多语言**：向导（`SetupPage`、`ConfigurePage` 及各 Section、`setup.json` / `configure.json` 的标签和说明）的文字都是写死的英文，没有接 i18n，所选语言不会让向导画面本身变语言。做 i18n 时一起处理。
+- **日期选择器**：现在显示 ISO（`YYYY-MM-DD`），报表里用到 `DatePicker` 的页面也随之变化；月份标题仍是英文（`MONTH_NAMES`）。
 
 ## 换行符（CRLF / LF）
 - 仓库里至少有 8 个文本文件在版本库里是 CRLF（`frontend/package.json`、`frontend/src/` 下 6 个文件含 `ConfigurePage.tsx`、`TERMS.md`），其余都是 LF。`ConfigurePage.tsx` 被 git 判为 `-text`（可能含特殊字符），要先查原因。用脚本或编辑器改 CRLF 文件时，换行符被悄悄转成 LF，一次差点产生上千行的假改动（T7 提交前发现并恢复）。

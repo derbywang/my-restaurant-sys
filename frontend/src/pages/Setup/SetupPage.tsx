@@ -7,34 +7,7 @@ import { setupService, SetupPayload } from '../../services/setup';
 import setupSchema from '../../data/forms/setup.json';
 import { ProgressModal } from '../../components/setup/ProgressModal';
 import { Switch } from '../../components/ui/switch';
-
-const FISCAL_YEARS: Record<string, string> = {
-  Afghanistan: '12-21',
-  Australia: '07-01',
-  Bangladesh: '07-01',
-  'Costa Rica': '10-01',
-  Egypt: '07-01',
-  Ethiopia: '07-08',
-  'Hong Kong': '04-01',
-  India: '04-01',
-  Iran: '06-23',
-  Kenya: '07-01',
-  Malaysia: '07-01',
-  Myanmar: '04-01',
-  Nepal: '07-16',
-  'New Zealand': '04-01',
-  Pakistan: '07-01',
-  Singapore: '04-01',
-  'South Africa': '03-01',
-  Thailand: '10-01',
-  'United Kingdom': '04-01',
-};
-
-function calculateFyStartDate(country: string): string {
-  const currentYear = new Date().getFullYear();
-  const mmdd = FISCAL_YEARS[country] || '01-01';
-  return `${currentYear}-${mmdd}`;
-}
+import { fiscalYearStart } from '../../utils/setupWizard';
 
 type PendingSubmit = {
   payload: SetupPayload;
@@ -64,19 +37,8 @@ export default function SetupPage() {
         
         if (!defaults) return;
 
-        const rawLangs = Array.isArray(defaults.languages)
-          ? defaults.languages
-          : (defaults.languages as any)?.languages || [];
-
-        const formattedLangs = rawLangs
-          .map((l: any) => {
-            const val = typeof l === 'string' ? l : (l.name || l.value || l.label);
-            if (val === 'English') return { value: 'English', label: 'English' };
-            if (val === 'العربية' || val === 'Arabic') return { value: 'Arabic', label: 'عربي' };
-            if (val === 'Français' || val === 'French') return { value: 'French', label: 'français' };
-            return null;
-          })
-          .filter(Boolean) as { value: string; label: string }[];
+        // the staff languages (日本語, 中文, 한국어, English); the value is the name Frappe maps back to a code
+        const formattedLangs = Array.isArray(defaults.languages) ? defaults.languages : [];
 
         const rawCountries = Array.isArray(defaults.countries) ? defaults.countries : [];
         const formattedCountries = rawCountries.map((c: any) =>
@@ -101,10 +63,9 @@ export default function SetupPage() {
           timezones: formattedTimezones
         }));
         
-        const defaultLanguage = (defaults.languages as any)?.default_language || 'English';
-        formRef.current?.setFieldValue('language', defaultLanguage);
+        formRef.current?.setFieldValue('language', defaults.default_language || formattedLangs[0]?.value || 'English');
 
-        const countryToUse = defaults.detected_country || 'India';
+        const countryToUse = defaults.default_country || 'Japan';
         formRef.current?.setFieldValue('country', countryToUse);
         await handleCountryChange(countryToUse);
       } catch (err) {
@@ -135,7 +96,7 @@ export default function SetupPage() {
         formRef.current?.setFieldValue('chart_of_accounts', formattedCharts[0].value);
       }
 
-      const fyStartDate = calculateFyStartDate(country);
+      const fyStartDate = fiscalYearStart(country, new Date().getFullYear());
       formRef.current?.setFieldValue('fy_start_date', fyStartDate);
     } catch (err) {
       console.error("Failed to load country defaults", err);
@@ -202,10 +163,25 @@ export default function SetupPage() {
     }
   }, [finishSetup]);
 
+  // The failure stays on screen (the modal is shown while there is an error): 閉じる goes back to the
+  // form, 再試行 sends the same data again.
   const handleSetupFail = useCallback((message: string) => {
     setError(message);
     setSubmitting(false);
   }, []);
+
+  const handleCloseError = useCallback(() => {
+    setError(null);
+    setActiveIndex(0);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    finishedRef.current = false;
+    setError(null);
+    setActiveIndex(0);
+    setSubmitting(true);
+    void doApiCall();
+  }, [doApiCall]);
 
   const handleNext = async () => {
     if (!formRef.current?.validate()) {
@@ -284,7 +260,7 @@ export default function SetupPage() {
         </div>
       </div>
       
-      {submitting && (
+      {(submitting || error) && (
         <ProgressModal 
           visible={true} 
           activeIndex={activeIndex}
@@ -300,6 +276,8 @@ export default function SetupPage() {
           onReady={doApiCall}
           onComplete={handleSetupComplete}
           onFail={handleSetupFail}
+          onClose={handleCloseError}
+          onRetry={handleRetry}
         />
       )}
     </WizardLayout>

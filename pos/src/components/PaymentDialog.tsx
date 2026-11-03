@@ -3,7 +3,7 @@ import { X, Percent, Coins } from 'lucide-react';
 import { usePOSStore } from '../store/pos-store';
 import { formatCurrency, call, parseFrappeError } from '@ury/core';
 import { Button, Input, Dialog, DialogContent, showToast } from '@ury/ui';
-import { DEFAULT_PAYMENT_MODE } from '../data/order-types';
+import { defaultCashMode } from '../lib/payment-change';
 import { t } from '../i18n';
 import { checkPayments, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
@@ -115,15 +115,15 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const changeNotCash = check.error === 'change_not_cash';
 
   useEffect(()=>{
-    const defaultPaymentModePresent=paymentModes.find((mode)=>mode===DEFAULT_PAYMENT_MODE)
+    const defaultPaymentMode=defaultCashMode(paymentModes, paymentModeTypes)
     //only one payment mode should be present, then autofill the final amount, if not do not fill
     const otherPaymentModesNotEntered=Object.keys(paymentInputs).length<=1;
     // after the amount changed the cashier enters the money again: never fill in the new amount
-    if(!amountChanged && finalTotal && paymentModes && DEFAULT_PAYMENT_MODE && defaultPaymentModePresent && otherPaymentModesNotEntered){
-      //check if default payment mode is present in paymentModes
+    if(!amountChanged && finalTotal && paymentModes && defaultPaymentMode && otherPaymentModesNotEntered){
+      //the default payment mode is the cash one, if the profile has it
       setPaymentInputs((prev)=>({ 
         ...prev,
-        [DEFAULT_PAYMENT_MODE]:String(finalTotal) 
+        [defaultPaymentMode]:String(finalTotal) 
       }))
     }
   },[finalTotal,paymentModes])

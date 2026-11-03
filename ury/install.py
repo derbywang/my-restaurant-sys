@@ -20,6 +20,10 @@ def after_install():
 
         apply_jpy_format()
 
+        from ury.setup.wizard_defaults import apply_default_app
+
+        apply_default_app()
+
         click.secho("Thank you for installing URY App!", fg="green")
 
         

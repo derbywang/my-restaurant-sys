@@ -560,6 +560,7 @@ class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 		"get_customer_product",
 		"get_customer_order",
 		"preview_customer_cart",
+		"confirm_age",
 		"add_customer_items",
 		"request_bill",
 		"get_order_status",
@@ -891,7 +892,7 @@ class TestTheNextGuestsWhileTheLastBillIsUnpaid(SelfOrderingCase):
 	def test_the_new_guests_get_a_new_order_and_the_printed_one_stays_as_it_was(self):
 		self.staff_open()
 		session = self.scan()
-		new = add_customer_items(session, [{"item": ALCOHOL_ITEM, "qty": 1, "comment": "冷えたもの"}])["invoice"]
+		new = add_customer_items(session, [{"item": ALCOHOL_ITEM, "qty": 1, "comment": "冷えたもの"}], age_confirmed=1)["invoice"]
 		self.assertNotEqual(new, self.old)
 		self.assertEqual(frappe.db.get_value("POS Invoice", new, "invoice_printed"), 0)
 		self.assertEqual(items_of(new), [(ALCOHOL_ITEM, 1, "冷えたもの")])
@@ -1043,7 +1044,7 @@ class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):
 		session = self.scan()
 		items = [{"item": FOOD_ITEM, "qty": 3}, {"item": ALCOHOL_ITEM, "qty": 1}]
 		shown = self.cart(session, items)["rounded_total"]
-		order = add_customer_items(session, items)
+		order = add_customer_items(session, items, age_confirmed=1)
 		self.assertEqual(order["grand_total"], shown)
 		self.assertEqual(frappe.db.get_value("POS Invoice", order["invoice"], "rounded_total"), shown)
 
@@ -1077,3 +1078,334 @@ class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):
 		for key in ("rate", "amount"):
 			self.assertNotIn(key, line)
 		self.assertEqual(order["grand_total"], 2200)
+
+
+class TestWhichDishesTheGuestsMayOrder(SelfOrderingCase):
+	"""「セルフオーダー可」: a dish that is not ticked is not offered, and cannot be ordered by calling the
+	server directly either."""
+
+	def _row(self, item=FOOD_ITEM):
+		return frappe.get_all("URY Menu Item", filters={"item": item}, pluck="name")[0]
+
+	def _untick(self, item=FOOD_ITEM):
+		row = self._row(item)
+		frappe.db.set_value("URY Menu Item", row, "self_order_allowed", 0)
+		frappe.db.commit()
+		self.addCleanup(self._tick, row)
+
+	def _tick(self, row):
+		frappe.db.set_value("URY Menu Item", row, "self_order_allowed", 1)
+		frappe.db.commit()
+
+	def test_every_dish_that_was_on_the_menu_before_is_allowed(self):
+		# the column is new: the rows that were there get its default, so no patch is needed
+		self.assertTrue(frappe.db.count("URY Menu Item"))
+		self.assertEqual(frappe.db.count("URY Menu Item", {"self_order_allowed": ["!=", 1]}), 0)
+
+	def test_a_new_dish_is_allowed_unless_it_is_unticked(self):
+		self.assertEqual(frappe.get_meta("URY Menu Item").get_field("self_order_allowed").default, "1")
+
+	def test_an_unticked_dish_is_not_on_the_menu(self):
+		self._untick()
+		self.staff_open()
+		items = [row["item"] for row in get_customer_menu(self.scan())["items"]]
+		self.assertNotIn(FOOD_ITEM, items)
+		self.assertIn(ALCOHOL_ITEM, items)
+
+	def test_an_unticked_dish_cannot_be_ordered(self):
+		self._untick()
+		self.staff_open()
+		session = self.scan()
+		self.refused("Item not available", add_customer_items, session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertIsNone(frappe.db.get_value("URY Ordering Session", {"ordering_profile": PROFILE}, "invoice"))
+
+	def test_an_unticked_dish_is_not_priced_or_shown(self):
+		self._untick()
+		self.staff_open()
+		session = self.scan()
+		self.refused("Item not available", self_ordering.preview_customer_cart, session, [{"item": FOOD_ITEM, "qty": 1}])
+		with self.assertRaises(frappe.DoesNotExistError):
+			self_ordering.get_customer_product(session, FOOD_ITEM)
+
+	def test_the_staff_still_have_the_dish(self):
+		self._untick()
+		self.assertTrue(place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLE))
+
+
+class TestAgeConfirmation(SelfOrderingCase):
+	"""Alcohol (the item group the setup wizard makes, and the groups below it) asks "20歳以上ですか？" the first
+	time in a session. The server records the answer "yes" on the session and does not take alcohol from a
+	session that has no such record. A new session (the table opened again, a new scan) asks again."""
+
+	ALCOHOL = [{"item": ALCOHOL_ITEM, "qty": 1}]
+
+	def _groups(self):
+		return frappe.get_all("URY Age Check Item Group", filters={"parent": PROFILE}, pluck="item_group")
+
+	def _set_groups(self, groups):
+		profile = frappe.get_doc("URY Self Ordering Profile", PROFILE)
+		profile.set("age_check_item_groups", [{"item_group": group} for group in groups])
+		profile.save(ignore_permissions=True)
+		frappe.db.commit()
+
+	def _recorded(self, raw_session):
+		import hashlib
+
+		token_hash = hashlib.sha256(raw_session.encode()).hexdigest()
+		return frappe.db.get_value("URY Ordering Session", {"token_hash": token_hash}, "age_confirmed")
+
+	def menu(self):
+		self.staff_open()
+		return {row["item"]: row for row in get_customer_menu(self.scan())["items"]}
+
+	def test_a_new_profile_asks_for_the_alcohol_group_of_the_wizard(self):
+		from ury.setup.jp_tax import ALCOHOL_GROUP
+
+		self.assertEqual(self._groups(), [ALCOHOL_GROUP])
+
+	def test_the_dishes_in_the_groups_below_alcohol_are_asked_about_too(self):
+		from ury.setup.jp_tax import ALCOHOL_GROUP
+
+		# the test beer is in "Bar", a group below the alcohol group
+		self.assertEqual(frappe.db.get_value("Item Group", frappe.db.get_value("Item", ALCOHOL_ITEM, "item_group"), "parent_item_group"), ALCOHOL_GROUP)
+		menu = self.menu()
+		self.assertTrue(menu[ALCOHOL_ITEM]["age_check"])
+		self.assertFalse(menu[FOOD_ITEM]["age_check"])
+
+	def test_a_profile_without_the_group_asks_about_nothing(self):
+		self._set_groups([])
+		self.assertFalse(self.menu()[ALCOHOL_ITEM]["age_check"])
+		session = self.scan()
+		self.assertTrue(add_customer_items(session, self.ALCOHOL)["invoice"])
+
+	def test_alcohol_from_a_session_without_the_answer_is_refused_and_nothing_is_saved(self):
+		self.staff_open()
+		session = self.scan()
+		self.refused("Age confirmation required", add_customer_items, session, self.ALCOHOL)
+		self.refused("Age confirmation required", add_customer_items, session, self.ALCOHOL, age_confirmed=0)
+		self.refused("Age confirmation required", add_customer_items, session, self.ALCOHOL, age_confirmed="0")
+		self.assertEqual(frappe.db.count("POS Invoice", {"docstatus": 0, "restaurant_table": TABLE}), 0)
+		self.assertFalse(self._recorded(session))
+
+	def test_the_answer_yes_is_recorded_on_the_session(self):
+		self.staff_open()
+		session = self.scan()
+		self.assertFalse(get_customer_menu(session)["age_confirmed"])
+		order = add_customer_items(session, self.ALCOHOL, age_confirmed=1)
+		self.assertEqual([row["item_code"] for row in order["items"]], [ALCOHOL_ITEM])
+		self.assertTrue(self._recorded(session))
+		self.assertTrue(get_customer_menu(session)["age_confirmed"])  # the page knows after a reload
+
+	def test_the_answer_is_not_asked_again_in_the_same_session(self):
+		self.staff_open()
+		session = self.scan()
+		add_customer_items(session, self.ALCOHOL, age_confirmed="1")  # the browser sends text
+		more = add_customer_items(session, self.ALCOHOL)  # no answer sent: the session has it
+		self.assertEqual(len(more["items"]), 2)
+
+	def test_a_new_session_asks_again(self):
+		self.staff_open()
+		first = self.scan()
+		add_customer_items(first, self.ALCOHOL, age_confirmed=1)
+		second = self.scan()  # the next scan of the code is a new session
+		self.assertNotEqual(first, second)
+		self.assertFalse(get_customer_menu(second)["age_confirmed"])
+		self.refused("Age confirmation required", add_customer_items, second, self.ALCOHOL)
+
+	def test_after_the_table_is_opened_again_the_new_guests_are_asked(self):
+		self.staff_open()
+		old = self.scan()
+		add_customer_items(old, self.ALCOHOL, age_confirmed=1)
+		self.staff_close()
+		self.staff_open()
+		new = self.scan()
+		self.refused("Age confirmation required", add_customer_items, new, self.ALCOHOL)
+		# and the old session is no longer valid at all
+		self.refused("Table closed", add_customer_items, old, self.ALCOHOL)
+
+	def test_food_needs_no_answer_and_records_nothing(self):
+		self.staff_open()
+		session = self.scan()
+		self.assertTrue(self.order(session)["invoice"])
+		self.assertFalse(self._recorded(session))
+
+	def test_a_request_with_a_dish_that_asks_the_age_needs_the_answer_even_with_food(self):
+		self.staff_open()
+		self.refused(
+			"Age confirmation required",
+			add_customer_items, self.scan(), [{"item": FOOD_ITEM, "qty": 1}, {"item": ALCOHOL_ITEM, "qty": 1}],
+		)
+
+	def test_the_answer_no_is_not_recorded_and_the_next_alcohol_asks_again(self):
+		# "いいえ" sends nothing to the server: the dish is not put in the cart
+		self.staff_open()
+		session = self.scan()
+		self.refused("Age confirmation required", add_customer_items, session, self.ALCOHOL, age_confirmed=0)
+		self.assertFalse(self._recorded(session))
+		self.refused("Age confirmation required", add_customer_items, session, self.ALCOHOL)
+		self.assertTrue(add_customer_items(session, self.ALCOHOL, age_confirmed=1)["invoice"])
+
+	def test_the_cart_total_does_not_ask(self):
+		self.staff_open()
+		self.assertTrue(self_ordering.preview_customer_cart(self.scan(), self.ALCOHOL)["rounded_total"])
+
+
+class TestTheReasonsAGuestIsRefusedHaveATitle(SelfOrderingCase):
+	"""The ordering page shows its own text for each reason, by the `title` of the error: all the ways a
+	guest's call can be refused because the ordering is over have one."""
+
+	CALLS = (
+		("get_customer_menu", lambda session: get_customer_menu(session)),
+		("preview_customer_cart", lambda session: self_ordering.preview_customer_cart(session, [{"item": FOOD_ITEM, "qty": 1}])),
+		("add_customer_items", lambda session: add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])),
+		("confirm_age", lambda session: self_ordering.confirm_age(session)),
+	)
+
+	def test_a_session_of_a_table_that_was_opened_again_is_refused_as_table_closed(self):
+		self.staff_open()
+		old = self.scan()
+		self.staff_close()
+		self.staff_open()
+		for name, call in self.CALLS:
+			with self.subTest(name):
+				self.refused("Table closed", call, old)
+
+	def test_a_table_that_was_closed_is_refused_as_table_closed(self):
+		self.staff_open()
+		session = self.scan()
+		self.staff_close()
+		for name, call in self.CALLS:
+			with self.subTest(name):
+				self.refused("Table closed", call, session)
+
+	def test_a_shift_that_was_closed_is_refused_as_store_closed(self):
+		self.staff_open()
+		session = self.scan()
+		close_shift(self.opening)
+		for name, call in self.CALLS:
+			with self.subTest(name):
+				self.refused("Store closed", call, session)
+
+	def test_a_session_that_is_not_valid_is_refused_as_session_expired(self):
+		for name, call in self.CALLS:
+			with self.subTest(name):
+				self.refused("Session expired", call, "not-a-session")
+		self.refused("Session expired", get_customer_menu, "")
+
+	def test_a_session_that_ran_out_is_refused_as_session_expired(self):
+		self.staff_open()
+		session = self.scan()
+		frappe.db.set_value("URY Ordering Session", {"ordering_profile": PROFILE}, "expires_at", add_to_date(now_datetime(), minutes=-5))
+		frappe.db.commit()
+		self.refused("Session expired", get_customer_menu, session)
+
+	def test_an_order_that_is_over_is_refused_as_order_closed(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		print_bill(invoice)
+		self.staff_open()  # the table is opened again; the old session is made to belong to that opening
+		old = session
+		frappe.db.set_value("URY Ordering Session", {"ordering_profile": PROFILE, "invoice": invoice}, "table_opening", frappe.db.get_value("URY Table", TABLE, "self_order_opening"))
+		frappe.db.commit()
+		self.refused("Order closed", add_customer_items, old, [{"item": FOOD_ITEM, "qty": 1}])
+
+
+class TestTheAnswerIsKeptWhenGiven(SelfOrderingCase):
+	"""「はい」 is recorded on the session when it is given, not when the order is sent: a guest who answers and
+	reloads the page is not asked again. Only the guest's own session, and only to "yes"."""
+
+	def _recorded(self, raw_session):
+		import hashlib
+
+		token_hash = hashlib.sha256(raw_session.encode()).hexdigest()
+		return frappe.db.get_value("URY Ordering Session", {"token_hash": token_hash}, "age_confirmed")
+
+	def test_the_answer_is_recorded_without_an_order(self):
+		self.staff_open()
+		session = self.scan()
+		self.assertFalse(get_customer_menu(session)["age_confirmed"])
+		result = self_ordering.confirm_age(session)
+		self.assertTrue(result["age_confirmed"])
+		self.assertTrue(self._recorded(session))
+		self.assertTrue(get_customer_menu(session)["age_confirmed"])  # what a reloaded page reads
+		self.assertIsNone(frappe.db.get_value("URY Ordering Session", {"token_hash": __import__("hashlib").sha256(session.encode()).hexdigest()}, "invoice"))
+
+	def test_the_order_after_it_needs_no_answer(self):
+		self.staff_open()
+		session = self.scan()
+		self_ordering.confirm_age(session)
+		self.assertTrue(add_customer_items(session, [{"item": ALCOHOL_ITEM, "qty": 1}])["invoice"])
+
+	def test_it_is_only_the_session_of_the_guest(self):
+		self.staff_open()
+		mine, other = self.scan(), self.scan()
+		self_ordering.confirm_age(mine)
+		self.assertTrue(self._recorded(mine))
+		self.assertFalse(self._recorded(other))
+		self.refused("Age confirmation required", add_customer_items, other, [{"item": ALCOHOL_ITEM, "qty": 1}])
+
+	def test_it_cannot_be_called_for_a_session_that_is_not_valid(self):
+		with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+			self_ordering.confirm_age("not-a-session")
+		self.staff_open()
+		old = self.scan()
+		self.staff_close()
+		self.staff_open()
+		self.refused("Table closed", self_ordering.confirm_age, old)
+		self.assertFalse(self._recorded(old))
+
+	def test_the_new_guests_of_a_reopened_table_are_asked_again(self):
+		self.staff_open()
+		old = self.scan()
+		self_ordering.confirm_age(old)
+		self.staff_close()
+		self.staff_open()
+		new = self.scan()
+		self.assertFalse(get_customer_menu(new)["age_confirmed"])
+		self.refused("Age confirmation required", add_customer_items, new, [{"item": ALCOHOL_ITEM, "qty": 1}])
+
+	def test_a_guest_cannot_take_the_answer_back_or_set_anything_else(self):
+		# the function has no argument but the session: nothing to send but "yes" for this session
+		import inspect
+
+		self.assertEqual(list(inspect.signature(self_ordering.confirm_age).parameters), ["session"])
+
+
+class TestTheAgeGroupOfExistingProfiles(SelfOrderingCase):
+	"""The patch gives a profile that was made before the age check the alcohol group, and leaves the others."""
+
+	def _rows(self):
+		return frappe.get_all("URY Age Check Item Group", filters={"parent": PROFILE}, pluck="item_group")
+
+	def _set(self, groups):
+		profile = frappe.get_doc("URY Self Ordering Profile", PROFILE)
+		profile.set("age_check_item_groups", [{"item_group": group} for group in groups])
+		profile.flags.no_default_age_groups = True
+		profile.save(ignore_permissions=True)
+		frappe.db.commit()
+
+	def test_an_empty_profile_gets_the_alcohol_group(self):
+		from ury.patches.v2_0 import age_check_item_groups
+		from ury.setup.jp_tax import ALCOHOL_GROUP
+
+		self._set([])
+		self.assertEqual(self._rows(), [])
+		age_check_item_groups.execute()
+		self.assertEqual(self._rows(), [ALCOHOL_GROUP])
+
+	def test_a_profile_with_groups_is_left_alone(self):
+		from ury.patches.v2_0 import age_check_item_groups
+
+		self._set(["Consumable"])
+		age_check_item_groups.execute()
+		self.assertEqual(self._rows(), ["Consumable"])
+
+	def test_running_it_twice_changes_nothing(self):
+		from ury.patches.v2_0 import age_check_item_groups
+		from ury.setup.jp_tax import ALCOHOL_GROUP
+
+		self._set([])
+		age_check_item_groups.execute()
+		age_check_item_groups.execute()
+		self.assertEqual(self._rows(), [ALCOHOL_GROUP])

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { NOTE_MAX_LENGTH, addToCart, decrementCart, setNote, toPayload, toPreviewPayload, type Cart } from './cart'
+import { NOTE_MAX_LENGTH, addToCart, decrementCart, setNote, toPayload, toPreviewPayload, hasAgeCheckedDish, type Cart } from './cart'
 import type { MenuItem } from './api'
 
 const dish = (item: string, price_incl_tax = 1100): MenuItem =>
-  ({ item, item_name: item, price_incl_tax, disabled: 0, special_dish: 0, item_image: null, course: null, course_label: null }) as MenuItem
+  ({ item, item_name: item, price_incl_tax, age_check: false, disabled: 0, special_dish: 0, item_image: null, course: null, course_label: null }) as MenuItem
 
 describe('the cart', () => {
   it('adds a dish once, then counts it up', () => {
@@ -78,5 +78,22 @@ describe('the cart sent to the server for its total', () => {
 
   it('is empty for an empty cart', () => {
     expect(toPreviewPayload({})).toEqual([])
+  })
+})
+
+describe('the age check', () => {
+  const beer = { ...dish('ビール', 550), age_check: true }
+
+  it('is needed when the cart has a dish that asks the age', () => {
+    expect(hasAgeCheckedDish(addToCart(addToCart({}, dish('寿司')), beer))).toBe(true)
+  })
+
+  it('is not needed for food', () => {
+    expect(hasAgeCheckedDish(addToCart({}, dish('寿司')))).toBe(false)
+    expect(hasAgeCheckedDish({})).toBe(false)
+  })
+
+  it('is not needed any more when the alcohol is taken out of the cart', () => {
+    expect(hasAgeCheckedDish(decrementCart(addToCart({}, beer), 'ビール'))).toBe(false)
   })
 })

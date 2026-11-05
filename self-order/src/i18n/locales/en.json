@@ -11,5 +11,38 @@
   },
   "price": {
     "incl_tax": " (tax incl.)"
+  },
+  "age": {
+    "question": "Are you 20 or older?",
+    "note": "Alcohol is for people aged 20 and over.",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "closed": {
+    "table_closed": {
+      "title": "Ordering has ended",
+      "message": "Ordering at this table has ended. Please ask a member of staff."
+    },
+    "store_closed": {
+      "title": "We cannot take orders now",
+      "message": "We are closed, so we cannot take your order. Please ask a member of staff."
+    },
+    "order_closed": {
+      "title": "This order has ended",
+      "message": "This order is already finished. Please ask a member of staff to add anything."
+    },
+    "session_expired": {
+      "title": "This page has expired",
+      "message": "It has been unused for too long. Please scan the QR code on your table again, or ask a member of staff."
+    },
+    "reload": "Reload"
+  },
+  "errors": {
+    "network": "Could not connect. Please check your signal and try again.",
+    "server": "Something went wrong on our side. Please try again in a moment.",
+    "other": "We could not complete that. Please try again or ask a member of staff.",
+    "age": "We could not confirm your age. Please try again.",
+    "no_code": "This link has no ordering code. Please scan the QR code on your table again.",
+    "total_failed": "Could not get the total. Please try again."
   }
 }

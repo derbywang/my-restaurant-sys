@@ -4,8 +4,10 @@ import {
   bootstrap,
   createPaymentRequest,
   getCurrentOrder,
+  confirmAge,
   getMenu,
   getStoredContext,
+  getStoredToken,
   previewCart,
   requestBill,
   type CartPreview,
@@ -15,9 +17,13 @@ import {
   type PaymentRequestResult,
 } from '../lib/api'
 import { tokenFromSearch } from '../lib/qr-link'
+import { canResume } from '../lib/resume'
+import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
+import { t } from '../i18n'
 import {
   addToCart as addToCartLine,
   decrementCart as decrementCartLine,
+  hasAgeCheckedDish,
   setNote,
   toPayload,
   toPreviewPayload,
@@ -32,6 +38,7 @@ const PREVIEW_DELAY_MS = 300
 // them directly here rather than changing api.ts's exported surface.
 const SESSION_KEY = 'ury_order_session'
 const CONTEXT_KEY = 'ury_order_context'
+const TOKEN_KEY = 'ury_order_token'
 
 function useQueryToken(): string | null {
   return tokenFromSearch(window.location.search)
@@ -62,20 +69,59 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequestResult | null>(null)
   const [payingOnline, setPayingOnline] = useState(false)
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null)
+  // the server could not give the total of the cart: the page says so instead of waiting for it
+  const [previewFailed, setPreviewFailed] = useState(false)
+  // why the ordering is over for this page (the table was closed ...): a notice replaces the menu and the cart
+  const [closed, setClosed] = useState<FailureKind | null>(null)
+  // the alcohol the guest is being asked about ("20歳以上ですか？"); it is not in the cart until the answer is yes
+  const [ageQuestion, setAgeQuestion] = useState<MenuItem | null>(null)
+  // asked once per session: after a yes the next alcohol goes straight in (the server keeps the answer too)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
 
   const loadOrder = useCallback(async (session: string) => {
     const current = await getCurrentOrder(session)
     setOrder(current)
   }, [])
 
+  // What a failed call means for the page. When the ordering is over (the table was closed or opened again
+  // for the next guests, the shift is closed, the order is paid, the session ran out) the cart is dropped
+  // and a notice replaces the menu: nothing more can be ordered from this page. Anything else is said in
+  // words of the page (no connection, a problem of the server), never in the raw text of the server.
+  const handleFailure = useCallback((err: unknown) => {
+    const kind = classifyFailure(err)
+    if (isOrderingOver(kind)) {
+      setCart({})
+      setCartPreview(null)
+      setPreviewFailed(false)
+      setAgeQuestion(null)
+      setError(null)
+      setClosed(kind)
+    } else {
+      if (kind === 'age') setAgeConfirmed(false) // the server has no answer of this guest: ask again
+      setError(t(`errors.${kind}`))
+    }
+    return kind
+  }, [])
+
   const init = useCallback(async () => {
     setLoading(true)
     try {
       let ctx: OrderingContext
+      // a session taken from the stored one (a reload) is tried first and replaced by a new one if the
+      // server no longer accepts it (the table was opened again, the session expired)
+      let resumed = false
+      const stored = getStoredContext()
       if (initialContext) {
         ctx = initialContext
       } else if (token) {
-        ctx = await bootstrap(token)
+        // The address keeps the code after a reload; a new session for every reload would forget the
+        // age answer and the order of the guest.
+        if (canResume(token, getStoredToken(), stored)) {
+          ctx = stored
+          resumed = true
+        } else {
+          ctx = await bootstrap(token)
+        }
       } else {
         const storedContext = getStoredContext()
         if (storedContext) {
@@ -86,22 +132,30 @@ export function useOrderingSession(initialContext?: OrderingContext) {
           // actually expires.
           ctx = storedContext
         } else {
-          setError('This link is missing an ordering code. Please rescan the QR code on your table.')
+          setError(t('errors.no_code'))
           setLoading(false)
           return
         }
       }
+      let menuResponse
+      try {
+        menuResponse = await getMenu(ctx.session)
+      } catch (err) {
+        if (!resumed || !token) throw err
+        ctx = await bootstrap(token)
+        menuResponse = await getMenu(ctx.session)
+      }
       setContext(ctx)
-      const menuResponse = await getMenu(ctx.session)
       setMenu(menuResponse.items.filter((item) => !item.disabled))
+      setAgeConfirmed(Boolean(menuResponse.age_confirmed))
       await loadOrder(ctx.session)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load the menu. Please rescan the QR code.')
+      handleFailure(err)
     } finally {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialContext, token])
+  }, [initialContext, token, handleFailure])
 
   useEffect(() => {
     init()
@@ -130,6 +184,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const resetSession = useCallback(() => {
     sessionStorage.removeItem(SESSION_KEY)
     sessionStorage.removeItem(CONTEXT_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
     setCart({})
     setOrder(null)
     setBillRequested(false)
@@ -137,12 +192,36 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     setPayingOnline(false)
     setSubmitting(false)
     setError(null)
+    setAgeConfirmed(false)
+    setClosed(null)
+    setPreviewFailed(false)
     setContext(null)
     setMenu([])
     init()
   }, [init])
 
+  // the first alcohol dish of a session is asked about; after a yes the next ones are not
   function addToCart(item: MenuItem) {
+    if (item.age_check && !ageConfirmed) {
+      setAgeQuestion(item)
+      return
+    }
+    setCart((prev) => addToCartLine(prev, item))
+  }
+
+  // 「はい」 is recorded on the session at once (a reload before the order is sent does not ask again);
+  // 「いいえ」 records nothing and the dish is not put in the cart
+  async function answerAge(yes: boolean) {
+    const item = ageQuestion
+    setAgeQuestion(null)
+    if (!yes || !item || !context) return
+    try {
+      await confirmAge(context.session)
+    } catch (err) {
+      handleFailure(err)
+      return
+    }
+    setAgeConfirmed(true)
     setCart((prev) => addToCartLine(prev, item))
   }
 
@@ -165,19 +244,34 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     if (!session) return
     if (cartKey === '[]') {
       setCartPreview(null)
+      setPreviewFailed(false)
       return
     }
     let current = true
     const timer = window.setTimeout(() => {
       previewCart(session, JSON.parse(cartKey))
-        .then((preview) => current && setCartPreview(preview))
-        .catch(() => current && setCartPreview(null))
+        .then((preview) => {
+          if (!current) return
+          setCartPreview(preview)
+          setPreviewFailed(false)
+        })
+        .catch((err) => {
+          if (!current) return
+          setCartPreview(null)
+          // when the ordering is over a notice takes the place of the page; otherwise the total area says
+          // that it has no total
+          if (isOrderingOver(classifyFailure(err))) {
+            handleFailure(err)
+            return
+          }
+          setPreviewFailed(true)
+        })
     }, PREVIEW_DELAY_MS)
     return () => {
       current = false
       window.clearTimeout(timer)
     }
-  }, [session, cartKey, order?.grand_total])
+  }, [session, cartKey, order?.grand_total, handleFailure])
   const cartTotal = cartPreview?.rounded_total ?? null
 
   async function submitCart() {
@@ -186,11 +280,12 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     setError(null)
     try {
       const payload = toPayload(cart, Boolean(context.capabilities.item_notes_enabled))
-      const updated = await addItems(context.session, payload)
+      // the answer is sent with an order that has alcohol; the server records it on the session
+      const updated = await addItems(context.session, payload, ageConfirmed && hasAgeCheckedDish(cart))
       setOrder(updated)
       setCart({})
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not place the order. Please try again.')
+      handleFailure(err)
     } finally {
       setSubmitting(false)
     }
@@ -202,7 +297,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
       await requestBill(context.session)
       setBillRequested(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not request the bill. Please ask staff for help.')
+      handleFailure(err)
     }
   }
 
@@ -217,9 +312,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
         window.location.href = result.payment_url
       }
     } catch (err) {
-      // Includes the graceful "online payment isn't set up yet" case from
-      // the backend — surfaced as a normal error message, not a crash.
-      setError(err instanceof Error ? err.message : 'Could not start online payment. Please pay at the counter.')
+      handleFailure(err)
     } finally {
       setPayingOnline(false)
     }
@@ -247,5 +340,9 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     cartCount,
     cartTotal,
     cartPreview,
+    previewFailed,
+    closed,
+    ageQuestion,
+    answerAge,
   }
 }

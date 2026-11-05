@@ -28,6 +28,8 @@
   "column_break_product_display",
   "show_item_descriptions",
   "enable_item_notes",
+  "age_check_section",
+  "age_check_item_groups",
   "billing_payment_section",
   "enable_request_bill",
   "enable_customer_payment",
@@ -226,11 +228,23 @@
    "no_copy": 1,
    "print_hide": 1,
    "report_hide": 1
+  },
+  {
+   "fieldname": "age_check_section",
+   "fieldtype": "Section Break",
+   "label": "Age Check"
+  },
+  {
+   "description": "Dishes in these item groups (and the groups below them) ask the guest \"Are you 20 or older?\" before they go in the cart. New profiles start with the alcohol group of the setup wizard.",
+   "fieldname": "age_check_item_groups",
+   "fieldtype": "Table",
+   "label": "Age Check Item Groups",
+   "options": "URY Age Check Item Group"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-05 10:00:00.000000",
+ "modified": "2026-11-05 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",

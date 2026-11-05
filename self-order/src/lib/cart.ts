@@ -44,3 +44,8 @@ export function toPayload(
 export function toPreviewPayload(cart: Cart): { item: string; qty: number }[] {
   return Object.values(cart).map((entry) => ({ item: entry.item.item, qty: entry.qty }))
 }
+
+/** The cart has a dish that asks the guest's age (alcohol): the order is sent with the guest's answer "yes". */
+export function hasAgeCheckedDish(cart: Cart): boolean {
+  return Object.values(cart).some((entry) => entry.item.age_check)
+}

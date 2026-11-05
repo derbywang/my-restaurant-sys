@@ -35,10 +35,13 @@ ITEM_TAX_TEMPLATES = {
 # Tax is set only on these three parent groups; kitchen routing keeps using the
 # groups underneath them. Every row has a valid_from (see _get_item_tax_template:
 # rows without a date are ignored once any dated row is in force).
-PARENT_GROUPS = ("食品", "酒類", "非食品")
+# 酒類 is also the group whose dishes ask the guests for their age when they order themselves
+# (URY Self Ordering Profile.age_check_item_groups starts with it).
+ALCOHOL_GROUP = "酒類"
+PARENT_GROUPS = ("食品", ALCOHOL_GROUP, "非食品")
 GROUP_TAXES = {
     "食品": (("店内飲食", "標準10%"), ("テイクアウト", "軽減8%")),
-    "酒類": (("店内飲食", "標準10%"), ("テイクアウト", "標準10%")),
+    ALCOHOL_GROUP: (("店内飲食", "標準10%"), ("テイクアウト", "標準10%")),
     "非食品": (("店内飲食", "標準10%"), ("テイクアウト", "標準10%")),
 }
 
@@ -50,7 +53,7 @@ LEGACY_TEMPLATE_TITLES = ("Japan Tax 10%", "Japan Tax 8%")
 # drinks are 食品 (only alcohol is 酒類); 非食品 is merchandise, packaging and the like.
 MENU_KIND_GROUPS = {
     "食品": "料理・ドリンク",
-    "酒類": "お酒",
+    ALCOHOL_GROUP: "お酒",
     "非食品": "物販・その他",
 }
 

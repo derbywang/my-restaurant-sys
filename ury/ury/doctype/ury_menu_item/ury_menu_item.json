@@ -12,6 +12,7 @@
   "rate",
   "special_dish",
   "disabled",
+  "self_order_allowed",
   "course_icon",
   "course"
  ],
@@ -51,6 +52,14 @@
    "label": "Disabled"
   },
   {
+   "default": "1",
+   "description": "Guests may order this dish themselves (QR code, table tablet). Untick for dishes that must be ordered through the staff.",
+   "fieldname": "self_order_allowed",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Self Order Allowed"
+  },
+  {
    "fieldname": "course",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -67,7 +76,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-07-17 12:45:47.721827",
+ "modified": "2026-11-05 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Menu Item",

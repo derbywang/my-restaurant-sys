@@ -1,3 +1,5 @@
+import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ClosedNotice from '../components/ClosedNotice'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
 import { useIdleReset } from '../hooks/useIdleReset'
@@ -41,6 +43,10 @@ function TabletLayout({ initialContext }: LayoutProps) {
     cartCount,
     cartTotal,
     cartPreview,
+    previewFailed,
+    closed,
+    ageQuestion,
+    answerAge,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -90,6 +96,8 @@ function TabletLayout({ initialContext }: LayoutProps) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
+      {closed && <ClosedNotice kind={closed} />}
+      <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
       <header className="flex items-center justify-between border-b bg-background/95 px-6 py-4">
         <h1 className="text-xl font-semibold">
           {context?.table ? `Table ${context.table}` : 'Order for Pickup'}
@@ -126,6 +134,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
           cartCount={cartCount}
           cartTotal={cartTotal}
           cartPreview={cartPreview}
+          previewFailed={previewFailed}
           submitting={submitting}
           billRequested={billRequested}
           payingOnline={payingOnline}

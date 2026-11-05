@@ -30,6 +30,8 @@ export interface MenuItem {
   item_name: string
   /** The price of one with the tax, worked out by the server; the price without tax is never sent. */
   price_incl_tax: number
+  /** The guest is asked "20歳以上ですか？" before this dish goes in the cart (alcohol). */
+  age_check: boolean
   special_dish: number
   disabled: number
   item_image: string | null
@@ -38,6 +40,8 @@ export interface MenuItem {
 }
 
 export interface MenuResponse {
+  /** The guest already answered "20歳以上ですか？" with yes in this session. */
+  age_confirmed?: boolean
   items: MenuItem[]
   modified_time: string | null
   name: string | null
@@ -89,6 +93,12 @@ export interface OrderStatus {
 // round trip the backend doesn't offer for an already-open session).
 const SESSION_KEY = 'ury_order_session'
 const CONTEXT_KEY = 'ury_order_context'
+// the ordering code (from the QR link) the stored session was made from; see lib/resume.ts
+const TOKEN_KEY = 'ury_order_token'
+
+export function getStoredToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY)
+}
 
 export function getStoredSession(): string | null {
   return sessionStorage.getItem(SESSION_KEY)
@@ -126,6 +136,7 @@ interface FrappeResponse<T> {
 export async function bootstrap(token: string): Promise<OrderingContext> {
   const response = await call.get<FrappeResponse<OrderingContext>>(`${M}.get_ordering_context`, { token })
   storeContext(response.message)
+  sessionStorage.setItem(TOKEN_KEY, token)
   return response.message
 }
 
@@ -175,13 +186,20 @@ export async function previewCart(
   return response.message
 }
 
+/** The guest answered 「はい」 to 「20歳以上ですか？」: the server keeps it on the session, so a reload does not ask again. */
+export async function confirmAge(session: string): Promise<void> {
+  await call.post<FrappeResponse<{ age_confirmed: boolean }>>(`${M}.confirm_age`, { session })
+}
+
 export async function addItems(
   session: string,
   items: { item: string; qty: number; comment?: string }[],
+  ageConfirmed = false,
 ): Promise<CustomerOrder> {
   const response = await call.post<FrappeResponse<CustomerOrder>>(`${M}.add_customer_items`, {
     session,
     items: JSON.stringify(items),
+    age_confirmed: ageConfirmed ? 1 : 0,
   })
   return response.message
 }

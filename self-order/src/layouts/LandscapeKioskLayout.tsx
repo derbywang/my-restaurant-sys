@@ -1,3 +1,5 @@
+import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ClosedNotice from '../components/ClosedNotice'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
 import { useIdleReset } from '../hooks/useIdleReset'
@@ -43,6 +45,10 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
     cartCount,
     cartTotal,
     cartPreview,
+    previewFailed,
+    closed,
+    ageQuestion,
+    answerAge,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -92,6 +98,8 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-lg">
+      {closed && <ClosedNotice kind={closed} />}
+      <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
       <header className="flex items-center justify-between border-b bg-background/95 px-10 py-6">
         <h1 className="text-3xl font-semibold">
           {context?.table ? `Table ${context.table}` : 'Order for Pickup'}
@@ -128,6 +136,7 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
           cartCount={cartCount}
           cartTotal={cartTotal}
           cartPreview={cartPreview}
+          previewFailed={previewFailed}
           submitting={submitting}
           billRequested={billRequested}
           payingOnline={payingOnline}

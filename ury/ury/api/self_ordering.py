@@ -325,7 +325,7 @@ def _resolve_session(session_token, require_open=True):
     """The session of a token. `require_open`: the branch must be open and, for a table, the table too
     (a guest may still read the order and its status after the table has been closed)."""
     if not session_token:
-        frappe.throw(_("Missing ordering session"), frappe.PermissionError)
+        _fail("Session expired", _("Missing ordering session"), frappe.PermissionError)
 
     token_hash = hashlib.sha256(session_token.encode()).hexdigest()
     session_name = frappe.db.get_value(
@@ -334,14 +334,14 @@ def _resolve_session(session_token, require_open=True):
         "name",
     )
     if not session_name:
-        frappe.throw(_("Ordering session expired or invalid. Please rescan the QR code."), frappe.PermissionError)
+        _fail("Session expired", _("Ordering session expired or invalid. Please rescan the QR code."), frappe.PermissionError)
 
     with _elevated():
         session = frappe.get_doc("URY Ordering Session", session_name)
         if session.expires_at and session.expires_at < now_datetime():
             session.status = "Expired"
             session.save(ignore_permissions=True)
-            frappe.throw(_("Ordering session expired. Please rescan the QR code."), frappe.PermissionError)
+            _fail("Session expired", _("Ordering session expired. Please rescan the QR code."), frappe.PermissionError)
 
         if require_open:
             profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
@@ -480,13 +480,9 @@ def get_customer_menu(session):
     profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
 
     with _elevated():
-        menu = resolve_restaurant_menu(
-            branch=profile.branch,
-            room=None,
-            order_type=order_type,
-            cashier=False,
-        )
+        menu = _customer_menu(profile, order_type)
         prices = _prices_incl_tax([row["item"] for row in menu["items"]], profile, order_type)
+        age_check = _age_checked_items(profile, [row["item"] for row in menu["items"]])
 
     # resolve_restaurant_menu() already returns a sanitized item list
     # (item/item_name/course/image) — no raw Item doc fields leak here. The guests are shown the price
@@ -495,8 +491,48 @@ def get_customer_menu(session):
     items = []
     for row in menu["items"]:
         if row["item"] in prices:
-            items.append({**{k: v for k, v in row.items() if k != "rate"}, "price_incl_tax": prices[row["item"]]})
-    return {**menu, "items": items}
+            items.append({
+                **{k: v for k, v in row.items() if k != "rate"},
+                "price_incl_tax": prices[row["item"]],
+                "age_check": row["item"] in age_check,
+            })
+    # `age_confirmed`: the guest already answered the age question in this session (a reload keeps it)
+    return {**menu, "items": items, "age_confirmed": bool(session.get("age_confirmed"))}
+
+
+def _customer_menu(profile, order_type):
+    """The menu the guests are shown: the active menu of the branch without the dishes that are not ticked
+    「セルフオーダー可」. Must run elevated."""
+    menu = resolve_restaurant_menu(branch=profile.branch, room=None, order_type=order_type, cashier=False)
+    # the column is new: until a site is migrated every dish is allowed
+    if frappe.db.has_column("URY Menu Item", "self_order_allowed"):
+        refused = set(
+            frappe.get_all(
+                "URY Menu Item", filters={"parent": menu.get("name"), "self_order_allowed": 0}, pluck="item"
+            )
+        )
+        menu = {**menu, "items": [row for row in menu["items"] if row["item"] not in refused]}
+    return menu
+
+
+def _age_checked_items(profile, item_codes):
+    """The dishes among `item_codes` that ask the guest's age: those in an item group of the profile's
+    age check list or in a group below one of them. Must run elevated."""
+    if not item_codes or not frappe.db.table_exists("URY Age Check Item Group"):
+        return set()
+    groups = frappe.get_all(
+        "URY Age Check Item Group", filters={"parent": profile.name, "parenttype": profile.doctype}, pluck="item_group"
+    )
+    if not groups:
+        return set()
+    # a group and the groups below it, by the nested set of the item group tree
+    bounds = frappe.get_all("Item Group", filters={"name": ["in", groups]}, fields=["lft", "rgt"])
+    in_tree = {
+        name
+        for lft, rgt in ((b.lft, b.rgt) for b in bounds)
+        for name in frappe.get_all("Item Group", filters={"lft": [">=", lft], "rgt": ["<=", rgt]}, pluck="name")
+    }
+    return set(frappe.get_all("Item", filters={"name": ["in", list(item_codes)], "item_group": ["in", list(in_tree)]}, pluck="name"))
 
 
 def _prices_incl_tax(item_codes, profile, order_type):
@@ -525,6 +561,9 @@ def get_customer_product(session, item_code):
     profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
 
     with _elevated():
+        order_type = "Dine In" if session.table else "Take Away"
+        if item_code not in {row["item"] for row in _customer_menu(profile, order_type)["items"]}:
+            frappe.throw(_("Item not found"), frappe.DoesNotExistError)
         item = frappe.db.get_value(
             "Item", item_code,
             ["item_code", "item_name", "description", "image"],
@@ -638,6 +677,11 @@ def get_customer_order(session):
     return order
 
 
+def _is_yes(value):
+    """The browser sends the answer as text ("1"), a script may send a number or true."""
+    return str(value).strip().lower() in ("1", "true", "yes")
+
+
 def _clean_items(session, profile, items, allow_empty=False):
     """The dishes of a request as the order takes them: only dishes of the menu the guests are shown,
     a positive quantity, the note cut to what the field takes (and dropped where notes are off)."""
@@ -651,15 +695,7 @@ def _clean_items(session, profile, items, allow_empty=False):
         frappe.throw(_("Too many items in a single request"), frappe.ValidationError)
 
     with _elevated():
-        menu_names = {
-            m.get("item")
-            for m in resolve_restaurant_menu(
-                branch=profile.branch,
-                room=None,
-                order_type="Dine In" if session.table else "Take Away",
-                cashier=False,
-            )["items"]
-        }
+        menu_names = {m.get("item") for m in _customer_menu(profile, "Dine In" if session.table else "Take Away")["items"]}
 
     clean_items = []
     for raw in items:
@@ -679,6 +715,17 @@ def _clean_items(session, profile, items, allow_empty=False):
 
         clean_items.append({"item": item_code, "item_name": item_code, "qty": qty, "comment": comment})
     return clean_items
+
+
+@frappe.whitelist(allow_guest=True)
+def confirm_age(session):
+    """The guest answered "20歳以上ですか？" with yes: record it on this session now, so that a reload of the
+    page before the order is sent does not ask again. It does one thing: sets the answer of the guest's own
+    session to yes. The order is still checked by `add_customer_items`."""
+    session = _resolve_session(session)
+    with _elevated():
+        frappe.db.set_value("URY Ordering Session", session.name, "age_confirmed", 1, update_modified=False)
+    return {"age_confirmed": True}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -732,7 +779,7 @@ def preview_customer_cart(session, items):
 
 
 @frappe.whitelist(allow_guest=True)
-def add_customer_items(session, items):
+def add_customer_items(session, items, age_confirmed=0):
     """Append-only customer order mutation. `items` is a list of
     {"item": <item_code>, "qty": <number>, "comment": <optional str>} —
     same shape sync_order()/price_items_for_invoice() already expect.
@@ -773,6 +820,19 @@ def add_customer_items(session, items):
             )
 
     clean_items = _clean_items(session, profile, items)
+
+    # Alcohol is only taken from a session in which the guest answered "20歳以上ですか？" with yes. The browser
+    # asks the first time in a session and sends the answer with that order; the server records it on the
+    # session and does not rely on the browser for the next ones. A new session asks again.
+    with _elevated():
+        asks_age = _age_checked_items(profile, [row["item"] for row in clean_items])
+    if asks_age and not session.get("age_confirmed"):
+        if not _is_yes(age_confirmed):
+            _fail("Age confirmation required", _("Please confirm that you are 20 or older to order alcohol."))
+        if frappe.db.has_column("URY Ordering Session", "age_confirmed"):  # the column is new
+            frappe.db.set_value("URY Ordering Session", session.name, "age_confirmed", 1, update_modified=False)
+            # the session is saved again below (its order): do not write the old value back over the answer
+            session.age_confirmed = 1
 
     order_type = "Dine In" if session.table else "Take Away"
 

@@ -323,9 +323,9 @@
 
 **年龄确认**：
 
-- Self Ordering Profile 增加子表 `age_check_item_groups`（Link Item Group），默认一行「酒類」。判断时包含下级组（真实站点上「酒類」下面有「酒（テスト」等下级组，菜品放在下级组里），用嵌套集合 `lft/rgt` 判断。
-- `get_customer_menu` 给每道菜返回 `age_check`（布尔）。顾客点「加入购物车」时，`age_check` 的菜先弹出对话框「20歳以上ですか？」，按钮「はい」「いいえ」：选「はい」加入购物车，选「いいえ」关闭对话框、**不加入**。对话框、按钮的文字都用翻译函数输出（3.12）。
-- 服务器也要把关（不能只靠前端）：`add_customer_items` 对 `age_check` 的菜要求请求里带 `age_confirmed = 1`，没有就拒绝，`title = "Age confirmation required"`。每次加入这类菜都弹对话框（不记住上一次的回答，不同的人可能会使用同一台平板或自助机）。
+- Self Ordering Profile 增加子表 `age_check_item_groups`（Link Item Group，子 DocType「URY Age Check Item Group」），新建 Profile 时默认一行向导建的酒类组（`ury/setup/jp_tax.py` 的 `ALCOHOL_GROUP`，不在别处写死名称）；已有的 Profile 由补丁 `age_check_item_groups` 补上（只补子表为空的）。判断时包含下级组（真实站点上「酒類」下面有「酒（テスト」等下级组，菜品放在下级组里），用嵌套集合 `lft/rgt` 判断。
+- `get_customer_menu` 给每道菜返回 `age_check`（布尔），并返回 `age_confirmed`（这个会话是否已经回答过「はい」，刷新页面后仍然知道）。**每个会话问一次**（2026-11 门店决定）：会话里第一次加酒类时弹出对话框「20歳以上ですか？」，按钮「はい」「いいえ」；选「はい」加入购物车，并且这个会话之后再点酒类、按「+」都不再问；选「いいえ」关闭对话框、**不加入、不记录**，下次点酒类还要问。对话框、按钮的文字都用翻译函数输出（3.12）。
+- 服务器记录并把关（不能只靠前端）：URY Ordering Session 增加 `age_confirmed`（Check）。`add_customer_items(session, items, age_confirmed=0)` 收到含 `age_check` 菜的请求时：会话已有记录就通过；没有记录则要求请求里带 `age_confirmed = 1`（同时记到会话上），没有就拒绝，`title = "Age confirmation required"`，什么都不保存。新会话（桌台重新开启、重新扫码、旧会话失效）重新问。同一台平板上换了客人但会话没变时不会再问，这是门店接受的取舍。
 - 这只是「自己申报」的确认，不核对证件。买酒时店员送酒的环节本来就能看到客人（门店知道这一点）。
 - 三种形式（二维码、平板、自助机）都一样。
 

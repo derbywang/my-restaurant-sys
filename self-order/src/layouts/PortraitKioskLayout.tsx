@@ -1,3 +1,5 @@
+import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ClosedNotice from '../components/ClosedNotice'
 import { useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '@ury/core'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
@@ -6,6 +8,7 @@ import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
+import { mergeOrderLines } from '../lib/order-lines'
 import type { MenuItem, OrderingContext } from '../lib/api'
 
 const IDLE_WARN_MS = 60000
@@ -55,6 +58,10 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     cartCount,
     cartTotal,
     cartPreview,
+    previewFailed,
+    closed,
+    ageQuestion,
+    answerAge,
   } = useOrderingSession(initialContext)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY)
@@ -123,6 +130,8 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
 
   return (
     <div className="flex min-h-screen flex-col pb-24">
+      {closed && <ClosedNotice kind={closed} />}
+      <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
       <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/95 px-6 py-4 backdrop-blur">
         <h1 className="text-2xl font-semibold">
           {context?.table ? `Table ${context.table}` : 'Order for Pickup'}
@@ -143,9 +152,12 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
         <section className="mx-6 mt-4 rounded-lg border p-4">
           <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>
           <ul className="space-y-1 text-base">
-            {order.items.map((row, idx) => (
+            {mergeOrderLines(order.items).map((row, idx) => (
               <li key={`${row.item_code}-${idx}`} className="flex justify-between">
-                <span>{row.item_name} × {row.qty}</span>
+                <span>
+                  {row.item_name} × {row.qty}
+                  {row.comment && <span className="ml-1 text-xs text-muted-foreground">（{row.comment}）</span>}
+                </span>
                 <span className="tabular-nums">{formatCurrency(row.amount_incl_tax)}</span>
               </li>
             ))}
@@ -255,7 +267,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
           )}
 
           <div className="px-4 pt-3">
-            <CartTotals preview={cartPreview} />
+            <CartTotals preview={cartPreview} failed={previewFailed} />
           </div>
 
           <div className="flex items-center gap-3 p-4">
@@ -267,7 +279,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
               <span className="text-base font-semibold">
                 {cartCount} item{cartCount > 1 ? 's' : ''}
               </span>
-              <span className="text-base font-semibold tabular-nums">{cartTotalText(cartTotal)}</span>
+              <span className="text-base font-semibold tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
             </button>
             <button
               onClick={submitCart}

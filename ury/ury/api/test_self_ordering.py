@@ -81,9 +81,14 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
     def setUp(self):
         # The answer shows each line with its tax (checked against real orders in
         # test_self_ordering_table); here the rows are mocks without prices.
-        patcher = patch(f"{MOD}.tax_of", return_value=0)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for target, value in (
+            (f"{MOD}.tax_of", 0),
+            (f"{MOD}._age_checked_items", set()),
+            (f"{MOD}.frappe.db.has_column", False),  # the real menu and session tables are not used here
+        ):
+            patcher = patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def _session_doc(self, table="Table 7", invoice=None, source="QR Table"):
         session = MagicMock()

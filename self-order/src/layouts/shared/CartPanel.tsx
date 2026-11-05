@@ -4,6 +4,7 @@ import type { CartEntry } from '../../lib/cart'
 import CartNote from '../../components/CartNote'
 import CartTotals, { cartTotalText } from '../../components/CartTotals'
 import { t } from '../../i18n'
+import { mergeOrderLines } from '../../lib/order-lines'
 
 interface CartPanelProps {
   context: OrderingContext | null
@@ -12,6 +13,7 @@ interface CartPanelProps {
   cartCount: number
   cartTotal: number | null
   cartPreview: CartPreview | null
+  previewFailed: boolean
   submitting: boolean
   billRequested: boolean
   payingOnline: boolean
@@ -36,6 +38,7 @@ function CartPanel({
   cartCount,
   cartTotal,
   cartPreview,
+  previewFailed,
   submitting,
   billRequested,
   payingOnline,
@@ -54,10 +57,11 @@ function CartPanel({
           <section className="mb-4 rounded-lg border p-3">
             <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>
             <ul className="space-y-1 text-sm">
-              {order.items.map((row, idx) => (
+              {mergeOrderLines(order.items).map((row, idx) => (
                 <li key={`${row.item_code}-${idx}`} className="flex justify-between">
                   <span>
                     {row.item_name} × {row.qty}
+                    {row.comment && <span className="ml-1 text-xs text-muted-foreground">（{row.comment}）</span>}
                   </span>
                   <span className="tabular-nums">{formatCurrency(row.amount_incl_tax)}</span>
                 </li>
@@ -113,9 +117,9 @@ function CartPanel({
           <span>
             {cartCount} item{cartCount !== 1 ? 's' : ''}
           </span>
-          <span className="tabular-nums">{cartTotalText(cartTotal)}</span>
+          <span className="tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
         </div>
-        <CartTotals preview={cartPreview} />
+        <CartTotals preview={cartPreview} failed={previewFailed} />
         <button
           onClick={onSubmit}
           disabled={submitting || cartCount === 0}

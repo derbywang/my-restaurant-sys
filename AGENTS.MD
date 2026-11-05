@@ -184,7 +184,7 @@ All frontends are served as Frappe web pages. Route rules in `hooks.py` (`websit
 
 ### QZ Tray
 - Thermal printing uses QZ Tray (desktop app). The POS sends signed print jobs.
-- Signing keys: `public/js/sign-message.js` + `jsrsasign-all-min.js`
+- Signing: the React POS asks the server (`ury_print.qz_certificate_text`, `signature_promise`); the legacy Desk scripts use `public/js/sign-message.js` + `jsrsasign-all-min.js`
 - QZ host is configured per POS Profile (`qz_host` field).
 
 ---
@@ -200,7 +200,7 @@ All frontends are served as Frappe web pages. Route rules in `hooks.py` (`websit
 
 Shared code for the React apps lives in `packages/`:
 - `@ury/ui` — components (`import { Button, Dialog, ... } from '@ury/ui'`), theme tokens (`@import '@ury/ui/styles/theme.css'`), Tailwind preset (`presets: [preset]` from `@ury/ui/tailwind-preset`). Consumer Tailwind configs must include `"../packages/ui/src/**/*.{ts,tsx}"` in `content`.
-- `@ury/core` — frappe client (`call`/`db`/`auth`), auth/role helpers, `storage`, formatting, QZ print transport. Printing requires `initPrinting({ signKey })` at app startup; the signing key stays in the consuming app (never in `packages/`).
+- `@ury/core` — frappe client (`call`/`db`/`auth`), auth/role helpers, `storage`, formatting, QZ print transport. QZ messages are signed by the server (`ury_print.signature_promise`); the private key is under `sites/<site>/private/qz/`, never in the repo or the browser.
 
 Build commands:
 ```bash

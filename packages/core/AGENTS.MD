@@ -6,7 +6,7 @@
 
 - **Workspace package** (yarn classic workspaces, declared at repo root). Consumed as `"@ury/core": "*"`.
 - **Source-linked**: `package.json` `exports` points directly at `./src/index.ts`. There is no build step — the consuming app's Vite/TypeScript (`moduleResolution: "bundler"`) compiles the package source. Edits are picked up instantly by `vite dev`.
-- **Peer dependencies**: `frappe-js-sdk`, `axios`, `qz-tray`, `jsrsasign` — the consuming app must declare them (see §4).
+- **Peer dependencies**: `frappe-js-sdk`, `axios`, `qz-tray` (and `jsrsasign`, no longer used by the QZ code) — the consuming app must declare them (see §4).
 - Typecheck standalone with `yarn workspace @ury/core typecheck`.
 
 The React component counterpart is `@ury/ui` (`packages/ui/`): components, theme tokens, Tailwind preset. `@ury/ui` does **not** depend on `@ury/core`.
@@ -27,7 +27,8 @@ packages/core/src/
 ├── currency.ts         ← getCurrency(), setCurrency()
 ├── format.ts           ← formatCurrency(), formatCompactCurrency(), formatInvoiceTime()
 └── print/
-    └── qz.ts           ← initPrinting(), loadQzPrinter(), printWithQz(), disconnectQzPrinter()
+    ├── qz.ts           ← loadQzPrinter(), printWithQz(), disconnectQzPrinter()
+    └── qz-security.ts  ← certificate / signature promises (server-side signing)
 ```
 
 ## 3. Features and usage
@@ -89,22 +90,15 @@ export const initI18n = (lang?: string) =>
 ### QZ-Tray printing (`print/qz.ts`)
 Transport + signing mechanics only; domain print orchestration (e.g. pos's `printOrder`) stays in the app.
 
-- `initPrinting({ signKey })` — **must be called once at app startup before any print**. The RSA signing key is injected; it lives in the consuming app (e.g. `pos/privateKey.ts`) and must NEVER be moved into `packages/`. `printWithQz` throws a clear error if used uninitialized.
-- `printWithQz(host, html)` — signs (SHA512withRSA via jsrsasign), connects if needed, prints HTML to the default printer.
-- `loadQzPrinter(host)` / `disconnectQzPrinter()` — explicit websocket lifecycle. The certificate is fetched from `/assets/ury/files/cert.pem`.
-
-```ts
-// main.tsx
-import { initPrinting } from '@ury/core';
-import { privateKey } from '../privateKey';
-initPrinting({ signKey: privateKey });
-```
+- No key in the browser: QZ Tray asks the page for a certificate and a signature; both come from the server (`ury.ury.api.ury_print.qz_certificate_text` and `signature_promise`; key and certificate live under `sites/<site>/private/qz/`, see the deployment checklist in `docs/design/self-order-design.md` 9.5). `print/qz-security.ts` holds the pure helpers (tested in `qz.spec.ts`).
+- `printWithQz(host, html)` — connects if needed (security configured first), prints HTML to the default printer.
+- `loadQzPrinter(host)` / `disconnectQzPrinter()` — explicit websocket lifecycle.
 
 ## 4. Rules for agents
 
 - **Import only from the barrel** `'@ury/core'`, never deep paths into `src/`.
 - **Keep it framework-agnostic**: no React, no JSX, no app state, no domain API wrappers (order/table/invoice APIs belong in the app, e.g. `pos/src/lib/`).
 - **Peer deps**: anything imported at module level here must be a `peerDependency` (with a matching `devDependency` for standalone typecheck), and every consuming app must declare it — the barrel pulls all modules, so even a non-printing app currently needs `qz-tray`/`jsrsasign`/`axios` at build time. If that becomes painful, split subpath exports (e.g. `@ury/core/print`) rather than dropping the peers.
-- **No secrets**: keys, certs, and credentials stay in consuming apps and are injected (the `initPrinting` pattern).
+- **No secrets**: keys, certs, and credentials never go into the browser bundle or `packages/`; QZ signing is done by the server.
 - **Don't rename exports** without updating all consumers (`pos/`, `frontend/`) in the same change; run `yarn workspace @ury/core typecheck` plus each app's `tsc -b` and `yarn build`.
 - `import.meta.env` usage is confined to `frappe/client.ts` — keep it that way (it ties the file to Vite consumers; the factory's explicit `baseUrl` parameter is the escape hatch).

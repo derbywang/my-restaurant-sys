@@ -293,7 +293,7 @@ No plural support: use `_one` / `_other` key pairs and pick by count (see `dashb
 
 ### What NOT to break
 - **`@ury/core` exports (`call`, `db`, `auth`, …)** — every API file depends on them; do not rename or re-wrap. Shared-package changes affect `frontend/` too (see `../packages/core/AGENTS.MD`).
-- **`main.tsx` `initPrinting({ signKey: privateKey })`** — must run before any QZ print; the signing key stays in `pos/privateKey`, never in `packages/`.
+- **QZ signing is done by the server** (`ury_print.signature_promise`); `main.tsx` no longer initialises printing and the browser has no key.
 - **`pos-store.ts` `resetOrderState()`** — called after every successful order submit/payment; must reset all transient order fields.
 - **`main.tsx` init sequence** — `initI18n()` must resolve before `ReactDOM.render()`.
 - **`AuthGuard`** — do not bypass or remove; it protects the entire app.

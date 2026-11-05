@@ -19,3 +19,7 @@ ury/www/urypos.html
 ury/www/mosaic.html
 build
 
+# QZ Tray keys and certificates never go into the repo (they live under sites/<site>/private/qz/)
+*.pem
+override.crt
+digital-certificate.txt

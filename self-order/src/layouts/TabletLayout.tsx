@@ -40,10 +40,11 @@ function TabletLayout({ initialContext }: LayoutProps) {
     cartItems,
     cartCount,
     cartTotal,
+    cartPreview,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
-  const idleResetTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const idleResetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   function handleReset() {
     if (window.confirm('Start a new order? Current cart will be cleared.')) {
@@ -124,6 +125,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
           cartItems={cartItems}
           cartCount={cartCount}
           cartTotal={cartTotal}
+          cartPreview={cartPreview}
           submitting={submitting}
           billRequested={billRequested}
           payingOnline={payingOnline}

@@ -1,4 +1,5 @@
 import { formatCurrency } from '@ury/core'
+import { t } from '../../i18n'
 import type { MenuItem, OrderingCapabilities } from '../../lib/api'
 
 type Cart = Record<string, { item: MenuItem; qty: number }>
@@ -34,7 +35,7 @@ function MenuGrid({ menu, cart, capabilities, onAdd, gridClassName, cardClassNam
           )}
           <div className="flex flex-1 flex-col gap-1 p-3">
             <div className="font-medium">{item.item_name}</div>
-            <div className="text-muted-foreground tabular-nums">{formatCurrency(item.rate)}</div>
+            <div className="text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
             {cart[item.item] && (
               <div className="mt-1 text-sm font-semibold text-primary">In cart: {cart[item.item].qty}</div>
             )}

@@ -78,6 +78,13 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
     a client-supplied rate/tax/cost-center, and must never replace existing
     invoice.items wholesale."""
 
+    def setUp(self):
+        # The answer shows each line with its tax (checked against real orders in
+        # test_self_ordering_table); here the rows are mocks without prices.
+        patcher = patch(f"{MOD}.tax_of", return_value=0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _session_doc(self, table="Table 7", invoice=None, source="QR Table"):
         session = MagicMock()
         session.table = table

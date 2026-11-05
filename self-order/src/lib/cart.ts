@@ -39,3 +39,8 @@ export function toPayload(
     return note ? { item: entry.item.item, qty: entry.qty, comment: note } : { item: entry.item.item, qty: entry.qty }
   })
 }
+
+/** What `preview_customer_cart` takes to give the total with tax: the dishes and how many, the server does the rest. */
+export function toPreviewPayload(cart: Cart): { item: string; qty: number }[] {
+  return Object.values(cart).map((entry) => ({ item: entry.item.item, qty: entry.qty }))
+}

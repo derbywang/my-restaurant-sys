@@ -6,14 +6,26 @@ import {
   getCurrentOrder,
   getMenu,
   getStoredContext,
+  previewCart,
   requestBill,
+  type CartPreview,
   type CustomerOrder,
   type MenuItem,
   type OrderingContext,
   type PaymentRequestResult,
 } from '../lib/api'
 import { tokenFromSearch } from '../lib/qr-link'
-import { addToCart as addToCartLine, decrementCart as decrementCartLine, setNote, toPayload, type Cart } from '../lib/cart'
+import {
+  addToCart as addToCartLine,
+  decrementCart as decrementCartLine,
+  setNote,
+  toPayload,
+  toPreviewPayload,
+  type Cart,
+} from '../lib/cart'
+
+/** The total is asked of the server this long after the last change of the cart. */
+const PREVIEW_DELAY_MS = 300
 
 // Same keys api.ts uses internally for sessionStorage persistence. api.ts
 // doesn't expose a clear function (only get/store), so resetSession clears
@@ -49,6 +61,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const [billRequested, setBillRequested] = useState(false)
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequestResult | null>(null)
   const [payingOnline, setPayingOnline] = useState(false)
+  const [cartPreview, setCartPreview] = useState<CartPreview | null>(null)
 
   const loadOrder = useCallback(async (session: string) => {
     const current = await getCurrentOrder(session)
@@ -143,7 +156,29 @@ export function useOrderingSession(initialContext?: OrderingContext) {
 
   const cartItems = Object.values(cart)
   const cartCount = cartItems.reduce((sum, entry) => sum + entry.qty, 0)
-  const cartTotal = cartItems.reduce((sum, entry) => sum + entry.qty * entry.item.rate, 0)
+
+  // The total with the tax is the server's: the prices are not added up here. It is asked for when the cart
+  // changes (and after an order is placed), and the last answer stays on the screen until the next one comes.
+  const session = context?.session
+  const cartKey = JSON.stringify(toPreviewPayload(cart))
+  useEffect(() => {
+    if (!session) return
+    if (cartKey === '[]') {
+      setCartPreview(null)
+      return
+    }
+    let current = true
+    const timer = window.setTimeout(() => {
+      previewCart(session, JSON.parse(cartKey))
+        .then((preview) => current && setCartPreview(preview))
+        .catch(() => current && setCartPreview(null))
+    }, PREVIEW_DELAY_MS)
+    return () => {
+      current = false
+      window.clearTimeout(timer)
+    }
+  }, [session, cartKey, order?.grand_total])
+  const cartTotal = cartPreview?.rounded_total ?? null
 
   async function submitCart() {
     if (!context || cartItems.length === 0) return
@@ -211,5 +246,6 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     cartItems,
     cartCount,
     cartTotal,
+    cartPreview,
   }
 }

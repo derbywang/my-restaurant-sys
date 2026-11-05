@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useIdleReset } from '../hooks/useIdleReset'
 import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
+import CartTotals, { cartTotalText } from '../components/CartTotals'
+import { t } from '../i18n'
 import type { MenuItem, OrderingContext } from '../lib/api'
 
 const IDLE_WARN_MS = 60000
@@ -52,12 +54,13 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     cartItems,
     cartCount,
     cartTotal,
+    cartPreview,
   } = useOrderingSession(initialContext)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY)
   const [cartExpanded, setCartExpanded] = useState(false)
   const [showIdleWarning, setShowIdleWarning] = useState(false)
-  const idleResetTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const idleResetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   function handleReset() {
     if (window.confirm('Start a new order? Current cart will be cleared.')) {
@@ -138,17 +141,17 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
 
       {order && order.items.length > 0 && (
         <section className="mx-6 mt-4 rounded-lg border p-4">
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Your order so far</h2>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>
           <ul className="space-y-1 text-base">
             {order.items.map((row, idx) => (
               <li key={`${row.item_code}-${idx}`} className="flex justify-between">
                 <span>{row.item_name} × {row.qty}</span>
-                <span className="tabular-nums">{formatCurrency(row.amount)}</span>
+                <span className="tabular-nums">{formatCurrency(row.amount_incl_tax)}</span>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex justify-between border-t pt-2 text-base font-semibold">
-            <span>Total</span>
+            <span>{t('cart.total_incl_tax')}</span>
             <span className="tabular-nums">{formatCurrency(order.grand_total)}</span>
           </div>
           {context?.capabilities.customer_payment_enabled && !order.billed && (
@@ -251,6 +254,10 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
             </div>
           )}
 
+          <div className="px-4 pt-3">
+            <CartTotals preview={cartPreview} />
+          </div>
+
           <div className="flex items-center gap-3 p-4">
             <button
               onClick={() => setCartExpanded((prev) => !prev)}
@@ -260,7 +267,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
               <span className="text-base font-semibold">
                 {cartCount} item{cartCount > 1 ? 's' : ''}
               </span>
-              <span className="text-base font-semibold tabular-nums">{formatCurrency(cartTotal)}</span>
+              <span className="text-base font-semibold tabular-nums">{cartTotalText(cartTotal)}</span>
             </button>
             <button
               onClick={submitCart}
@@ -313,7 +320,7 @@ function MenuCard({
       )}
       <div className="p-4">
         <div className="text-lg font-medium">{item.item_name}</div>
-        <div className="mt-1 text-base text-muted-foreground tabular-nums">{formatCurrency(item.rate)}</div>
+        <div className="mt-1 text-base text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
         {qtyInCart > 0 && (
           <div className="mt-2 text-sm font-semibold text-primary">In cart: {qtyInCart}</div>
         )}

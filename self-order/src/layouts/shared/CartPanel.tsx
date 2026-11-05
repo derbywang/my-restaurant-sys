@@ -1,14 +1,17 @@
 import { formatCurrency } from '@ury/core'
-import type { CustomerOrder, MenuItem, OrderingContext } from '../../lib/api'
+import type { CartPreview, CustomerOrder, MenuItem, OrderingContext } from '../../lib/api'
 import type { CartEntry } from '../../lib/cart'
 import CartNote from '../../components/CartNote'
+import CartTotals, { cartTotalText } from '../../components/CartTotals'
+import { t } from '../../i18n'
 
 interface CartPanelProps {
   context: OrderingContext | null
   order: CustomerOrder | null
   cartItems: CartEntry[]
   cartCount: number
-  cartTotal: number
+  cartTotal: number | null
+  cartPreview: CartPreview | null
   submitting: boolean
   billRequested: boolean
   payingOnline: boolean
@@ -32,6 +35,7 @@ function CartPanel({
   cartItems,
   cartCount,
   cartTotal,
+  cartPreview,
   submitting,
   billRequested,
   payingOnline,
@@ -48,19 +52,19 @@ function CartPanel({
       <div className="flex-1 overflow-y-auto">
         {order && order.items.length > 0 && (
           <section className="mb-4 rounded-lg border p-3">
-            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Your order so far</h2>
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>
             <ul className="space-y-1 text-sm">
               {order.items.map((row, idx) => (
                 <li key={`${row.item_code}-${idx}`} className="flex justify-between">
                   <span>
                     {row.item_name} × {row.qty}
                   </span>
-                  <span className="tabular-nums">{formatCurrency(row.amount)}</span>
+                  <span className="tabular-nums">{formatCurrency(row.amount_incl_tax)}</span>
                 </li>
               ))}
             </ul>
             <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
-              <span>Total</span>
+              <span>{t('cart.total_incl_tax')}</span>
               <span className="tabular-nums">{formatCurrency(order.grand_total)}</span>
             </div>
           </section>
@@ -109,8 +113,9 @@ function CartPanel({
           <span>
             {cartCount} item{cartCount !== 1 ? 's' : ''}
           </span>
-          <span className="tabular-nums">{formatCurrency(cartTotal)}</span>
+          <span className="tabular-nums">{cartTotalText(cartTotal)}</span>
         </div>
+        <CartTotals preview={cartPreview} />
         <button
           onClick={onSubmit}
           disabled={submitting || cartCount === 0}

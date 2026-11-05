@@ -559,6 +559,7 @@ class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 		"get_customer_menu",
 		"get_customer_product",
 		"get_customer_order",
+		"preview_customer_cart",
 		"add_customer_items",
 		"request_bill",
 		"get_order_status",
@@ -757,7 +758,15 @@ class TestOverHttp(SelfOrderingCase):
 		self.assertTrue(invoice)
 		# what the page shows next to "Total": the amount of the order, with the tax (¥1,000 + 10%)
 		self.assertEqual(body["message"]["grand_total"], 1100, body["message"])
-		self.assertEqual([row["amount"] for row in body["message"]["items"]], [1000], body["message"])
+		self.assertEqual([row["amount_incl_tax"] for row in body["message"]["items"]], [1100], body["message"])
+
+		status, body = self.http("GET", "get_customer_menu", session=session)
+		self.assertEqual({row["item"]: row["price_incl_tax"] for row in body["message"]["items"]}[FOOD_ITEM], 1100)
+		status, body = self.http(
+			"POST", "preview_customer_cart", session=session, items=json.dumps([{"item": ALCOHOL_ITEM, "qty": 2}])
+		)
+		self.assertEqual(status, 200, body)
+		self.assertEqual((body["message"]["ordered_total"], body["message"]["rounded_total"]), (1100, 2200))
 
 		status, body = self.http("GET", "get_customer_order", session=session)
 		self.assertEqual(status, 200, body)
@@ -972,3 +981,99 @@ class TestWhichOrderTheFirstDishGoesTo(SelfOrderingCase):
 		order = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
 		self.assertEqual(order["invoice"], self.source)
 		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "custom_ordering_session"), None)
+
+
+class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):
+	"""総額表示: the guests are shown prices with the tax, calculated by the server, and the total of the
+	cart and of the order is the amount the bill will have. The tax-exclusive price is not sent at all."""
+
+	def pickup_session(self):
+		profile = frappe.get_doc("URY Self Ordering Profile", PROFILE)
+		raw, _session = self_ordering._open_session(profile, "QR Pickup", None)
+		return raw
+
+	def cart(self, session, items):
+		return self_ordering.preview_customer_cart(session, items)
+
+	def prices(self, session):
+		menu = get_customer_menu(session)
+		return {row["item"]: row for row in menu["items"]}
+
+	def test_a_dine_in_menu_shows_the_price_with_ten_percent(self):
+		self.staff_open()
+		prices = self.prices(self.scan())
+		self.assertEqual(prices[FOOD_ITEM]["price_incl_tax"], 1100)
+		self.assertEqual(prices[ALCOHOL_ITEM]["price_incl_tax"], 550)
+
+	def test_a_take_away_menu_shows_eight_percent_for_the_food(self):
+		prices = self.prices(self.pickup_session())
+		self.assertEqual(prices[FOOD_ITEM]["price_incl_tax"], 1080)
+		self.assertEqual(prices[ALCOHOL_ITEM]["price_incl_tax"], 550)
+
+	def test_the_price_without_tax_is_not_sent(self):
+		self.staff_open()
+		for row in get_customer_menu(self.scan())["items"]:
+			self.assertNotIn("rate", row)
+
+	def test_the_tail_of_the_tax_is_rounded_the_way_the_bill_does(self):
+		original = frappe.db.get_value("Item Price", {"item_code": FOOD_ITEM, "selling": 1}, "price_list_rate")
+		frappe.db.sql("update `tabItem Price` set price_list_rate = 333 where item_code = %s and selling = 1", FOOD_ITEM)
+		frappe.db.commit()
+		self.addCleanup(self._restore_price, original)
+		# 333 x 8% = 26.64: the bill cuts it to 26
+		self.assertEqual(self.prices(self.pickup_session())[FOOD_ITEM]["price_incl_tax"], 359)
+
+	def _restore_price(self, original):
+		frappe.db.sql("update `tabItem Price` set price_list_rate = %s where item_code = %s and selling = 1", (original, FOOD_ITEM))
+		frappe.db.commit()
+
+	def test_the_cart_total_is_with_tax(self):
+		self.staff_open()
+		total = self.cart(self.scan(), [{"item": FOOD_ITEM, "qty": 1}, {"item": ALCOHOL_ITEM, "qty": 2}])
+		self.assertEqual(total["rounded_total"], 2200)
+		self.assertEqual([(t["rate"], t["tax_amount"]) for t in total["taxes"]], [(10, 200)])
+		self.assertEqual(total["ordered_total"], 0)
+
+	def test_an_empty_cart_is_zero(self):
+		self.staff_open()
+		self.assertEqual(self.cart(self.scan(), [])["rounded_total"], 0)
+
+	def test_the_cart_total_is_what_the_order_will_have(self):
+		self.staff_open()
+		session = self.scan()
+		items = [{"item": FOOD_ITEM, "qty": 3}, {"item": ALCOHOL_ITEM, "qty": 1}]
+		shown = self.cart(session, items)["rounded_total"]
+		order = add_customer_items(session, items)
+		self.assertEqual(order["grand_total"], shown)
+		self.assertEqual(frappe.db.get_value("POS Invoice", order["invoice"], "rounded_total"), shown)
+
+	def test_what_was_ordered_is_part_of_the_total(self):
+		self.staff_open()
+		session = self.scan()
+		self.order(session)  # 1100
+		total = self.cart(session, [{"item": ALCOHOL_ITEM, "qty": 2}])
+		self.assertEqual(total["ordered_total"], 1100)
+		self.assertEqual(total["rounded_total"], 2200)  # the order and the cart together
+
+	def test_the_cart_total_of_a_take_away_order(self):
+		total = self.cart(self.pickup_session(), [{"item": FOOD_ITEM, "qty": 1}, {"item": ALCOHOL_ITEM, "qty": 1}])
+		self.assertEqual(total["rounded_total"], 1630)
+		self.assertEqual([(t["rate"], t["tax_amount"]) for t in total["taxes"]], [(10, 50), (8, 80)])
+
+	def test_the_cart_only_takes_what_the_menu_has(self):
+		self.staff_open()
+		self.refused("Item not available", self.cart, self.scan(), [{"item": "no such dish", "qty": 1}])
+
+	def test_the_cart_needs_a_valid_session(self):
+		with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+			self.cart("not-a-session", [{"item": FOOD_ITEM, "qty": 1}])
+
+	def test_the_order_shows_each_line_with_tax(self):
+		self.staff_open()
+		session = self.scan()
+		order = self.order(session, quantity=2)
+		line = order["items"][0]
+		self.assertEqual((line["price_incl_tax"], line["amount_incl_tax"]), (1100, 2200))
+		for key in ("rate", "amount"):
+			self.assertNotIn(key, line)
+		self.assertEqual(order["grand_total"], 2200)

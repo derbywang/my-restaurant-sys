@@ -2,6 +2,14 @@
   "cart": {
     "note_label": "Request (optional)",
     "note_placeholder": "e.g. no wasabi",
-    "note_hint": "Please write in Japanese or in simple words."
+    "note_hint": "Please write in Japanese or in simple words.",
+    "total_incl_tax": "Total (tax incl.)",
+    "ordered": "Already ordered",
+    "tax_line": "Tax on {{base}} at {{rate}}%",
+    "order_so_far": "Your order so far",
+    "order_total_incl_tax": "Amount due (tax incl.)"
+  },
+  "price": {
+    "incl_tax": " (tax incl.)"
   }
 }

@@ -28,7 +28,8 @@ export interface OrderingContext {
 export interface MenuItem {
   item: string
   item_name: string
-  rate: number
+  /** The price of one with the tax, worked out by the server; the price without tax is never sent. */
+  price_incl_tax: number
   special_dish: number
   disabled: number
   item_image: string | null
@@ -47,8 +48,8 @@ export interface OrderItem {
   item_name: string
   qty: number
   comment: string | null
-  rate: number
-  amount: number
+  price_incl_tax: number
+  amount_incl_tax: number
 }
 
 export interface CustomerOrder {
@@ -60,8 +61,17 @@ export interface CustomerOrder {
   // to. Present (possibly null before an order exists) on every response.
   pickup_code?: string | null
   items: OrderItem[]
+  /** What the bill will be for all of the order, with the tax. */
   grand_total: number
   billed: boolean
+}
+
+/** What the cart comes to with the tax, from the server (`preview_customer_cart`). */
+export interface CartPreview {
+  rounded_total: number
+  /** The dishes already ordered, which are part of `rounded_total`. */
+  ordered_total: number
+  taxes: { rate: number; taxable_amount: number; tax_amount: number }[]
 }
 
 export interface OrderStatus {
@@ -151,6 +161,17 @@ export async function getMenu(session: string): Promise<MenuResponse> {
 
 export async function getCurrentOrder(session: string): Promise<CustomerOrder> {
   const response = await call.get<FrappeResponse<CustomerOrder>>(`${M}.get_customer_order`, { session })
+  return response.message
+}
+
+export async function previewCart(
+  session: string,
+  items: { item: string; qty: number }[],
+): Promise<CartPreview> {
+  const response = await call.post<FrappeResponse<CartPreview>>(`${M}.preview_customer_cart`, {
+    session,
+    items: JSON.stringify(items),
+  })
   return response.message
 }
 

@@ -39,6 +39,7 @@ from ury.ury.doctype.ury_order.ury_order import (
     _resolve_or_create_pos_invoice,
     price_items_for_invoice,
 )
+from ury.ury.api.order_totals import cart_document, prices_incl_tax, tax_of, totals_of
 from ury.ury.api.ury_kot_generate import kot_execute
 
 # The name of the parameter that carries the token in the link of the QR code: written once in
@@ -476,18 +477,46 @@ def assign_device_table(device_id, device_credential, staff_pin, table):
 def get_customer_menu(session):
     session = _resolve_session(session)
     order_type = "Dine In" if session.table else "Take Away"
+    profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
 
     with _elevated():
         menu = resolve_restaurant_menu(
-            branch=frappe.db.get_value("URY Self Ordering Profile", session.ordering_profile, "branch"),
+            branch=profile.branch,
             room=None,
             order_type=order_type,
             cashier=False,
         )
+        prices = _prices_incl_tax([row["item"] for row in menu["items"]], profile, order_type)
 
     # resolve_restaurant_menu() already returns a sanitized item list
-    # (item/item_name/rate/course/image) — no raw Item doc fields leak here.
-    return menu
+    # (item/item_name/course/image) — no raw Item doc fields leak here. The guests are shown the price
+    # with the tax (総額表示), worked out here; the price without tax is not sent. A dish that has no
+    # price cannot be ordered, so it is not offered.
+    items = []
+    for row in menu["items"]:
+        if row["item"] in prices:
+            items.append({**{k: v for k, v in row.items() if k != "rate"}, "price_incl_tax": prices[row["item"]]})
+    return {**menu, "items": items}
+
+
+def _prices_incl_tax(item_codes, profile, order_type):
+    """{item: price with tax} for the dishes that have a price. Must run elevated."""
+    if not item_codes:
+        return {}
+    args = (profile.pos_profile, order_type, profile.default_customer)
+    try:
+        return prices_incl_tax(item_codes, *args, trusted_branch=profile.branch)
+    except frappe.ValidationError:
+        # a dish without a price makes the whole calculation fail: find which one
+        pass
+    prices = {}
+    for code in item_codes:
+        kept = len(frappe.local.message_log)
+        try:
+            prices.update(prices_incl_tax([code], *args, trusted_branch=profile.branch))
+        except frappe.ValidationError:
+            del frappe.local.message_log[kept:]
+    return prices
 
 
 @frappe.whitelist(allow_guest=True)
@@ -574,18 +603,20 @@ def _sanitize_invoice_for_customer(invoice):
         # name itself doubles as their pickup reference — reusing the
         # existing invoice identity rather than minting a new field/value.
         "pickup_code": invoice.name,
+        # the guests are shown the prices with the tax; the price without it is not sent
         "items": [
             {
                 "item_code": row.item_code,
                 "item_name": row.item_name,
                 "qty": row.qty,
                 "comment": row.comment,
-                "rate": row.rate,
-                "amount": row.amount,
+                "price_incl_tax": row.net_rate + tax_of(invoice, row, row.net_rate),
+                "amount_incl_tax": row.net_amount + tax_of(invoice, row, row.net_amount),
             }
             for row in invoice.items
         ],
-        "grand_total": invoice.grand_total,
+        # what the bill will be: all of the order, with the tax
+        "grand_total": invoice.rounded_total or invoice.grand_total,
         "billed": bool(invoice.invoice_printed),
     }
 
@@ -605,6 +636,99 @@ def get_customer_order(session):
         # the order is over: nothing of it is shown, and nothing can be added to it
         return {**empty, "state": order["state"]}
     return order
+
+
+def _clean_items(session, profile, items, allow_empty=False):
+    """The dishes of a request as the order takes them: only dishes of the menu the guests are shown,
+    a positive quantity, the note cut to what the field takes (and dropped where notes are off)."""
+    if isinstance(items, str):
+        items = json.loads(items)
+    if not items and allow_empty:
+        return []
+    if not items or not isinstance(items, list):
+        frappe.throw(_("No items provided"), frappe.ValidationError)
+    if len(items) > MAX_ITEMS_PER_REQUEST:
+        frappe.throw(_("Too many items in a single request"), frappe.ValidationError)
+
+    with _elevated():
+        menu_names = {
+            m.get("item")
+            for m in resolve_restaurant_menu(
+                branch=profile.branch,
+                room=None,
+                order_type="Dine In" if session.table else "Take Away",
+                cashier=False,
+            )["items"]
+        }
+
+    clean_items = []
+    for raw in items:
+        item_code = raw.get("item")
+        qty = raw.get("qty")
+        # the guests' note: only where the profile allows notes, and not longer than the field takes
+        comment = (raw.get("comment") or "")[:MAX_COMMENT_LEN] if profile.enable_item_notes else ''
+
+        if not item_code or item_code not in menu_names:
+            _fail("Item not available", _("Item {0} is not available on this menu").format(item_code))
+        try:
+            qty = float(qty)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            frappe.throw(_("Invalid quantity for item {0}").format(item_code), frappe.ValidationError)
+
+        clean_items.append({"item": item_code, "item_name": item_code, "qty": qty, "comment": comment})
+    return clean_items
+
+
+@frappe.whitelist(allow_guest=True)
+def preview_customer_cart(session, items):
+    """What the cart comes to, with the tax, as the bill will have it (nothing is saved).
+
+    The profile, order type, table and order all come from the session, nothing from the client. When the
+    session has an order (or joins the one of the table) its dishes are part of the total, `ordered_total`
+    is what they come to alone.
+    """
+    session = _resolve_session(session)
+    profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+    cart = _clean_items(session, profile, items, allow_empty=True)
+    order_type = "Dine In" if session.table else "Take Away"
+
+    with _elevated():
+        invoice, invoice_name = _resolve_or_create_pos_invoice(
+            table=session.table,
+            invoiceNo=session.invoice or (_invoice_to_add_to(session.table) if session.table else None),
+            order_type=order_type, is_payment=None,
+            check_permission=False, override_branch=profile.branch,
+        )
+        if session.invoice and not invoice_name:
+            _fail("Order closed", _("This order is already closed. Please ask the staff."))
+        if invoice_name and invoice.invoice_printed:
+            _fail("Order closed", _("The bill is being prepared. Please ask the staff to add more."))
+
+        ordered = [
+            {"item": row.item_code, "item_name": row.item_name, "qty": row.qty, "comment": row.comment}
+            for row in (invoice.items if invoice_name else [])
+        ]
+        ordered_total = (invoice.rounded_total or invoice.grand_total) if invoice_name else 0
+        if not ordered and not cart:
+            return {"currency": None, "rounded_total": 0, "ordered_total": 0, "taxes": []}
+
+        doc = cart_document(
+            ordered + cart, profile.pos_profile, order_type, profile.default_customer,
+            session.table, invoice_name, trusted_branch=profile.branch,
+        )
+        totals = totals_of(doc)
+
+    return {
+        "currency": totals["currency"],
+        "rounded_total": totals["rounded_total"],
+        "ordered_total": ordered_total,
+        "taxes": [
+            {"rate": t["rate"], "taxable_amount": t["taxable_amount"], "tax_amount": t["tax_amount"]}
+            for t in totals["taxes"]
+        ],
+    }
 
 
 @frappe.whitelist(allow_guest=True)
@@ -648,41 +772,7 @@ def add_customer_items(session, items):
                 frappe.ValidationError,
             )
 
-    if isinstance(items, str):
-        items = json.loads(items)
-    if not items or not isinstance(items, list):
-        frappe.throw(_("No items provided"), frappe.ValidationError)
-    if len(items) > MAX_ITEMS_PER_REQUEST:
-        frappe.throw(_("Too many items in a single request"), frappe.ValidationError)
-
-    with _elevated():
-        menu_names = {
-            m.get("item")
-            for m in resolve_restaurant_menu(
-                branch=profile.branch,
-                room=None,
-                order_type="Dine In" if session.table else "Take Away",
-                cashier=False,
-            )["items"]
-        }
-
-    clean_items = []
-    for raw in items:
-        item_code = raw.get("item")
-        qty = raw.get("qty")
-        # the guests' note: only where the profile allows notes, and not longer than the field takes
-        comment = (raw.get("comment") or "")[:MAX_COMMENT_LEN] if profile.enable_item_notes else ''
-
-        if not item_code or item_code not in menu_names:
-            frappe.throw(_("Item {0} is not available on this menu").format(item_code), frappe.ValidationError)
-        try:
-            qty = float(qty)
-        except (TypeError, ValueError):
-            qty = 0
-        if qty <= 0:
-            frappe.throw(_("Invalid quantity for item {0}").format(item_code), frappe.ValidationError)
-
-        clean_items.append({"item": item_code, "item_name": item_code, "qty": qty, "comment": comment})
+    clean_items = _clean_items(session, profile, items)
 
     order_type = "Dine In" if session.table else "Take Away"
 

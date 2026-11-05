@@ -2,6 +2,14 @@
   "cart": {
     "note_label": "ご要望（任意）",
     "note_placeholder": "例：わさび抜き",
-    "note_hint": "ご要望は日本語または簡単な言葉でお書きください"
+    "note_hint": "ご要望は日本語または簡単な言葉でお書きください",
+    "total_incl_tax": "合計（税込）",
+    "ordered": "ご注文済み",
+    "tax_line": "{{rate}}%対象 {{base}} の消費税",
+    "order_so_far": "ご注文済みの内容",
+    "order_total_incl_tax": "お会計予定額（税込）"
+  },
+  "price": {
+    "incl_tax": "（税込）"
   }
 }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { NOTE_MAX_LENGTH, addToCart, decrementCart, setNote, toPayload, type Cart } from './cart'
+import { NOTE_MAX_LENGTH, addToCart, decrementCart, setNote, toPayload, toPreviewPayload, type Cart } from './cart'
 import type { MenuItem } from './api'
 
-const dish = (item: string, rate = 1000): MenuItem =>
-  ({ item, item_name: item, rate, disabled: 0, special_dish: 0, item_image: null, course: null, course_label: null }) as MenuItem
+const dish = (item: string, price_incl_tax = 1100): MenuItem =>
+  ({ item, item_name: item, price_incl_tax, disabled: 0, special_dish: 0, item_image: null, course: null, course_label: null }) as MenuItem
 
 describe('the cart', () => {
   it('adds a dish once, then counts it up', () => {
@@ -63,5 +63,20 @@ describe('what is sent with the order', () => {
 
   it('sends no note that is only blanks', () => {
     expect(toPayload(setNote(cart, 'ビール', '   '), true)[1]).toEqual({ item: 'ビール', qty: 1 })
+  })
+})
+
+describe('the cart sent to the server for its total', () => {
+  it('has the dishes and how many, nothing else (the server knows the prices and the tax)', () => {
+    let cart = addToCart(addToCart({}, dish('寿司')), dish('寿司'))
+    cart = setNote(addToCart(cart, dish('ビール')), 'ビール', '冷えたもの')
+    expect(toPreviewPayload(cart)).toEqual([
+      { item: '寿司', qty: 2 },
+      { item: 'ビール', qty: 1 },
+    ])
+  })
+
+  it('is empty for an empty cart', () => {
+    expect(toPreviewPayload({})).toEqual([])
   })
 })

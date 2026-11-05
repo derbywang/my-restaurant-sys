@@ -98,22 +98,43 @@ def preview_cart_totals(items, pos_profile, order_type, customer=None, table=Non
 	cart is sent. Prices come from the order's price list and the tax from the item tax
 	templates and the tax category of the order type, exactly as for a saved order.
 	"""
-	from ury.ury.doctype.ury_order.ury_order import get_order_invoice, price_items_for_invoice
-	from ury.ury.hooks.ury_pos_invoice import before_validate
-
 	if isinstance(items, str):
 		items = json.loads(items)
 	if not items:
 		return totals_of(None)
+	return totals_of(cart_document(items, pos_profile, order_type, customer, table, invoice, discount_percentage))
 
-	doc = get_order_invoice(table, invoice, order_type)
+
+def cart_document(
+	items, pos_profile, order_type, customer=None, table=None, invoice=None, discount_percentage=None, trusted_branch=None
+):
+	"""The order `items` would make, with its taxes calculated; it is not saved.
+
+	The open order `invoice` (if given) provides the header and its lines are replaced by `items`.
+	`trusted_branch` is for a caller that has authorised the request itself (the ordering page, by its
+	session): the branch is given instead of read from the logged-in user, and no permission is checked.
+	"""
+	from ury.ury.doctype.ury_order.ury_order import (
+		_resolve_or_create_pos_invoice,
+		get_order_invoice,
+		price_items_for_invoice,
+	)
+	from ury.ury.hooks.ury_pos_invoice import before_validate
+
+	if trusted_branch:
+		doc, _name = _resolve_or_create_pos_invoice(
+			table, invoice, order_type, None, check_permission=False, override_branch=trusted_branch
+		)
+	else:
+		doc = get_order_invoice(table, invoice, order_type)
 	if doc.name and doc.docstatus != 0:
 		frappe.throw(_("POS Invoice {0} is not an open order.").format(doc.name))
 	if doc.name and not doc.get("restaurant_table") and table:
 		doc.restaurant_table = table
 
 	posprofile = frappe.get_doc("POS Profile", pos_profile)
-	_check_branch(pos_profile)
+	if not trusted_branch:
+		_check_branch(pos_profile)
 	doc.pos_profile = pos_profile
 	doc.order_type = order_type
 	# Without a table (a take-away order before it gets one) the invoice does not know its
@@ -143,7 +164,42 @@ def preview_cart_totals(items, pos_profile, order_type, customer=None, table=Non
 		doc.additional_discount_percentage = percentage
 		doc.discount_amount = 0
 	doc.calculate_taxes_and_totals()
-	return totals_of(doc)
+	return doc
+
+
+def tax_of(doc, item, amount):
+	"""The tax on `amount` (net) of the order line `item`, rounded as the bill rounds the tax of a rate.
+
+	The bill adds up the amounts of each rate and rounds once (ury.overrides.pos_invoice); for the price
+	of one dish this is the same rule applied to that dish alone.
+	"""
+	from decimal import Decimal
+
+	from ury.overrides.pos_invoice import DEFAULT_ROUNDING, ROUNDING_MODES
+
+	profile = doc.get("pos_profile")
+	mode = profile and frappe.get_cached_value("POS Profile", profile, "custom_tax_rounding")
+	mode = ROUNDING_MODES[mode if mode in ROUNDING_MODES else DEFAULT_ROUNDING]
+	rates = item.item_tax_rate or {}
+	if isinstance(rates, str):
+		rates = json.loads(rates or "{}")
+	total = Decimal(0)
+	for tax in doc.taxes:
+		if tax.charge_type != "On Net Total":
+			continue
+		rate = flt(rates[tax.account_head]) if tax.account_head in rates else flt(tax.rate)
+		if rate:
+			total += (Decimal(repr(round(flt(amount), 9))) * Decimal(str(rate)) / 100).quantize(Decimal(1), rounding=mode)
+	return float(total)
+
+
+def prices_incl_tax(items, pos_profile, order_type, customer=None, trusted_branch=None):
+	"""{item code: the price of one with the tax} for the dishes in `items` (item codes), by the
+	tax of the order type, as the bill will tax them. Nothing is saved."""
+	doc = cart_document(
+		[{"item": code, "qty": 1} for code in items], pos_profile, order_type, customer, trusted_branch=trusted_branch
+	)
+	return {row.item_code: flt(row.net_rate) + tax_of(doc, row, row.net_rate) for row in doc.items}
 
 
 def totals_of(doc):

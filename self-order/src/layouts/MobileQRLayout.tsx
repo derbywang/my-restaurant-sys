@@ -1,6 +1,8 @@
 import { formatCurrency } from '@ury/core'
 import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
+import CartTotals, { cartTotalText } from '../components/CartTotals'
+import { t } from '../i18n'
 import type { OrderingContext } from '../lib/api'
 
 interface LayoutProps {
@@ -29,6 +31,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     cartItems,
     cartCount,
     cartTotal,
+    cartPreview,
   } = useOrderingSession(initialContext)
 
   function handleStartOver() {
@@ -78,7 +81,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
 
       {order && order.items.length > 0 && (
         <section className="mx-4 mt-4 rounded-lg border p-3">
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Your order so far</h2>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>
           {isPickup && order.pickup_code && (
             <p className="mb-2 rounded-md bg-muted p-2 text-center text-sm font-semibold">
               Pickup code: {order.pickup_code}
@@ -88,12 +91,12 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             {order.items.map((row, idx) => (
               <li key={`${row.item_code}-${idx}`} className="flex justify-between">
                 <span>{row.item_name} × {row.qty}</span>
-                <span className="tabular-nums">{formatCurrency(row.amount)}</span>
+                <span className="tabular-nums">{formatCurrency(row.amount_incl_tax)}</span>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
-            <span>Total</span>
+            <span>{t('cart.total_incl_tax')}</span>
             <span className="tabular-nums">{formatCurrency(order.grand_total)}</span>
           </div>
           {context?.capabilities.customer_payment_enabled && !order.billed && (
@@ -135,7 +138,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             )}
             <div className="p-2">
               <div className="text-sm font-medium">{item.item_name}</div>
-              <div className="text-sm text-muted-foreground tabular-nums">{formatCurrency(item.rate)}</div>
+              <div className="text-sm text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
               {cart[item.item] && (
                 <div className="mt-1 text-xs font-semibold text-primary">In cart: {cart[item.item].qty}</div>
               )}
@@ -177,8 +180,9 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
           </ul>
           <div className="mb-2 flex items-center justify-between text-sm font-semibold">
             <span>{cartCount} item{cartCount > 1 ? 's' : ''}</span>
-            <span className="tabular-nums">{formatCurrency(cartTotal)}</span>
+            <span className="tabular-nums">{cartTotalText(cartTotal)}</span>
           </div>
+          <CartTotals preview={cartPreview} />
           <button
             onClick={submitCart}
             disabled={submitting}

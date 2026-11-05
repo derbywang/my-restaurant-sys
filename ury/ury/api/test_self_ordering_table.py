@@ -1,0 +1,974 @@
+"""Self ordering at a table: the staff open the table, the guests order, the table closes by itself.
+
+A guest scans the QR code stuck on the table; the order goes through only while the branch has an
+opened and not yet closed shift and the staff have opened that table. The table closes when the
+bill is printed, the table is released (paid, cancelled), transferred, the shift is closed, or the
+profile's time is up. Sessions of an earlier opening stop being valid. Run on the test site only.
+"""
+
+import json
+from datetime import timedelta
+
+import frappe
+from frappe.utils import add_to_date, now_datetime
+
+from ury.setup.test_site import (
+	ALCOHOL_ITEM,
+	BRANCH,
+	CAPTAIN,
+	CASHIER,
+	CUSTOMER,
+	FOOD_ITEM,
+	MANAGER,
+	POS_PROFILE,
+	RESTAURANT,
+	TABLES,
+	URYFlowTestCase,
+	as_user,
+	close_shift,
+	open_pos,
+	pay_order,
+	place_order,
+	print_bill,
+)
+from ury.ury.api.pos_permissions import get_pos_permissions
+from ury.ury.api.self_ordering import (
+	add_customer_items,
+	branch_is_open,
+	close_table_for_ordering,
+	generate_qr_token,
+	get_customer_menu,
+	get_customer_order,
+	get_order_status,
+	get_ordering_context,
+	open_table_for_ordering,
+)
+from ury.ury.doctype.ury_order.ury_order import cancel_order, table_transfer
+
+PROFILE = "SELF-ORDER-TEST"
+TABLE = TABLES[0]
+OTHER_TABLE = TABLES[1]
+
+
+def titles():
+	return [m.get("title") for m in frappe.local.message_log]
+
+
+def table_row(table=TABLE):
+	return frappe.db.get_value(
+		"URY Table",
+		table,
+		["self_order_open", "self_order_opened_at", "self_order_opened_by", "self_order_opening"],
+		as_dict=True,
+	)
+
+
+class SelfOrderingCase(URYFlowTestCase):
+	def setUp(self):
+		super().setUp()
+		self.opening = open_pos(CASHIER)
+		self._make_profile()
+		self.addCleanup(self._clean)
+		frappe.local.message_log = []
+
+	def _make_profile(self):
+		self._clean()
+		doc = frappe.get_doc(
+			{
+				"doctype": "URY Self Ordering Profile",
+				"profile_name": PROFILE,
+				"restaurant": RESTAURANT,
+				"branch": BRANCH,
+				"pos_profile": POS_PROFILE,
+				"default_customer": CUSTOMER,
+				"enabled": 1,
+				"enable_qr_table_ordering": 1,
+				"enable_kiosk_ordering": 1,
+				"allow_add_to_running_table": 1,
+				"enable_pay_at_counter": 1,
+				"qr_signing_secret": "self-order-test-secret",
+				"table_open_minutes": 240,
+			}
+		)
+		doc.name = PROFILE
+		doc.insert(ignore_permissions=True)
+		frappe.db.commit()
+
+	def _clean(self):
+		frappe.db.delete("URY Ordering Session", {"ordering_profile": PROFILE})
+		if frappe.db.exists("URY Self Ordering Profile", PROFILE):
+			frappe.delete_doc("URY Self Ordering Profile", PROFILE, force=True, ignore_permissions=True)
+		for table in TABLES:
+			frappe.db.set_value(
+				"URY Table",
+				table,
+				{"self_order_open": 0, "self_order_opened_at": None, "self_order_opened_by": None, "self_order_opening": None},
+			)
+		frappe.db.commit()
+
+	# --- what a guest does ------------------------------------------------
+
+	def scan(self, table=TABLE):
+		with as_user("Administrator"):
+			token = generate_qr_token(PROFILE, table)
+		return get_ordering_context(token=token)["session"]
+
+	def order(self, session, quantity=1):
+		return add_customer_items(session, [{"item": FOOD_ITEM, "qty": quantity}])
+
+	def refused(self, title, call, *args, exc=(frappe.ValidationError, frappe.PermissionError), **kwargs):
+		frappe.local.message_log = []
+		with self.assertRaises(exc):
+			call(*args, **kwargs)
+		self.assertIn(title, titles())
+
+	# --- what the staff do ------------------------------------------------
+
+	def staff_open(self, table=TABLE, user=CASHIER):
+		with as_user(user):
+			return open_table_for_ordering(table)
+
+	def staff_close(self, table=TABLE, user=CASHIER):
+		with as_user(user):
+			return close_table_for_ordering(table)
+
+
+class TestOpeningHours(SelfOrderingCase):
+	"""The branch must have an opened shift that has not been closed (the date does not matter)."""
+
+	def test_an_opened_shift_is_enough(self):
+		self.assertTrue(branch_is_open(BRANCH))
+
+	def test_a_shift_opened_yesterday_and_not_closed_is_still_open(self):
+		# past midnight, or the staff forgot to close yesterday's shift
+		yesterday = add_to_date(now_datetime(), days=-1)
+		frappe.db.set_value(
+			"POS Opening Entry",
+			self.opening.name,
+			{"posting_date": yesterday.date(), "period_start_date": yesterday},
+			update_modified=False,
+		)
+		self.assertTrue(branch_is_open(BRANCH))
+		self.staff_open()
+		self.assertTrue(self.order(self.scan()))
+
+	def test_another_branchs_shift_does_not_count(self):
+		self.assertFalse(branch_is_open("a branch nobody opened"))
+		self.assertFalse(branch_is_open(None))
+
+	def test_when_the_shift_is_closed_the_branch_is_closed(self):
+		close_shift(self.opening)
+		self.assertFalse(branch_is_open(BRANCH))
+
+	def test_without_an_open_shift_nobody_can_scan_in(self):
+		self.staff_open()
+		close_shift(self.opening)
+		self.refused("Store closed", self.scan)
+
+	def test_without_an_open_shift_a_table_cannot_be_opened(self):
+		close_shift(self.opening)
+		self.refused("Store closed", self.staff_open)
+
+	def test_a_session_started_before_the_shift_was_closed_stops_working(self):
+		self.staff_open()
+		session = self.scan()
+		close_shift(self.opening)
+		self.refused("Store closed", self.order, session)
+
+
+class TestTheTableMustBeOpen(SelfOrderingCase):
+	def test_a_table_that_is_not_open_cannot_be_ordered_from(self):
+		self.refused("Table closed", self.scan)
+
+	def test_after_the_staff_open_it_the_guests_can_order(self):
+		self.staff_open()
+		session = self.scan()
+		order = self.order(session)
+		self.assertTrue(order["invoice"])
+		self.assertEqual(order["table"], TABLE)
+		self.assertTrue(get_customer_menu(session)["items"])
+
+	def test_closing_it_ends_the_session(self):
+		self.staff_open()
+		session = self.scan()
+		self.staff_close()
+		self.refused("Table closed", self.order, session)
+		self.refused("Table closed", get_customer_menu, session)
+
+	def test_the_session_of_the_guests_before_is_not_valid_after_it_is_opened_again(self):
+		self.staff_open()
+		old_session = self.scan()
+		self.staff_close()
+		self.staff_open()
+		self.refused("Table closed", self.order, old_session)
+		new_session = self.scan()
+		self.assertTrue(self.order(new_session))
+
+	def test_opening_again_without_closing_also_starts_over(self):
+		self.staff_open()
+		old_session = self.scan()
+		self.staff_open()
+		self.refused("Table closed", self.order, old_session)
+
+	def test_after_the_time_is_up_the_table_is_closed_by_itself(self):
+		self.staff_open()
+		session = self.scan()
+		long_ago = add_to_date(now_datetime(), minutes=-241)
+		frappe.db.set_value("URY Table", TABLE, "self_order_opened_at", long_ago, update_modified=False)
+		self.refused("Table closed", self.order, session)
+		self.refused("Table closed", self.scan)
+
+	def test_a_guest_can_still_read_the_order_after_the_table_was_closed(self):
+		self.staff_open()
+		session = self.scan()
+		self.order(session)
+		self.staff_close()
+		self.assertEqual(len(get_customer_order(session)["items"]), 1)
+		self.assertFalse(get_order_status(session)["table_open"])
+
+	def test_the_status_says_the_table_is_open(self):
+		self.staff_open()
+		session = self.scan()
+		self.assertTrue(get_order_status(session)["table_open"])
+
+	def test_a_table_opened_is_not_the_other_table(self):
+		self.staff_open(TABLE)
+		self.refused("Table closed", self.scan, OTHER_TABLE)
+
+
+class TestTheTableClosesByItself(SelfOrderingCase):
+	def _open_with_order(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		self.assertTrue(table_row()["self_order_open"])
+		return session, invoice
+
+	def test_when_the_bill_is_printed(self):
+		session, invoice = self._open_with_order()
+		print_bill(invoice, CASHIER)
+		self.assertFalse(table_row()["self_order_open"])
+		self.refused("Table closed", self.order, session)
+
+	def test_when_the_order_is_paid(self):
+		session, invoice = self._open_with_order()
+		print_bill(invoice, CASHIER)
+		pay_order(invoice, CASHIER)
+		self.assertFalse(table_row()["self_order_open"])
+
+	def test_when_the_order_is_cancelled(self):
+		session, invoice = self._open_with_order()
+		with as_user(CASHIER):
+			cancel_order(invoice, "test")
+		self.assertFalse(table_row()["self_order_open"])
+		self.refused("Table closed", self.order, session)
+
+	def test_when_the_order_moves_to_another_table(self):
+		session, invoice = self._open_with_order()
+		with as_user(MANAGER):
+			table_transfer(TABLE, TABLES[2], invoice)
+		self.assertFalse(table_row(TABLE)["self_order_open"])
+		self.refused("Table closed", self.order, session)
+
+	def test_when_the_shift_is_closed(self):
+		self.staff_open(TABLE)
+		self.staff_open(OTHER_TABLE)
+		close_shift(self.opening)
+		self.assertFalse(table_row(TABLE)["self_order_open"])
+		self.assertFalse(table_row(OTHER_TABLE)["self_order_open"])
+
+	def test_the_other_tables_stay_open(self):
+		self.staff_open(TABLE)
+		self.staff_open(OTHER_TABLE)
+		self.staff_close(TABLE)
+		self.assertTrue(table_row(OTHER_TABLE)["self_order_open"])
+
+
+class TestAfterTheBillIsPrinted(SelfOrderingCase):
+	def test_a_printed_order_takes_no_more_dishes_even_if_the_table_is_still_open(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		# printed in the database only: the table was not released (as a stale call would find it)
+		frappe.db.set_value("POS Invoice", invoice, "invoice_printed", 1, update_modified=False)
+		self.refused("Order closed", self.order, session)
+		self.assertEqual(frappe.db.count("POS Invoice Item", {"parent": invoice}), 1)
+
+	def test_before_it_is_printed_the_guests_can_add_dishes(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		self.assertEqual(self.order(session)["invoice"], invoice)
+		self.assertEqual(frappe.db.count("POS Invoice Item", {"parent": invoice}), 2)
+
+	def test_an_order_that_is_gone_is_closed_not_started_again(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		frappe.db.set_value("POS Invoice", invoice, "docstatus", 2, update_modified=False)
+		self.refused("Order closed", self.order, session)
+		self.assertEqual(frappe.db.count("POS Invoice", {"docstatus": 0, "restaurant_table": TABLE}), 0)
+
+	def test_a_table_whose_bill_is_printed_can_be_opened_again_for_the_next_guests(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		print_bill(invoice, CASHIER)  # printing releases the table: it is Available again
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 0)
+		self.assertTrue(self.staff_open()["tables"])
+		self.assertTrue(table_row()["self_order_open"])
+
+
+class TestWhoMayOpenATable(SelfOrderingCase):
+	def test_anyone_who_takes_orders_may(self):
+		for user in (CASHIER, CAPTAIN, MANAGER):
+			self.staff_close()
+			result = self.staff_open(user=user)
+			self.assertEqual(result["tables"], [TABLE])
+			self.assertEqual(table_row()["self_order_opened_by"], user)
+
+	def test_it_is_open_for_four_hours(self):
+		result = self.staff_open()
+		self.assertEqual(result["expires_at"] - result["opened_at"], timedelta(minutes=240))
+
+	def test_a_user_without_a_pos_role_may_not(self):
+		user = "norole-so@test.local"
+		if not frappe.db.exists("User", user):
+			frappe.get_doc(
+				{"doctype": "User", "email": user, "first_name": "No Role", "send_welcome_email": 0, "roles": []}
+			).insert(ignore_permissions=True)
+		with self.assertRaises(frappe.PermissionError):
+			self.staff_open(user=user)
+		with self.assertRaises(frappe.PermissionError):
+			self.staff_close(user=user)
+		self.assertFalse(table_row()["self_order_open"])
+
+	def test_a_guest_may_not(self):
+		with self.assertRaises(frappe.PermissionError):
+			self.staff_open(user="Guest")
+
+	def test_a_take_away_table_cannot_be_opened(self):
+		frappe.db.set_value("URY Table", TABLE, "is_take_away", 1)
+		self.addCleanup(frappe.db.set_value, "URY Table", TABLE, "is_take_away", 0)
+		with self.assertRaises(frappe.ValidationError):
+			self.staff_open()
+
+	def test_a_table_of_another_branch_may_not(self):
+		original = frappe.db.get_value("URY Table", TABLE, "branch")
+		frappe.db.set_value("URY Table", TABLE, "branch", "somewhere else", update_modified=False)
+		self.addCleanup(frappe.db.set_value, "URY Table", TABLE, "branch", original)
+		with self.assertRaises(frappe.PermissionError):
+			self.staff_open(user=CAPTAIN)
+
+	def test_a_table_with_the_order_of_a_waiter_can_be_opened_and_the_guests_add_to_it(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		self.staff_open()
+		session = self.scan()
+		self.assertEqual(self.order(session)["invoice"], invoice)
+
+	def test_a_branch_without_a_self_ordering_profile_cannot_open_tables(self):
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enabled", 0)
+		with self.assertRaises(frappe.ValidationError):
+			self.staff_open()
+
+	def test_the_pos_permission_map_says_who_may(self):
+		for user in (CASHIER, CAPTAIN, MANAGER, "Administrator"):
+			with as_user(user):
+				self.assertTrue(get_pos_permissions()["open_self_order"], user)
+		user = "norole-so@test.local"
+		if not frappe.db.exists("User", user):
+			frappe.get_doc(
+				{"doctype": "User", "email": user, "first_name": "No Role", "send_welcome_email": 0, "roles": []}
+			).insert(ignore_permissions=True)
+		with as_user(user):
+			self.assertFalse(get_pos_permissions()["open_self_order"])
+
+
+# --- the guests' order and the staff -----------------------------------------------------------
+
+from ury.ury.api import self_ordering
+from ury.ury.doctype.ury_order.ury_order import get_table_order_context
+
+
+def tickets_since(invoice, before):
+	"""{ticket type: [(item, quantity, comments, cancelled_qty)]} of the kitchen tickets of the order made after `before`."""
+	result = {}
+	for ticket in frappe.get_all("URY KOT", filters={"invoice": invoice}, fields=["name", "type"], order_by="creation"):
+		if ticket.name in before:
+			continue
+		rows = frappe.get_all(
+			"URY KOT Items",
+			filters={"parent": ticket.name},
+			fields=["item", "quantity", "comments", "cancelled_qty"],
+		)
+		result.setdefault(ticket.type, []).extend(
+			(row.item, int(row.quantity), row.comments or "", int(row.cancelled_qty or 0)) for row in rows
+		)
+	return result
+
+
+def ticket_names(invoice):
+	return set(frappe.get_all("URY KOT", filters={"invoice": invoice}, pluck="name"))
+
+
+class TestTheGuestsNoteReachesTheKitchen(SelfOrderingCase):
+	def _note(self, session, text, quantity=1):
+		return add_customer_items(session, [{"item": FOOD_ITEM, "qty": quantity, "comment": text}])
+
+	def test_the_note_of_a_dish_is_on_the_kitchen_ticket(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self._note(session, "わさび抜き")["invoice"]
+		self.assertEqual(tickets_since(invoice, set())["New Order"], [(FOOD_ITEM, 1, "わさび抜き", 0)])
+
+	def test_the_same_dish_again_sends_only_what_was_added_with_its_own_note(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self._note(session, "わさび抜き")["invoice"]
+		before = ticket_names(invoice)
+		self._note(session, "大盛り", quantity=2)
+		tickets = tickets_since(invoice, before)
+		self.assertEqual(sum(tickets.values(), []), [(FOOD_ITEM, 2, "大盛り", 0)])
+		self.assertNotIn("Partially cancelled", tickets)
+
+	def test_the_same_dish_without_a_note_is_not_sent_twice(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self._note(session, "")["invoice"]
+		before = ticket_names(invoice)
+		self._note(session, "")
+		sent = sum(tickets_since(invoice, before).values(), [])
+		self.assertEqual([(item, quantity) for item, quantity, _c, _x in sent], [(FOOD_ITEM, 1)])
+
+
+class TestTheWaiterTakesOverTheGuestsOrder(SelfOrderingCase):
+	"""A waiter adds to and changes an order the guests placed, like any order; only the cashier takes dishes back."""
+
+	def setUp(self):
+		super().setUp()
+		original = frappe.db.get_value("POS Profile", POS_PROFILE, "remove_items")
+		self.addCleanup(self._switch, original)
+		self._switch(1)
+		self.staff_open(user=CASHIER)  # not the captain: he did not open the table
+		self.session = self.scan()
+		self.invoice = add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 2}])["invoice"]
+		frappe.db.commit()
+
+	def _switch(self, value):
+		frappe.db.set_value("POS Profile", POS_PROFILE, "remove_items", value)
+		frappe.db.commit()
+		frappe.clear_document_cache("POS Profile", POS_PROFILE)
+
+	def _quantity(self):
+		return frappe.db.get_value("POS Invoice Item", {"parent": self.invoice, "item_code": FOOD_ITEM}, "qty")
+
+	def test_the_order_is_the_order_of_the_staff_who_opened_the_table(self):
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.invoice, "waiter"), CASHIER)
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.invoice, "custom_order_source"), "QR Table")
+
+	def test_a_waiter_who_did_not_open_the_table_sees_the_order_and_may_change_it(self):
+		with as_user(CAPTAIN):
+			context = get_table_order_context(TABLE)
+		self.assertEqual(context["order"]["name"], self.invoice)
+		self.assertTrue(context["permissions"]["view"])
+		self.assertTrue(context["permissions"]["modify"])
+
+	def test_he_adds_a_dish(self):
+		place_order(CAPTAIN, [(FOOD_ITEM, 3)], table=TABLE, invoice=self.invoice)
+		self.assertEqual(self._quantity(), 3)
+
+	def test_he_cannot_take_a_dish_back(self):
+		with self.assertRaises(frappe.PermissionError):
+			place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE, invoice=self.invoice)
+		frappe.db.rollback()
+		self.assertEqual(self._quantity(), 2)
+		with as_user(CAPTAIN):
+			permissions = get_table_order_context(TABLE)["permissions"]
+		self.assertFalse(permissions["reduce_items"])
+		self.assertFalse(permissions["remove_items"])
+
+	def test_the_cashier_can_take_a_dish_back(self):
+		place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLE, invoice=self.invoice)
+		self.assertEqual(self._quantity(), 1)
+
+	def test_the_guests_can_still_add_after_the_waiter_did(self):
+		place_order(CAPTAIN, [(FOOD_ITEM, 3)], table=TABLE, invoice=self.invoice)
+		order = add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(order["invoice"], self.invoice)
+
+	def test_an_order_of_one_waiter_is_still_not_open_to_another_waiter(self):
+		"""The takeover is for the guests' orders only: the ownership rule for staff orders stays."""
+		invoice = place_order(MANAGER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		frappe.db.set_value("POS Invoice", invoice, "waiter", MANAGER)
+		with as_user(CAPTAIN):
+			context = get_table_order_context(TABLES[2])
+		# a manager's order, the captain neither owns it nor has elevated access (billing is the cashier's)
+		self.assertFalse(context["permissions"]["view"])
+
+
+class TestWhatTheGuestsSeeWhenTheOrderIsOver(SelfOrderingCase):
+	def _ordered(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		return session, invoice
+
+	def test_while_it_is_open(self):
+		session, _invoice = self._ordered()
+		self.assertEqual(get_order_status(session)["order_state"], "open")
+		self.assertEqual(get_customer_order(session)["state"], "open")
+
+	def test_when_the_bill_is_printed(self):
+		session, invoice = self._ordered()
+		print_bill(invoice, CASHIER)
+		self.assertEqual(get_order_status(session)["order_state"], "billed")
+		order = get_customer_order(session)
+		self.assertEqual(order["state"], "billed")
+		self.assertTrue(order["items"])  # the guests can still see what they ordered
+
+	def test_when_the_order_is_cancelled(self):
+		session, invoice = self._ordered()
+		with as_user(CASHIER):
+			cancel_order(invoice, "test")
+		self.assertEqual(get_order_status(session)["order_state"], "cancelled")
+		order = get_customer_order(session)
+		self.assertEqual(order["state"], "cancelled")
+		self.assertEqual(order["items"], [])
+		self.assertFalse(get_order_status(session)["table_open"])
+		self.refused("Table closed", self.order, session)
+
+	def test_when_the_order_is_paid(self):
+		session, invoice = self._ordered()
+		print_bill(invoice, CASHIER)
+		pay_order(invoice, CASHIER)
+		self.assertEqual(get_order_status(session)["order_state"], "paid")
+		self.assertEqual(get_customer_order(session)["items"], [])
+
+	def test_before_any_order(self):
+		self.staff_open()
+		session = self.scan()
+		self.assertEqual(get_order_status(session)["order_state"], "none")
+		self.assertEqual(get_customer_order(session)["state"], "none")
+
+
+class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
+	"""Whatever the guests send, the order only grows; a mistake is for the staff (the cashier) to correct."""
+
+	# what the guests' interface may do; a new function that the guests can call must be added here on purpose
+	GUEST_FUNCTIONS = {
+		"get_ordering_context",
+		"assign_device_table",
+		"get_customer_menu",
+		"get_customer_product",
+		"get_customer_order",
+		"add_customer_items",
+		"request_bill",
+		"get_order_status",
+		"create_payment_request",
+		"get_payment_status",
+		"share_payment_link",
+	}
+	CHANGE_THE_ORDER = {"add_customer_items"}
+
+	def test_the_functions_the_guests_can_call_are_the_known_ones(self):
+		guest = {f.__name__ for f in frappe.guest_methods if f.__module__ == self_ordering.__name__}
+		self.assertEqual(guest, self.GUEST_FUNCTIONS)
+
+	def test_a_new_order_line_is_added_and_the_old_ones_stay(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session, quantity=2)["invoice"]
+		self.order(session, quantity=1)
+		rows = frappe.get_all(
+			"POS Invoice Item", filters={"parent": invoice}, fields=["item_code", "qty"], order_by="idx"
+		)
+		self.assertEqual([(r.item_code, int(r.qty)) for r in rows], [(FOOD_ITEM, 2), (FOOD_ITEM, 1)])
+
+	def test_a_quantity_of_zero_or_less_is_refused_and_changes_nothing(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session, quantity=2)["invoice"]
+		for quantity in (0, -1, -2, "-1", "x", None):
+			with self.assertRaises(frappe.ValidationError, msg=repr(quantity)):
+				add_customer_items(session, [{"item": FOOD_ITEM, "qty": quantity}])
+		rows = frappe.get_all("POS Invoice Item", filters={"parent": invoice}, fields=["qty"])
+		self.assertEqual([int(r.qty) for r in rows], [2])
+
+	def test_a_request_that_adds_and_subtracts_in_one_go_is_refused_as_a_whole(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session, quantity=2)["invoice"]
+		frappe.db.commit()  # as the request does; the refused one below is rolled back on its own
+		with self.assertRaises(frappe.ValidationError):
+			add_customer_items(session, [{"item": FOOD_ITEM, "qty": 3}, {"item": FOOD_ITEM, "qty": -3}])
+		frappe.db.rollback()
+		rows = frappe.get_all("POS Invoice Item", filters={"parent": invoice}, fields=["qty"])
+		self.assertEqual([int(r.qty) for r in rows], [2])
+
+
+class TestWhatThePosShows(SelfOrderingCase):
+	"""`get_open_tables`: whether the POS offers the button, and which tables are open now."""
+
+	def tables(self, user=CASHIER):
+		with as_user(user):
+			return self_ordering.get_open_tables()
+
+	def test_the_button_is_offered_to_whoever_takes_orders_when_the_branch_has_a_profile(self):
+		for user in (CASHIER, CAPTAIN, MANAGER):
+			self.assertTrue(self.tables(user)["enabled"], user)
+
+	def test_it_is_not_offered_without_a_profile_or_with_the_tables_switched_off(self):
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_qr_table_ordering", 0)
+		self.assertFalse(self.tables()["enabled"])
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, {"enable_qr_table_ordering": 1, "enabled": 0})
+		self.assertFalse(self.tables()["enabled"])
+
+	def test_it_is_not_offered_to_a_user_who_does_not_take_orders_or_to_a_guest(self):
+		self.assertEqual(self.tables("Guest"), {"enabled": False, "store_open": False, "tables": [], "blocked": []})
+
+	def test_the_open_tables_are_listed_with_the_time_they_were_opened(self):
+		self.staff_open(TABLE, user=CAPTAIN)
+		listed = self.tables()["tables"]
+		self.assertEqual([row["table"] for row in listed], [TABLE])
+		self.assertEqual(listed[0]["opened_by"], CAPTAIN)
+		self.assertTrue(listed[0]["opened_at"] and listed[0]["expires_at"])
+
+	def test_a_table_that_is_closed_or_timed_out_is_not_listed(self):
+		self.staff_open(TABLE)
+		self.staff_open(OTHER_TABLE)
+		self.staff_close(TABLE)
+		frappe.db.set_value(
+			"URY Table", OTHER_TABLE, "self_order_opened_at", add_to_date(now_datetime(), minutes=-241), update_modified=False
+		)
+		self.assertEqual(self.tables()["tables"], [])
+
+	def test_the_store_state_is_given_so_the_pos_can_say_why_a_table_cannot_be_opened(self):
+		self.assertTrue(self.tables()["store_open"])
+		close_shift(self.opening)
+		self.assertFalse(self.tables()["store_open"])
+
+
+class TestAsARealGuest(SelfOrderingCase):
+	"""The customer page is used by nobody who is logged in. Every call below is made as Guest, which is
+	what the browser of a guest is; the tests above run as the administrator and would not notice a
+	missing permission."""
+
+	def as_guest(self, call, *args, **kwargs):
+		with as_user("Guest"):
+			return call(*args, **kwargs)
+
+	def scan_as_guest(self, table=TABLE):
+		with as_user("Administrator"):
+			token = generate_qr_token(PROFILE, table)
+		return self.as_guest(get_ordering_context, token=token)["session"]
+
+	def test_the_whole_way_from_the_code_to_the_order(self):
+		self.staff_open()
+		session = self.scan_as_guest()
+		menu = self.as_guest(get_customer_menu, session)
+		self.assertTrue(menu["items"])
+		product = self.as_guest(self_ordering.get_customer_product, session, FOOD_ITEM)
+		self.assertEqual(product["item_code"], FOOD_ITEM)
+		order = self.as_guest(add_customer_items, session, [{"item": FOOD_ITEM, "qty": 1, "comment": "わさび抜き"}])
+		self.assertTrue(order["invoice"])
+		self.assertEqual(self.as_guest(get_customer_order, session)["state"], "open")
+		self.assertTrue(self.as_guest(get_order_status, session)["table_open"])
+
+	def test_the_guest_adds_to_the_order_a_waiter_started(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		frappe.db.commit()
+		self.staff_open()
+		session = self.scan_as_guest()
+		order = self.as_guest(add_customer_items, session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(order["invoice"], invoice)
+		self.assertEqual(len(order["items"]), 2)
+		# the amount next to "Total" on the ordering page: both dishes with the tax
+		self.assertEqual(order["grand_total"], 2200, order)
+		self.assertEqual(self.as_guest(get_customer_order, session)["grand_total"], 2200)
+
+
+class TestOverHttp(SelfOrderingCase):
+	"""The same calls the ordering page makes, over HTTP as a visitor without a login (GET for the code,
+	the menu and the order, POST for the order), against the server that is running for the bench.
+
+	The calls above are made in Python as the administrator or as Guest; they cannot show what only
+	the HTTP layer does (the method of the request, the commit at the end of it, the answer a browser
+	gets). Skipped when no server answers for the test site.
+	"""
+
+	BASE = "http://127.0.0.1:8000/api/method/ury.ury.api.self_ordering."
+
+	def setUp(self):
+		super().setUp()
+		self.host = f"{frappe.local.site}:8000"
+
+	def http(self, method, name, **params):
+		import json as _json
+		from urllib import error, parse, request as urlrequest
+
+		url = self.BASE + name
+		data = None
+		if method == "GET":
+			url += "?" + parse.urlencode(params)
+		else:
+			data = parse.urlencode(params).encode()
+		req = urlrequest.Request(url, data=data, method=method, headers={"Host": self.host})
+		try:
+			with urlrequest.urlopen(req, timeout=20) as response:
+				return response.status, _json.loads(response.read())
+		except error.HTTPError as e:
+			return e.code, _json.loads(e.read() or b"{}")
+		except OSError:
+			self.skipTest("no server answers on port 8000")
+
+	def messages(self, body):
+		"""The `title`s of the messages the server sent with an error."""
+		return [_json.get("title") for _json in map(__import__("json").loads, __import__("json").loads(body.get("_server_messages", "[]")))]
+
+	def test_a_table_that_is_not_open_is_refused_with_its_title(self):
+		with as_user("Administrator"):
+			token = generate_qr_token(PROFILE, TABLE)
+		frappe.db.commit()
+		status, body = self.http("GET", "get_ordering_context", token=token)
+		self.assertEqual(status, 403)
+		self.assertIn("Table closed", self.messages(body))
+
+	def test_the_way_a_browser_goes_from_the_code_to_the_order(self):
+		self.staff_open()
+		frappe.db.commit()
+		with as_user("Administrator"):
+			token = generate_qr_token(PROFILE, TABLE)
+
+		status, body = self.http("GET", "get_ordering_context", token=token)
+		self.assertEqual(status, 200, body)
+		session = body["message"]["session"]
+
+		status, body = self.http("GET", "get_customer_menu", session=session)
+		self.assertEqual(status, 200, body)
+		self.assertTrue(body["message"]["items"])
+
+		status, body = self.http("GET", "get_customer_order", session=session)
+		self.assertEqual(status, 200, body)
+		self.assertEqual(body["message"]["state"], "none")
+
+		status, body = self.http(
+			"POST", "add_customer_items", session=session, items=json.dumps([{"item": FOOD_ITEM, "qty": 1, "comment": "わさび抜き"}])
+		)
+		self.assertEqual(status, 200, body)
+		invoice = body["message"]["invoice"]
+		self.assertTrue(invoice)
+		# what the page shows next to "Total": the amount of the order, with the tax (¥1,000 + 10%)
+		self.assertEqual(body["message"]["grand_total"], 1100, body["message"])
+		self.assertEqual([row["amount"] for row in body["message"]["items"]], [1000], body["message"])
+
+		status, body = self.http("GET", "get_customer_order", session=session)
+		self.assertEqual(status, 200, body)
+		self.assertEqual(body["message"]["invoice"], invoice)
+		self.assertEqual(body["message"]["state"], "open")
+		self.assertEqual(body["message"]["grand_total"], 1100, body["message"])
+
+
+class TestTheKitchenSeesWhoServesTheGuests(SelfOrderingCase):
+	"""The kitchen screen writes the name of the person next to the table, and the guests' order is served by
+	the staff who opened the table, not by the administrator the server runs the guests' calls as."""
+
+	def _full_name(self, user):
+		return frappe.db.get_value("User", user, "full_name")
+
+	def _kot_users(self, invoice):
+		return set(frappe.get_all("URY KOT", filters={"invoice": invoice}, pluck="user"))
+
+	def test_the_ticket_of_the_guests_order_has_the_name_of_the_staff_who_opened_the_table(self):
+		for opener in (CASHIER, CAPTAIN):
+			self.staff_close()
+			self.staff_open(user=opener)
+			session = self.scan()
+			invoice = self.order(session)["invoice"]
+			self.assertEqual(frappe.db.get_value("POS Invoice", invoice, "waiter"), opener)
+			self.assertEqual(self._kot_users(invoice), {self._full_name(opener)})
+			self.assertNotIn("Administrator", self._kot_users(invoice))
+			frappe.db.set_value("POS Invoice", invoice, "docstatus", 2)  # over; the next opener starts fresh
+			frappe.db.commit()
+
+	def test_what_the_guests_add_later_carries_the_same_name(self):
+		self.staff_open(user=CASHIER)
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		self.order(session)
+		self.assertEqual(self._kot_users(invoice), {self._full_name(CASHIER)})
+		self.assertEqual(frappe.db.count("URY KOT", {"invoice": invoice}), 2)
+
+	def test_the_ticket_of_a_staff_order_keeps_the_name_of_who_sent_it(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		self.assertEqual(self._kot_users(invoice), {self._full_name(CAPTAIN)})
+
+
+class TestItemNotes(SelfOrderingCase):
+	def test_with_notes_switched_off_the_note_is_dropped(self):
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_item_notes", 0)
+		frappe.db.commit()
+		self.staff_open()
+		session = self.scan()
+		invoice = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1, "comment": "わさび抜き"}])["invoice"]
+		self.assertEqual(frappe.db.get_value("POS Invoice Item", {"parent": invoice}, "comment") or "", "")
+		self.assertEqual(tickets_since(invoice, set())["New Order"], [(FOOD_ITEM, 1, "", 0)])
+
+	def test_with_notes_on_the_note_is_kept_and_cut_to_140_characters(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1, "comment": "あ" * 300}])["invoice"]
+		self.assertEqual(len(frappe.db.get_value("POS Invoice Item", {"parent": invoice}, "comment")), 140)
+
+
+class TestWhichTablesTheButtonIsNotOfferedFor(SelfOrderingCase):
+	"""A table is held by a printed bill only if it is occupied and nothing but printed bills are on it.
+	Printing releases the table, so this does not arise by itself (a guard, in case it does)."""
+
+	def tables(self):
+		with as_user(CASHIER):
+			return self_ordering.get_open_tables()
+
+	def test_a_table_with_a_printed_bill_that_is_free_again_is_not_blocked(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		print_bill(invoice, CASHIER)
+		self.assertNotIn(TABLE, self.tables()["blocked"])
+
+	def test_a_table_that_is_occupied_by_nothing_but_a_printed_bill_is_blocked_and_refused(self):
+		invoice = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		print_bill(invoice, CASHIER)
+		frappe.db.set_value("URY Table", TABLE, "occupied", 1)  # the state that printing does not leave
+		frappe.db.commit()
+		self.assertIn(TABLE, self.tables()["blocked"])
+		self.assertNotIn(OTHER_TABLE, self.tables()["blocked"])
+		self.refused("Order closed", self.staff_open)
+		self.assertFalse(table_row()["self_order_open"])
+
+	def test_the_next_guests_order_on_the_table_does_not_block_it(self):
+		old = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		print_bill(old, CASHIER)
+		place_order(CAPTAIN, [(ALCOHOL_ITEM, 1)], table=TABLE)  # a new order: the table is occupied again
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 1)
+		self.assertNotIn(TABLE, self.tables()["blocked"])
+		self.assertTrue(self.staff_open()["tables"])
+
+
+def items_of(invoice):
+	return [
+		(row.item_code, int(row.qty), row.comment or "")
+		for row in frappe.get_all(
+			"POS Invoice Item", filters={"parent": invoice}, fields=["item_code", "qty", "comment"], order_by="idx"
+		)
+	]
+
+
+class TestTheNextGuestsWhileTheLastBillIsUnpaid(SelfOrderingCase):
+	"""The last guests have the bill and are at the cash desk; the staff seat the next guests at once. The
+	table opens again, and the new guests' dishes go on a new order, never on the one that is printed."""
+
+	def setUp(self):
+		super().setUp()
+		self.old = place_order(CAPTAIN, [(FOOD_ITEM, 2)], table=TABLE)
+		print_bill(self.old, CASHIER)
+		self.old_before = frappe.db.get_value(
+			"POS Invoice", self.old, ["grand_total", "rounded_total", "invoice_printed", "docstatus"]
+		)
+		self.old_items = items_of(self.old)
+
+	def _old_is_untouched(self):
+		self.assertEqual(
+			frappe.db.get_value("POS Invoice", self.old, ["grand_total", "rounded_total", "invoice_printed", "docstatus"]),
+			self.old_before,
+		)
+		self.assertEqual(items_of(self.old), self.old_items)
+
+	def test_the_new_guests_get_a_new_order_and_the_printed_one_stays_as_it_was(self):
+		self.staff_open()
+		session = self.scan()
+		new = add_customer_items(session, [{"item": ALCOHOL_ITEM, "qty": 1, "comment": "冷えたもの"}])["invoice"]
+		self.assertNotEqual(new, self.old)
+		self.assertEqual(frappe.db.get_value("POS Invoice", new, "invoice_printed"), 0)
+		self.assertEqual(items_of(new), [(ALCOHOL_ITEM, 1, "冷えたもの")])
+		self._old_is_untouched()
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 1)
+
+	def test_what_they_add_later_goes_to_the_new_order_and_so_do_other_phones_at_the_table(self):
+		self.staff_open()
+		first, second = self.scan(), self.scan()
+		new = add_customer_items(first, [{"item": FOOD_ITEM, "qty": 1}])["invoice"]
+		self.assertEqual(add_customer_items(first, [{"item": FOOD_ITEM, "qty": 1}])["invoice"], new)
+		self.assertEqual(add_customer_items(second, [{"item": FOOD_ITEM, "qty": 1}])["invoice"], new)
+		self.assertEqual(len(items_of(new)), 3)
+		self._old_is_untouched()
+
+	def test_the_guests_see_only_their_own_order(self):
+		self.staff_open()
+		session = self.scan()
+		order = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual([row["qty"] for row in order["items"]], [1])
+		self.assertEqual(order["grand_total"], 1100)  # not 3300: the printed bill is not theirs
+
+	def test_each_order_is_paid_on_its_own_and_the_table_is_released_when_both_are_done(self):
+		self.staff_open()
+		session = self.scan()
+		new = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])["invoice"]
+
+		pay_order(self.old, CASHIER)  # the last guests pay at the desk
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.old, "docstatus"), 1)
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 1)  # the new guests are there
+		self.assertTrue(table_row()["self_order_open"])  # they may still order
+		self.assertEqual(self.order(session)["invoice"], new)
+
+		print_bill(new, CASHIER)
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 0)
+		self.assertFalse(table_row()["self_order_open"])
+		pay_order(new, CASHIER)
+		self.assertEqual(frappe.db.get_value("POS Invoice", new, "docstatus"), 1)
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 0)
+
+	def test_the_shift_cannot_be_closed_before_both_are_dealt_with(self):
+		self.staff_open()
+		new = add_customer_items(self.scan(), [{"item": FOOD_ITEM, "qty": 1}])["invoice"]
+
+		with self.assertRaises(frappe.ValidationError) as both:
+			close_shift(self.opening)
+		self.assertIn(self.old, str(both.exception))
+		self.assertIn(new, str(both.exception))
+
+		pay_order(self.old, CASHIER)
+		with self.assertRaises(frappe.ValidationError) as one:
+			close_shift(self.opening)
+		self.assertNotIn(self.old, str(one.exception))
+		self.assertIn(new, str(one.exception))
+
+		print_bill(new, CASHIER)
+		pay_order(new, CASHIER)
+		close_shift(self.opening)  # now it can be closed
+		self.assertFalse(branch_is_open(BRANCH))
+
+
+class TestWhichOrderTheFirstDishGoesTo(SelfOrderingCase):
+	"""A guest who scans after a bill was split finds two open orders on the table: the dishes go on the
+	original, the same one every time; the part that was split off does not get the guests' dishes."""
+
+	def setUp(self):
+		super().setUp()
+		from ury.ury.doctype.ury_order.ury_order import split_bill
+
+		self.source = place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=TABLE)
+		row = frappe.get_all("POS Invoice Item", filters={"parent": self.source, "item_code": ALCOHOL_ITEM}, pluck="name")[0]
+		with as_user(CASHIER):
+			self.sibling = split_bill(self.source, [{"name": row, "qty": 1}])["new_invoice"]
+		frappe.db.commit()
+		self.sibling_items = items_of(self.sibling)
+
+	def test_it_goes_to_the_original_every_time(self):
+		self.staff_open()
+		for _ in range(3):
+			order = add_customer_items(self.scan(), [{"item": FOOD_ITEM, "qty": 1}])
+			self.assertEqual(order["invoice"], self.source)
+		self.assertEqual(items_of(self.sibling), self.sibling_items)
+
+	def test_the_split_off_order_is_not_the_one_the_guests_see(self):
+		self.staff_open()
+		session = self.scan()
+		order = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(order["invoice"], self.source)
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "custom_ordering_session"), None)

@@ -1,7 +1,7 @@
 import { formatCurrency } from '@ury/core'
 import type { CustomerOrder, MenuItem, OrderingContext } from '../../lib/api'
-
-type CartEntry = { item: MenuItem; qty: number }
+import type { CartEntry } from '../../lib/cart'
+import CartNote from '../../components/CartNote'
 
 interface CartPanelProps {
   context: OrderingContext | null
@@ -14,6 +14,7 @@ interface CartPanelProps {
   payingOnline: boolean
   onIncrement: (item: MenuItem) => void
   onDecrement: (itemCode: string) => void
+  onNoteChange: (itemCode: string, note: string) => void
   onSubmit: () => void
   onRequestBill: () => void
   onPayOnline: () => void
@@ -36,6 +37,7 @@ function CartPanel({
   payingOnline,
   onIncrement,
   onDecrement,
+  onNoteChange,
   onSubmit,
   onRequestBill,
   onPayOnline,
@@ -53,13 +55,13 @@ function CartPanel({
                   <span>
                     {row.item_name} × {row.qty}
                   </span>
-                  <span>{row.amount}</span>
+                  <span className="tabular-nums">{formatCurrency(row.amount)}</span>
                 </li>
               ))}
             </ul>
             <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
               <span>Total</span>
-              <span>{order.grand_total}</span>
+              <span className="tabular-nums">{formatCurrency(order.grand_total)}</span>
             </div>
           </section>
         )}
@@ -71,7 +73,8 @@ function CartPanel({
           ) : (
             <ul className="space-y-2 text-sm">
               {cartItems.map((entry) => (
-                <li key={entry.item.item} className="flex items-center justify-between gap-2">
+                <li key={entry.item.item}>
+<div className="flex items-center justify-between gap-2">
                   <span className="flex-1">{entry.item.item_name}</span>
                   <span className="flex items-center gap-2">
                     <button
@@ -90,7 +93,11 @@ function CartPanel({
                       +
                     </button>
                   </span>
-                </li>
+                </div>
+{context?.capabilities.item_notes_enabled && (
+<CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => onNoteChange(entry.item.item, value)} />
+)}
+</li>
               ))}
             </ul>
           )}

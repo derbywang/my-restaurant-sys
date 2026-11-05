@@ -4,6 +4,8 @@ import { AlertTriangle, Square } from 'lucide-react';
 import { Button, Spinner, showToast } from '@ury/ui';
 import { useCaptainContext } from '../hooks/useCaptainContext';
 import LanguageMenu from '../../components/LanguageMenu';
+import SelfOrderToggle from '../../components/SelfOrderToggle';
+import { useSelfOrderTables } from '../../hooks/useSelfOrderTables';
 import { t } from '../../i18n';
 import { getRooms, getTables, type Room, type Table } from '../../lib/table-api';
 import { getMergeGroupMembers, sortTablesByMergeGroups } from '../../lib/table-utils';
@@ -40,6 +42,7 @@ export default function CaptainTables() {
   const [branchRooms, setBranchRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [tables, setTables] = useState<Table[]>([]);
+  const selfOrder = useSelfOrderTables();
   const [activeOrders, setActiveOrders] = useState<Map<string, ActiveTableOrder>>(new Map());
   const [ownerNames, setOwnerNames] = useState<Map<string, string>>(new Map());
   const [tablesLoading, setTablesLoading] = useState(false);
@@ -256,6 +259,16 @@ export default function CaptainTables() {
                   ownerName={ownership === 'mine' ? undefined : ownerName}
                   mergePartners={mergePartners}
                   onTap={() => handleTableTap(table, order)}
+                  selfOrderSlot={
+                    <SelfOrderToggle
+                      state={selfOrder.state}
+                      table={table.name}
+                      isTakeAway={table.is_take_away === 1}
+                      now={selfOrder.now}
+                      busy={selfOrder.busy}
+                      onToggle={(name, action) => void selfOrder.toggle(name, action)}
+                    />
+                  }
                 />
               );
             })}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Lock, User, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { Badge } from '@ury/ui';
@@ -16,6 +17,8 @@ export interface CaptainTableCardProps {
   /** Names of other tables merged into this one's cluster (excludes `table.name` itself). */
   mergePartners?: string[];
   onTap: () => void;
+  /** The self-order button of the table (a SelfOrderToggle), when the branch uses self ordering. */
+  selfOrderSlot?: ReactNode;
 }
 
 const elapsedLabel = (isoTimestamp: string | null): string | null => {
@@ -51,6 +54,7 @@ const CaptainTableCard = ({
   ownerName,
   mergePartners,
   onTap,
+  selfOrderSlot,
 }: CaptainTableCardProps) => {
   const isOccupied = table.occupied === 1;
   const isBilled = Boolean(order?.invoicePrinted);
@@ -84,16 +88,14 @@ const CaptainTableCard = ({
         : 'warning';
 
   return (
+    <div className={cn('flex flex-col rounded-xl border-2', colorClasses)}>
     <button
       type="button"
       onClick={onTap}
-      className={cn(
-        'flex min-h-[7.5rem] flex-col items-stretch rounded-xl border-2 p-3 text-left transition-all active:scale-[0.98]',
-        colorClasses
-      )}
+      className="flex min-h-[7.5rem] flex-1 flex-col items-stretch p-3 text-left transition-all active:scale-[0.98]"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="truncate text-lg font-bold" title={table.name}>
+        <span className="min-w-0 break-words text-lg font-bold" title={table.name}>
           {table.name}
         </span>
         {isBilled && <Lock className="h-4 w-4 shrink-0" aria-label={t('captain.billed_locked')} />}
@@ -137,6 +139,8 @@ const CaptainTableCard = ({
         )}
       </div>
     </button>
+    {selfOrderSlot && <div className="px-3 pb-3">{selfOrderSlot}</div>}
+    </div>
   );
 };
 

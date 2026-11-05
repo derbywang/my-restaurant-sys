@@ -135,6 +135,18 @@ describe('opening a draft order from the order list', () => {
     expect(state.lastModifiedTime).toBe('2026-11-03 11:00:00.123456');
   });
 
+  it('knows that every line of it was already sent to the kitchen (so a waiter cannot take a dish back there)', async () => {
+    const { usePOSStore } = await loadStore();
+    usePOSStore.getState().openDraftOrderInNewTab(draft({ items: [{ ...PIZZA, quantity: 2 }, SAKE] as never[] }));
+    expect(usePOSStore.getState().activeOrders.map((item) => item.sentQuantity)).toEqual([2, 1]);
+  });
+
+  it('does not overwrite what a line already says it had sent', async () => {
+    const { usePOSStore } = await loadStore();
+    usePOSStore.getState().openDraftOrderInNewTab(draft({ items: [{ ...PIZZA, quantity: 3, sentQuantity: 2 }] as never[] }));
+    expect(usePOSStore.getState().activeOrders[0].sentQuantity).toBe(2);
+  });
+
   it('keeps each tab\'s own modified time when switching tabs', async () => {
     const { usePOSStore } = await loadStore();
     const store = usePOSStore.getState();

@@ -597,5 +597,15 @@
   "language": {
     "label": "언어",
     "change_failed": "언어 변경에 실패했습니다"
+  },
+  "self_order": {
+    "start": "셀프 주문 시작",
+    "stop": "중지",
+    "open_badge": "접수 중 {{minutes}}분",
+    "store_closed": "POS 개점 전에는 셀프 주문을 시작할 수 없습니다",
+    "started": "{{table}} 셀프 주문을 시작했습니다",
+    "stopped": "{{table}} 셀프 주문을 중지했습니다",
+    "failed": "셀프 주문을 전환하지 못했습니다",
+    "bill_printed": "계산서 발행됨 (결제 대기)"
   }
 }

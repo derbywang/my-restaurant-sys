@@ -1,0 +1,7 @@
+{
+  "cart": {
+    "note_label": "Request (optional)",
+    "note_placeholder": "e.g. no wasabi",
+    "note_hint": "Please write in Japanese or in simple words."
+  }
+}

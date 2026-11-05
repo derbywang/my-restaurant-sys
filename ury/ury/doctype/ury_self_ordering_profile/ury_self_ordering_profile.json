@@ -36,6 +36,7 @@
   "enable_pay_at_counter",
   "session_section",
   "session_idle_timeout_minutes",
+  "table_open_minutes",
   "qr_signing_secret",
   "staff_pin"
  ],
@@ -201,6 +202,13 @@
    "label": "Session Idle Timeout (Minutes)"
   },
   {
+   "default": "240",
+   "description": "How long a table stays open for self ordering after the staff opened it (240 = 4 hours).",
+   "fieldname": "table_open_minutes",
+   "fieldtype": "Int",
+   "label": "Table Open Minutes"
+  },
+  {
    "fieldname": "qr_signing_secret",
    "fieldtype": "Data",
    "hidden": 1,
@@ -222,7 +230,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-02 19:24:59.922860",
+ "modified": "2026-11-05 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",

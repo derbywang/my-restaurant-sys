@@ -110,5 +110,19 @@ class URYKOT(Document):
         frappe.cache().set_value(cache_key, self.time)
 
     def userSetting(self):
-        userDoc = frappe.get_doc("User", self.owner)
+        # The name the kitchen sees next to the table. The guests' orders are saved by the server (as the
+        # administrator), so for those it is the waiter of the order: the staff who opened the table.
+        userDoc = frappe.get_doc("User", self._waiter_of_guests_order() or self.owner)
         self.user = userDoc.full_name
+
+    def _waiter_of_guests_order(self):
+        from ury.ury.doctype.ury_order.ury_order import CUSTOMER_ORDER_SOURCES
+
+        if not self.invoice:
+            return None
+        source, waiter = frappe.db.get_value(
+            "POS Invoice", self.invoice, ["custom_order_source", "waiter"]
+        ) or (None, None)
+        if source in CUSTOMER_ORDER_SOURCES and waiter and frappe.db.exists("User", waiter):
+            return waiter
+        return None

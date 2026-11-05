@@ -597,5 +597,15 @@
   "language": {
     "label": "语言",
     "change_failed": "更改语言失败"
+  },
+  "self_order": {
+    "start": "开启自助点餐",
+    "stop": "停止",
+    "open_badge": "受理中 {{minutes}} 分钟",
+    "store_closed": "尚未开班，不能开启自助点餐",
+    "started": "已开启 {{table}} 的自助点餐",
+    "stopped": "已停止 {{table}} 的自助点餐",
+    "failed": "无法切换自助点餐",
+    "bill_printed": "已打印账单（待收款）"
   }
 }

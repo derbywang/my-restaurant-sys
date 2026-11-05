@@ -34,6 +34,7 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
     payingOnline,
     addToCart,
     decrementCart,
+    setCartNote,
     submitCart,
     handleRequestBill,
     payOnline,
@@ -130,6 +131,7 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
           payingOnline={payingOnline}
           onIncrement={addToCart}
           onDecrement={decrementCart}
+          onNoteChange={setCartNote}
           onSubmit={submitCart}
           onRequestBill={handleRequestBill}
           onPayOnline={payOnline}

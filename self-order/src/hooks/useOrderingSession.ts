@@ -12,6 +12,8 @@ import {
   type OrderingContext,
   type PaymentRequestResult,
 } from '../lib/api'
+import { tokenFromSearch } from '../lib/qr-link'
+import { addToCart as addToCartLine, decrementCart as decrementCartLine, setNote, toPayload, type Cart } from '../lib/cart'
 
 // Same keys api.ts uses internally for sessionStorage persistence. api.ts
 // doesn't expose a clear function (only get/store), so resetSession clears
@@ -19,11 +21,8 @@ import {
 const SESSION_KEY = 'ury_order_session'
 const CONTEXT_KEY = 'ury_order_context'
 
-type Cart = Record<string, { item: MenuItem; qty: number }>
-
 function useQueryToken(): string | null {
-  const params = new URLSearchParams(window.location.search)
-  return params.get('t')
+  return tokenFromSearch(window.location.search)
 }
 
 /**
@@ -131,23 +130,15 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   }, [init])
 
   function addToCart(item: MenuItem) {
-    setCart((prev) => {
-      const existing = prev[item.item]
-      return { ...prev, [item.item]: { item, qty: (existing?.qty ?? 0) + 1 } }
-    })
+    setCart((prev) => addToCartLine(prev, item))
   }
 
   function decrementCart(itemCode: string) {
-    setCart((prev) => {
-      const existing = prev[itemCode]
-      if (!existing) return prev
-      if (existing.qty <= 1) {
-        const rest = { ...prev }
-        delete rest[itemCode]
-        return rest
-      }
-      return { ...prev, [itemCode]: { ...existing, qty: existing.qty - 1 } }
-    })
+    setCart((prev) => decrementCartLine(prev, itemCode))
+  }
+
+  function setCartNote(itemCode: string, note: string) {
+    setCart((prev) => setNote(prev, itemCode, note))
   }
 
   const cartItems = Object.values(cart)
@@ -159,7 +150,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     setSubmitting(true)
     setError(null)
     try {
-      const payload = cartItems.map((entry) => ({ item: entry.item.item, qty: entry.qty }))
+      const payload = toPayload(cart, Boolean(context.capabilities.item_notes_enabled))
       const updated = await addItems(context.session, payload)
       setOrder(updated)
       setCart({})
@@ -212,6 +203,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     payingOnline,
     addToCart,
     decrementCart,
+    setCartNote,
     submitCart,
     handleRequestBill,
     payOnline,

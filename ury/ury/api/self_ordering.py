@@ -26,6 +26,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 
 import frappe
 from frappe import _
@@ -33,14 +34,21 @@ from frappe.utils import add_to_date, now_datetime
 
 from ury.ury_pos.api import resolve_restaurant_menu
 from ury.ury.doctype.ury_order.ury_order import (
+    SELF_ORDER_CLOSE_FIELDS,
+    _get_table_group,
     _resolve_or_create_pos_invoice,
     price_items_for_invoice,
 )
 from ury.ury.api.ury_kot_generate import kot_execute
 
+# The name of the parameter that carries the token in the link of the QR code: written once in
+# qr_link.json, which the ordering page (self-order/src/lib/qr-link.ts) imports as well.
+with open(os.path.join(os.path.dirname(__file__), "qr_link.json")) as _file:
+    QR_TOKEN_PARAM = json.load(_file)["param"]
+
 SESSION_TOKEN_BYTES_HASH_LEN = 64  # frappe.generate_hash(length=..)
 MAX_ITEMS_PER_REQUEST = 50
-MAX_COMMENT_LEN = 200
+MAX_COMMENT_LEN = 140  # the length of the comment field of a POS Invoice Item (a longer note fails the save)
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +67,69 @@ class _elevated:
     def __exit__(self, exc_type, exc, tb):
         frappe.set_user(self._previous_user)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Opening hours and open tables
+#
+# A guest orders only while the branch has a shift that was opened and not closed
+# (whatever day it was opened on: a shift that runs past midnight, or one the staff forgot to
+# close, is still open) and, for a table, only while the staff have opened that table. The
+# errors carry a stable `title`; the ordering page shows its own text for each of them.
+# ---------------------------------------------------------------------------
+
+DEFAULT_TABLE_OPEN_MINUTES = 240
+
+
+def _fail(title, message, exc=frappe.ValidationError):
+    frappe.throw(message, exc, title=title)
+
+
+def branch_is_open(branch):
+    """The branch has an opened POS shift that has not been closed yet (the opening date does not matter)."""
+    if not branch:
+        return False
+    return bool(
+        frappe.db.exists("POS Opening Entry", {"branch": branch, "docstatus": 1, "status": "Open"})
+    )
+
+
+def _open_table_state(table, profile):
+    """The opening of a table that is open for self ordering right now, else None.
+
+    A table is open from the moment the staff opened it until it is closed, released, or the
+    profile's `table_open_minutes` have passed (checked here, no scheduled job).
+    """
+    if not table:
+        return None
+    row = frappe.db.get_value(
+        "URY Table",
+        table,
+        ["self_order_open", "self_order_opened_at", "self_order_opened_by", "self_order_opening"],
+        as_dict=True,
+    )
+    if not row or not row.self_order_open or not row.self_order_opening:
+        return None
+    minutes = profile.table_open_minutes or DEFAULT_TABLE_OPEN_MINUTES
+    if row.self_order_opened_at and add_to_date(row.self_order_opened_at, minutes=minutes) < now_datetime():
+        return None
+    return row
+
+
+def _require_open_store(profile):
+    if not branch_is_open(profile.branch):
+        _fail("Store closed", _("We are not open right now."))
+
+
+def _require_open_table(profile, table):
+    state = _open_table_state(table, profile)
+    if not state:
+        _fail(
+            "Table closed",
+            _("This table is not open for ordering yet. Please ask the staff."),
+            frappe.PermissionError,
+        )
+    return state
 
 
 def _ensure_admin_branch_mapping(branch):
@@ -118,6 +189,16 @@ def generate_qr_token(profile, table=None):
     signature = _sign(payload, secret)
     raw = f"{payload}|{signature}"
     return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def qr_url(public_url, token):
+    """The link to stick on a table: `<public url>/order/?<param>=<token>`. `public_url` is the address the
+    guests reach the server on (the Self Ordering Profile's), never the address of the request: the staff may
+    print the code from the local network."""
+    public_url = (public_url or "").strip().rstrip("/")
+    if not public_url:
+        frappe.throw(_("The public address of the ordering page is not set"), frappe.ValidationError)
+    return f"{public_url}/order/?{QR_TOKEN_PARAM}={token}"
 
 
 def _verify_qr_token(token):
@@ -201,7 +282,7 @@ def _resolve_device(device_id, credential):
 # Ordering session lifecycle
 # ---------------------------------------------------------------------------
 
-def _open_session(profile, source, table, device=None):
+def _open_session(profile, source, table, device=None, table_opening=None):
     raw_session_token = frappe.generate_hash(length=SESSION_TOKEN_BYTES_HASH_LEN)
     token_hash = hashlib.sha256(raw_session_token.encode()).hexdigest()
     timeout_minutes = profile.session_idle_timeout_minutes or 30
@@ -213,6 +294,7 @@ def _open_session(profile, source, table, device=None):
             "source": source,
             "device": device,
             "table": table,
+            "table_opening": table_opening,
             "token_hash": token_hash,
             "status": "Active",
             "opened_at": now_datetime(),
@@ -238,7 +320,9 @@ def _open_session(profile, source, table, device=None):
     return raw_session_token, session
 
 
-def _resolve_session(session_token):
+def _resolve_session(session_token, require_open=True):
+    """The session of a token. `require_open`: the branch must be open and, for a table, the table too
+    (a guest may still read the order and its status after the table has been closed)."""
     if not session_token:
         frappe.throw(_("Missing ordering session"), frappe.PermissionError)
 
@@ -257,6 +341,19 @@ def _resolve_session(session_token):
             session.status = "Expired"
             session.save(ignore_permissions=True)
             frappe.throw(_("Ordering session expired. Please rescan the QR code."), frappe.PermissionError)
+
+        if require_open:
+            profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+            _require_open_store(profile)
+            if session.table:
+                state = _require_open_table(profile, session.table)
+                # a session of an earlier opening of the table (the guests before) is no longer valid
+                if session.table_opening != state.self_order_opening:
+                    _fail(
+                        "Table closed",
+                        _("This table is not open for ordering yet. Please ask the staff."),
+                        frappe.PermissionError,
+                    )
 
         session.last_activity = now_datetime()
         session.expires_at = add_to_date(
@@ -318,7 +415,12 @@ def get_ordering_context(token=None, device_id=None, device_credential=None):
     else:
         frappe.throw(_("Missing ordering token or device credentials"), frappe.PermissionError)
 
-    raw_session_token, session = _open_session(profile, source, table, device_name)
+    _require_open_store(profile)
+    state = _require_open_table(profile, table) if table else None
+
+    raw_session_token, session = _open_session(
+        profile, source, table, device_name, table_opening=state.self_order_opening if state else None
+    )
 
     return _ordering_context_response(raw_session_token, source, profile, table, layout)
 
@@ -356,7 +458,12 @@ def assign_device_table(device_id, device_credential, staff_pin, table):
     if table_branch != profile.branch:
         frappe.throw(_("Invalid table"), frappe.ValidationError)
 
-    raw_session_token, session = _open_session(profile, source, table, device_name)
+    _require_open_store(profile)
+    state = _require_open_table(profile, table)
+
+    raw_session_token, session = _open_session(
+        profile, source, table, device_name, table_opening=state.self_order_opening
+    )
 
     return _ordering_context_response(raw_session_token, source, profile, table, layout)
 
@@ -448,8 +555,18 @@ def _linked_item_options(child_doctype, parent_item_code, invoice_price_list):
 # Current order / append-only mutation
 # ---------------------------------------------------------------------------
 
+def _order_state(docstatus, invoice_printed):
+    """What the guests are told about their order: open, billed (the bill is printed), paid or cancelled."""
+    if docstatus == 2:
+        return "cancelled"
+    if docstatus == 1:
+        return "paid"
+    return "billed" if invoice_printed else "open"
+
+
 def _sanitize_invoice_for_customer(invoice):
     return {
+        "state": _order_state(invoice.docstatus, invoice.invoice_printed),
         "invoice": invoice.name,
         "table": invoice.restaurant_table,
         "order_type": invoice.order_type,
@@ -475,14 +592,19 @@ def _sanitize_invoice_for_customer(invoice):
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_order(session):
-    session = _resolve_session(session)
+    session = _resolve_session(session, require_open=False)
+    empty = {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False}
     if not session.invoice:
-        return {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False}
+        return {**empty, "state": "none"}
 
     with _elevated():
         invoice = frappe.get_doc("POS Invoice", session.invoice)
 
-    return _sanitize_invoice_for_customer(invoice)
+    order = _sanitize_invoice_for_customer(invoice)
+    if order["state"] in ("cancelled", "paid"):
+        # the order is over: nothing of it is shown, and nothing can be added to it
+        return {**empty, "state": order["state"]}
+    return order
 
 
 @frappe.whitelist(allow_guest=True)
@@ -548,7 +670,8 @@ def add_customer_items(session, items):
     for raw in items:
         item_code = raw.get("item")
         qty = raw.get("qty")
-        comment = (raw.get("comment") or "")[:MAX_COMMENT_LEN]
+        # the guests' note: only where the profile allows notes, and not longer than the field takes
+        comment = (raw.get("comment") or "")[:MAX_COMMENT_LEN] if profile.enable_item_notes else ''
 
         if not item_code or item_code not in menu_names:
             frappe.throw(_("Item {0} is not available on this menu").format(item_code), frappe.ValidationError)
@@ -567,9 +690,21 @@ def add_customer_items(session, items):
         _ensure_admin_branch_mapping(profile.branch)
 
         invoice, invoice_name = _resolve_or_create_pos_invoice(
-            table=session.table, invoiceNo=session.invoice, order_type=order_type, is_payment=None,
+            table=session.table,
+            # a session that has no order yet joins the open order of the table, or starts a new one:
+            # never a printed order, and always the same one when there are several (a split bill)
+            invoiceNo=session.invoice or (_invoice_to_add_to(session.table) if session.table else None),
+            order_type=order_type, is_payment=None,
             check_permission=False, override_branch=profile.branch,
         )
+
+        # The order this session works on must still be an open order that has not been billed:
+        # once the bill is printed the guests have been given an amount, and a cancelled or paid
+        # order is over (the table is closed by then, this keeps a kiosk or a stale call honest).
+        if session.invoice and not invoice_name:
+            _fail("Order closed", _("This order is already closed. Please ask the staff."))
+        if invoice_name and invoice.invoice_printed:
+            _fail("Order closed", _("The bill is being prepared. Please ask the staff to add more."))
 
         # _resolve_or_create_pos_invoice() never sets restaurant_table on a
         # brand-new invoice — sync_order() does that itself after the call
@@ -585,6 +720,13 @@ def add_customer_items(session, items):
         # the same table/session instead of one.
         if session.table and not invoice.restaurant_table:
             invoice.restaurant_table = session.table
+
+        # The order of the guests is served by the staff who opened their table (they may be the
+        # only ones to know about it); an order the staff had already started keeps its waiter.
+        if session.table and not invoice.waiter:
+            state = _open_table_state(session.table, profile)
+            if state and state.self_order_opened_by:
+                invoice.waiter = state.self_order_opened_by
 
         # Same gap for order_type on the pickup (no-table) path:
         # _resolve_or_create_pos_invoice() only derives order_type from the
@@ -607,30 +749,12 @@ def add_customer_items(session, items):
         if session.device:
             invoice.custom_ordering_device = session.device
 
-        # Aggregated by item_code, same as current_items_for_kot below (built
-        # after the append). This symmetry matters: add_customer_items()
-        # always appends a NEW row rather than merging into an existing
-        # same-item_code row (simpler, safer for concurrent requests), so a
-        # table's invoice routinely ends up with multiple separate rows for
-        # the same item_code after a few rounds of ordering. kot_execute's
-        # compare_two_array() does an exact-match-then-delta comparison
-        # assuming ONE row per item_code on each side — if `previous_items`
-        # were left as raw per-row entries while `current_items` was
-        # aggregated (as an earlier version of this function had it), a
-        # repeat item_code's several qty=1 previous rows would never
-        # exact-match the aggregated current total, and
-        # compare_two_array's delta loop overwrites (not accumulates)
-        # across multiple matching previous rows -- producing a bogus
-        # cancellation KOT for an item nobody cancelled. Confirmed live via
-        # a real second-order-on-a-multi-round-invoice test.
-        past_qty_by_item = {}
-        past_name_by_item = {}
-        for row in invoice.items:
-            past_qty_by_item[row.item_code] = past_qty_by_item.get(row.item_code, 0) + row.qty
-            past_name_by_item[row.item_code] = row.item_name
+        # One entry per line, as sync_order does (a dish can be on several lines, each with its own
+        # note): compare_two_array totals a dish over its lines and puts the extra quantity on the
+        # lines added last, so the lines appended below carry their notes to the kitchen.
         past_item = [
-            {"item_code": code, "item_name": past_name_by_item[code], "qty": past_qty_by_item[code], "comments": ""}
-            for code in past_qty_by_item
+            {"item_code": row.item_code, "item_name": row.item_name, "qty": row.qty, "comments": ""}
+            for row in invoice.items
         ]
 
         menu = frappe.db.get_value("URY Menu", {"branch": invoice.branch}, "name")
@@ -664,23 +788,15 @@ def add_customer_items(session, items):
             )
 
         try:
-            # kot_execute()'s diff (compare_two_array) expects `current_items`
-            # to be the COMPLETE desired per-item-code quantity state, one
-            # row per item_code — not just the newly-added rows. Passing
-            # clean_items alone here made every pre-existing item look
-            # "removed" (present in previous_items, absent from current),
-            # generating spurious cancellation KOTs for food nobody
-            # cancelled. Aggregate invoice.items (which now includes both
-            # the untouched old rows and the just-appended new ones) by
-            # item_code to build the correct current-state view.
-            qty_by_item = {}
-            name_by_item = {}
-            for row in invoice.items:
-                qty_by_item[row.item_code] = qty_by_item.get(row.item_code, 0) + row.qty
-                name_by_item[row.item_code] = row.item_name
+            # the whole order as it is now, line by line; the guest's note of a new line goes with it
             current_items_for_kot = [
-                {"item_code": code, "item_name": name_by_item[code], "qty": qty_by_item[code], "comments": ""}
-                for code in qty_by_item
+                {
+                    "item_code": row.item_code,
+                    "item_name": row.item_name,
+                    "qty": row.qty,
+                    "comments": row.get("comment") or "",
+                }
+                for row in invoice.items
             ]
             kot_execute(invoice.name, invoice.customer, invoice.restaurant_table, current_items_for_kot, past_item, None)
         except Exception as e:
@@ -731,8 +847,12 @@ def request_bill(session):
 
 @frappe.whitelist(allow_guest=True)
 def get_order_status(session):
-    session = _resolve_session(session)
-    result = {"session_status": session.status, "invoice": session.invoice}
+    session = _resolve_session(session, require_open=False)
+    result = {"session_status": session.status, "invoice": session.invoice, "order_state": "none"}
+    if session.table:
+        profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+        state = _open_table_state(session.table, profile)
+        result["table_open"] = bool(state and state.self_order_opening == session.table_opening)
 
     if session.invoice:
         with _elevated():
@@ -744,6 +864,8 @@ def get_order_status(session):
                 filters={"invoice": session.invoice, "status": ["!=", "Resolved"]},
                 fields=["name", "request_type", "status"],
             )
+        if invoice_fields:
+            result["order_state"] = _order_state(invoice_fields.docstatus, invoice_fields.invoice_printed)
         result["billed"] = bool(invoice_fields and invoice_fields.invoice_printed)
         result["submitted"] = bool(invoice_fields and invoice_fields.docstatus == 1)
         result["open_requests"] = open_requests
@@ -934,3 +1056,187 @@ def share_payment_link(session, recipient):
     _communication_provider(recipient, message)
 
     return {"status": "Sent", "payment_request": pr.name}
+
+
+def _draft_orders_of_tables(tables, **filters):
+    """Open (draft) orders on any of the tables, or on a table merged into them."""
+    return frappe.get_all(
+        "POS Invoice",
+        filters={"docstatus": 0, **filters},
+        or_filters=[["restaurant_table", "in", tables]]
+        + [["custom_merged_tables", "like", f"%{name}%"] for name in tables],
+        fields=["name", "restaurant_table", "custom_merged_tables", "custom_split_from", "creation"],
+        order_by="creation asc",
+    )
+
+
+def _tables_held_by_a_printed_bill(branch=None, tables=None):
+    """Tables that are occupied by nothing but printed bills (the guests have not left).
+
+    Printing releases the table, so a printed bill does not hold its table by itself; this is a guard for
+    the state in which it would. A table whose last guests have a printed, unpaid bill but are at the cash
+    desk is Available and may be opened for the next guests: their dishes go on a new order.
+    """
+    filters = {"invoice_printed": 1}
+    if branch:
+        filters["branch"] = branch
+    printed = frappe.get_all(
+        "POS Invoice",
+        filters={"docstatus": 0, **filters},
+        fields=["restaurant_table", "custom_merged_tables"],
+    )
+    held = set()
+    for row in printed:
+        if not row.restaurant_table:
+            continue
+        group = _get_table_group(row.restaurant_table, row.custom_merged_tables)
+        if tables is not None and not set(group) & set(tables):
+            continue
+        if not any(frappe.db.get_value("URY Table", name, "occupied") for name in group):
+            continue
+        if _draft_orders_of_tables(group, invoice_printed=0):
+            continue  # an order that is not printed is on the table: the next guests' order
+        held.update(group)
+    return held
+
+
+def _invoice_to_add_to(table):
+    """The open, not printed order the first dishes of a new session go to; None when there is none.
+
+    A table can have several (a bill that was split): the dishes go on the original, the one that was not
+    split off (`custom_split_from` empty), the earliest if there are several. A printed order is never one.
+    """
+    cluster = _get_table_group(table)
+    orders = _draft_orders_of_tables(cluster, invoice_printed=0)
+    if not orders:
+        return None
+    originals = [order for order in orders if not order.custom_split_from]
+    return (originals or orders)[0].name
+
+
+# ---------------------------------------------------------------------------
+# Staff: open and close a table for self ordering
+# ---------------------------------------------------------------------------
+
+def _staff_table(table):
+    """The URY Table, for staff who take orders at that table's branch."""
+    from ury.ury_pos.api import getBranch
+
+    if frappe.session.user == "Guest" or not frappe.has_permission("POS Invoice", "create"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    table_doc = frappe.get_doc("URY Table", table)
+    if frappe.session.user != "Administrator" and "System Manager" not in frappe.get_roles():
+        if table_doc.branch != getBranch():
+            frappe.throw(_("Not permitted for a table of another branch"), frappe.PermissionError)
+    return table_doc
+
+
+@frappe.whitelist()
+def open_table_for_ordering(table):
+    """The guests sit down: let them order from this table (the whole merged group) for a while."""
+    table_doc = _staff_table(table)
+
+    if table_doc.is_take_away:
+        frappe.throw(_("A take away table cannot be opened for self ordering"), frappe.ValidationError)
+
+    profile_name = frappe.db.get_value(
+        "URY Self Ordering Profile", {"branch": table_doc.branch, "enabled": 1}, "name"
+    )
+    profile = frappe.get_doc("URY Self Ordering Profile", profile_name) if profile_name else None
+    if not profile or not profile.enable_qr_table_ordering:
+        frappe.throw(_("Self ordering at tables is not set up for this branch"), frappe.ValidationError)
+
+    _require_open_store(profile)
+
+    cluster = _get_table_group(table)
+    if _tables_held_by_a_printed_bill(table_doc.branch, cluster):
+        _fail("Order closed", _("The bill of this table is printed and the guests are still there."))
+
+    opening = frappe.generate_hash(length=16)
+    opened_at = now_datetime()
+    for name in cluster:
+        frappe.db.set_value(
+            "URY Table",
+            name,
+            {
+                "self_order_open": 1,
+                "self_order_opened_at": opened_at,
+                "self_order_opened_by": frappe.session.user,
+                "self_order_opening": opening,
+            },
+            update_modified=False,
+        )
+
+    minutes = profile.table_open_minutes or DEFAULT_TABLE_OPEN_MINUTES
+    return {
+        "tables": cluster,
+        "opened_at": opened_at,
+        "expires_at": add_to_date(opened_at, minutes=minutes),
+    }
+
+
+@frappe.whitelist()
+def close_table_for_ordering(table):
+    """Stop self ordering at this table (the whole merged group); the guests' sessions end."""
+    table_doc = _staff_table(table)
+
+    cluster = _get_table_group(table)
+    for name in cluster:
+        frappe.db.set_value("URY Table", name, SELF_ORDER_CLOSE_FIELDS, update_modified=False)
+    # the sessions are not touched: they are no longer valid because the table has no opening any more
+    return {"tables": cluster}
+
+
+@frappe.whitelist()
+def get_open_tables():
+    """For the POS: does the branch offer self ordering at tables, is it open for business, and which
+    tables are open now. Nothing is offered to a guest or to a user who does not take orders."""
+    from ury.ury_pos.api import getBranch
+
+    nothing = {"enabled": False, "store_open": False, "tables": [], "blocked": []}
+    if (
+        frappe.session.user == "Guest"
+        or not frappe.has_permission("POS Invoice", "create")
+        or not frappe.db.has_column("URY Table", "self_order_open")
+    ):
+        return nothing
+
+    try:
+        branch = getBranch()
+    except frappe.ValidationError:
+        return nothing
+
+    profile = frappe.db.get_value(
+        "URY Self Ordering Profile",
+        {"branch": branch, "enabled": 1},
+        ["enable_qr_table_ordering", "table_open_minutes"],
+        as_dict=True,
+    )
+    if not profile or not profile.enable_qr_table_ordering:
+        return nothing
+
+    minutes = profile.table_open_minutes or DEFAULT_TABLE_OPEN_MINUTES
+    now = now_datetime()
+    tables = []
+    for row in frappe.get_all(
+        "URY Table",
+        filters={"branch": branch, "self_order_open": 1},
+        fields=["name", "self_order_opened_at", "self_order_opened_by"],
+        order_by="name",
+    ):
+        expires_at = add_to_date(row.self_order_opened_at, minutes=minutes) if row.self_order_opened_at else None
+        if expires_at and expires_at < now:
+            continue
+        tables.append(
+            {
+                "table": row.name,
+                "opened_at": row.self_order_opened_at,
+                "expires_at": expires_at,
+                "opened_by": row.self_order_opened_by,
+            }
+        )
+    # tables the button is not offered for: occupied by nothing but a printed bill (the server refuses
+    # to open them, see open_table_for_ordering)
+    blocked = _tables_held_by_a_printed_bill(branch)
+    return {"enabled": True, "store_open": branch_is_open(branch), "tables": tables, "blocked": sorted(blocked)}

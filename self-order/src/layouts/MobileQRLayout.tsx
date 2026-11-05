@@ -1,5 +1,6 @@
 import { formatCurrency } from '@ury/core'
 import { useOrderingSession } from '../hooks/useOrderingSession'
+import CartNote from '../components/CartNote'
 import type { OrderingContext } from '../lib/api'
 
 interface LayoutProps {
@@ -20,6 +21,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     payingOnline,
     addToCart,
     decrementCart,
+    setCartNote,
     submitCart,
     handleRequestBill,
     payOnline,
@@ -86,13 +88,13 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             {order.items.map((row, idx) => (
               <li key={`${row.item_code}-${idx}`} className="flex justify-between">
                 <span>{row.item_name} × {row.qty}</span>
-                <span>{row.amount}</span>
+                <span className="tabular-nums">{formatCurrency(row.amount)}</span>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
             <span>Total</span>
-            <span>{order.grand_total}</span>
+            <span className="tabular-nums">{formatCurrency(order.grand_total)}</span>
           </div>
           {context?.capabilities.customer_payment_enabled && !order.billed && (
             <button
@@ -146,7 +148,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
         <div className="fixed inset-x-0 bottom-0 border-t bg-background p-4">
           <ul className="mb-2 max-h-32 space-y-1 overflow-y-auto text-sm">
             {cartItems.map((entry) => (
-              <li key={entry.item.item} className="flex items-center justify-between">
+              <li key={entry.item.item}>
+<div className="flex items-center justify-between">
                 <span>{entry.item.item_name}</span>
                 <span className="flex items-center gap-2">
                   <button
@@ -165,7 +168,11 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
                     +
                   </button>
                 </span>
-              </li>
+              </div>
+{context?.capabilities.item_notes_enabled && (
+<CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => setCartNote(entry.item.item, value)} />
+)}
+</li>
             ))}
           </ul>
           <div className="mb-2 flex items-center justify-between text-sm font-semibold">

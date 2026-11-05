@@ -597,5 +597,15 @@
   "language": {
     "label": "言語",
     "change_failed": "言語の変更に失敗しました"
+  },
+  "self_order": {
+    "start": "セルフオーダー開始",
+    "stop": "停止",
+    "open_badge": "受付中 {{minutes}}分",
+    "store_closed": "レジ開け前はセルフオーダーを開始できません",
+    "started": "{{table}} のセルフオーダーを開始しました",
+    "stopped": "{{table}} のセルフオーダーを停止しました",
+    "failed": "セルフオーダーを切り替えられませんでした",
+    "bill_printed": "伝票発行済み（会計待ち）"
   }
 }

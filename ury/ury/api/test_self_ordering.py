@@ -260,7 +260,7 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
     @patch(f"{MOD}.frappe.db.set_value")
     @patch(f"{MOD}.frappe.db.get_value")
     @patch(f"{MOD}.frappe.set_user")
-    def test_add_customer_items_aggregates_past_item_for_repeated_item_code(
+    def test_add_customer_items_sends_only_the_new_dish_when_a_dish_is_on_two_lines(
         self, mock_set_user, mock_db_get_value, mock_db_set_value, mock_db_exists, mock_resolve_session, mock_get_doc,
         mock_resolve_menu, mock_resolve_invoice, mock_price_items, mock_kot,
     ):
@@ -333,14 +333,20 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
         current_items_arg = kot_args[3]
         previous_items_arg = kot_args[4]
 
-        # Both current and previous must show ONE aggregated Biryani entry
-        # (qty=2), not two separate qty=1 entries -- symmetry is the fix.
-        current_by_item = {row["item_code"]: row["qty"] for row in current_items_arg}
-        previous_by_item = {row["item_code"]: row["qty"] for row in previous_items_arg}
-        self.assertEqual(current_by_item, {"Biryani": 2, "Sandwich": 1})
-        self.assertEqual(previous_by_item, {"Biryani": 2})
-        # Exactly one entry per item_code on each side -- not two Biryani rows.
-        self.assertEqual(len(previous_items_arg), 1)
+        # The order goes to the kitchen line by line (a dish can be on several lines, each with its
+        # own note; compare_two_array totals a dish over its lines since 249129f). What matters is
+        # that the difference is only the new dish: nothing is "cancelled" for Biryani.
+        self.assertEqual([(row["item_code"], row["qty"]) for row in previous_items_arg], [("Biryani", 1), ("Biryani", 1)])
+        self.assertEqual(
+            [(row["item_code"], row["qty"]) for row in current_items_arg],
+            [("Biryani", 1), ("Biryani", 1), ("Sandwich", 1)],
+        )
+        from ury.ury.api.ury_kot_generate import compare_two_array, create_order_items, get_removed_items
+
+        now, before = create_order_items(current_items_arg), create_order_items(previous_items_arg)
+        difference = compare_two_array(now, before)
+        self.assertEqual([(row["item_code"], row["qty"]) for row in difference], [("Sandwich", 1)])
+        self.assertEqual(get_removed_items(before, now), [])
 
     @patch(f"{MOD}._resolve_session")
     def test_add_customer_items_rejects_item_not_on_menu(self, mock_resolve_session):
@@ -772,13 +778,18 @@ class TestAssignDeviceTable(unittest.TestCase):
         profile.allow_add_to_running_table = 1
         return profile
 
+    @patch(f"{MOD}._require_open_table")
+    @patch(f"{MOD}._require_open_store")
     @patch(f"{MOD}._open_session")
     @patch(f"{MOD}.frappe.db.exists")
     @patch(f"{MOD}.frappe.db.get_value")
     @patch(f"{MOD}._resolve_device")
     def test_assign_device_table_valid_pin_opens_session(
         self, mock_resolve_device, mock_db_get_value, mock_db_exists, mock_open_session,
+        mock_require_store, mock_require_table,
     ):
+        # (the opening hours and the opened table are covered by test_self_ordering_table.py)
+        mock_require_table.return_value = MagicMock(self_order_opening="OPENING-1")
         profile = self._profile()
         mock_resolve_device.return_value = (profile, None, "Kiosk", "DEVICE-1", "Tablet")
 
@@ -799,7 +810,7 @@ class TestAssignDeviceTable(unittest.TestCase):
 
         self.assertEqual(result["session"], "raw-session-token")
         self.assertEqual(result["table"], "Table 7")
-        mock_open_session.assert_called_once_with(profile, "Kiosk", "Table 7", "DEVICE-1")
+        mock_open_session.assert_called_once_with(profile, "Kiosk", "Table 7", "DEVICE-1", table_opening="OPENING-1")
 
     @patch(f"{MOD}.frappe.db.get_value")
     @patch(f"{MOD}._resolve_device")

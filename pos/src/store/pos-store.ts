@@ -1164,8 +1164,9 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       tabOrder: [...state.tabOrder, { id: newTabId, name: newTabName }],
       nextTabNumber: state.nextTabNumber + 1,
       heldTabs: { ...state.heldTabs, [state.activeTabId]: currentTabState },
-      // Populate the new tab with the draft order's data
-      activeOrders: draft.items,
+      // Populate the new tab with the draft order's data. Every line of a saved order has been sent to
+      // the kitchen: who may not take dishes back can only add to it (see lib/sent-items.ts).
+      activeOrders: draft.items.map((item) => ({ ...item, sentQuantity: item.sentQuantity ?? item.quantity })),
       selectedCustomer: draft.customer,
       selectedOrderType: draft.orderType,
       selectedTable: draft.table,

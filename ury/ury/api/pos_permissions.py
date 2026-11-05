@@ -65,6 +65,8 @@ def get_pos_permissions():
 		"unmerge_bills": billing,
 		"split_bill": billing,
 		"reduce_sent_items": can_reduce_sent_items(_profile_of_user()),
+		# opening a table for self ordering: whoever takes orders (the POS also checks the branch's Self Ordering Profile)
+		"open_self_order": bool(frappe.has_permission("POS Invoice", "create")),
 		"open_shift": bool(frappe.has_permission("POS Opening Entry", "create")),
 		"close_shift": bool(frappe.has_permission("POS Closing Entry", "create")),
 	}

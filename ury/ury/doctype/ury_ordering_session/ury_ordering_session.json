@@ -13,6 +13,7 @@
   "source",
   "device",
   "table",
+  "table_opening",
   "token_hash",
   "status_section",
   "status",
@@ -52,6 +53,13 @@
    "fieldtype": "Link",
    "label": "Table",
    "options": "URY Table"
+  },
+  {
+   "description": "The opening of the table (URY Table.self_order_opening) this session was started in.",
+   "fieldname": "table_opening",
+   "fieldtype": "Data",
+   "label": "Table Opening",
+   "read_only": 1
   },
   {
    "fieldname": "token_hash",
@@ -100,7 +108,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-19 02:25:00.000000",
+ "modified": "2026-11-05 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Ordering Session",

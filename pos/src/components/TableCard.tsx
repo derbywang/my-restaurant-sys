@@ -1,4 +1,4 @@
-import { type MouseEvent } from 'react';
+import { type MouseEvent, type ReactNode } from 'react';
 import { Eye, Loader2, Printer, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { formatInvoiceTime } from '@ury/core';
@@ -30,6 +30,8 @@ interface TableCardProps {
   onPrint: (event: MouseEvent<HTMLButtonElement>) => void;
   isPrinting: boolean;
   isRestricted?: boolean;
+  /** The self-order button of the table (a SelfOrderToggle), when the branch uses self ordering. */
+  selfOrderSlot?: ReactNode;
 }
 
 const TableCard = ({
@@ -48,6 +50,7 @@ const TableCard = ({
   onPrint,
   isPrinting,
   isRestricted = false,
+  selfOrderSlot,
 }: TableCardProps) => {
   const isOccupied = table.occupied === 1;
 
@@ -72,12 +75,12 @@ const TableCard = ({
       )}
     >
       <div className="flex flex-1 flex-col">
-        <div className="mb-3 flex items-start justify-between gap-1">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-x-1 gap-y-2">
+          <div className="flex min-w-[6rem] flex-1 items-center gap-2">
             <div className="shrink-0">
               <TableShapeIcon shape={table.table_shape || 'Rectangle'} />
             </div>
-            <span className="truncate text-lg font-semibold text-gray-900" title={mergeGroupLabel ?? table.name}>
+            <span className="break-words text-lg font-semibold text-gray-900" title={mergeGroupLabel ?? table.name}>
               {table.name}
             </span>
           </div>
@@ -137,6 +140,8 @@ const TableCard = ({
           )}
         </div>
       </div>
+
+      {selfOrderSlot && <div className="mb-3">{selfOrderSlot}</div>}
 
       <div
         className={cn(

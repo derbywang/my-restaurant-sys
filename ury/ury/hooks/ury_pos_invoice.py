@@ -2,7 +2,11 @@ import frappe
 from datetime import datetime
 from frappe.utils import now_datetime, get_time, now, get_datetime
 from ury.ury.api.pos_permissions import can_reduce_sent_items
-from ury.ury.doctype.ury_order.ury_order import release_merge_cluster_tables
+from ury.ury.doctype.ury_order.ury_order import (
+    _get_table_group,
+    _has_open_pos_invoices_for_cluster,
+    release_merge_cluster_tables,
+)
 
 
 def before_insert(doc, method):
@@ -395,6 +399,13 @@ def release_merged_tables(doc):
             continue
 
         if not invoice.restaurant_table:
+            continue
+
+        # The bill of the last guests may be paid after the next guests were seated and have an order
+        # that is not printed yet: their table is not free.
+        if _has_open_pos_invoices_for_cluster(
+            _get_table_group(invoice.restaurant_table, invoice.get("custom_merged_tables"))
+        ):
             continue
 
         frappe.db.set_value(

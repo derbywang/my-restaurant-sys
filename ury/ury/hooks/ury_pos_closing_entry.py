@@ -4,6 +4,20 @@ from frappe import _
 def before_save(doc, method):
     sub_pos_close_check(doc, method)
 
+
+def on_submit(doc, method):
+    close_self_ordering(doc, method)
+
+
+def close_self_ordering(doc, method):
+    """The shift is closed: no table of the branch stays open for self ordering."""
+    from ury.ury.doctype.ury_order.ury_order import self_order_close_fields
+
+    fields = self_order_close_fields()
+    branch = frappe.db.get_value("POS Profile", doc.pos_profile, "branch")
+    if fields and branch:
+        frappe.db.set_value("URY Table", {"branch": branch, "self_order_open": 1}, fields, update_modified=False)
+
 def validate(doc, method):
     validate_closing_covers_all_invoices(doc, method)
     validate_no_open_orders(doc, method)

@@ -40,6 +40,7 @@ CASHIER_ONLY = {
 	"merge_bills": True,
 	"unmerge_bills": True,
 	"split_bill": True,
+	"open_self_order": True,
 	"open_shift": True,
 	"close_shift": True,
 }
@@ -52,6 +53,7 @@ CAPTAIN_ONLY = {
 	"merge_bills": False,
 	"unmerge_bills": False,
 	"split_bill": False,
+	"open_self_order": True,  # whoever takes orders may open a table for the guests
 	"open_shift": False,
 	"close_shift": False,
 }

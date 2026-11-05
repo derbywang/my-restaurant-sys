@@ -425,5 +425,15 @@
     "paid": "Payé",
     "consolidated": "Consolidé",
     "return": "Retour"
+  },
+  "self_order": {
+    "start": "Démarrer la commande libre-service",
+    "stop": "Arrêter",
+    "open_badge": "Ouvert {{minutes}} min",
+    "store_closed": "La commande libre-service ne peut pas démarrer avant l'ouverture de la caisse",
+    "started": "Commande libre-service démarrée pour {{table}}",
+    "stopped": "Commande libre-service arrêtée pour {{table}}",
+    "failed": "Impossible de changer la commande libre-service",
+    "bill_printed": "Addition imprimée (en attente de paiement)"
   }
 }

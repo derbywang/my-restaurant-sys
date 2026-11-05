@@ -597,5 +597,15 @@
   "language": {
     "label": "Language",
     "change_failed": "Failed to change language"
+  },
+  "self_order": {
+    "start": "Start self-order",
+    "stop": "Stop",
+    "open_badge": "Open {{minutes}} min",
+    "store_closed": "Self-order cannot be started before the shift is opened",
+    "started": "Self-order started for {{table}}",
+    "stopped": "Self-order stopped for {{table}}",
+    "failed": "Could not switch self-order",
+    "bill_printed": "Bill printed (awaiting payment)"
   }
 }

@@ -360,11 +360,29 @@ def _reconcile_open_invoices_for_tables(table_names):
             _reconcile_invoice_merged_tables(invoice, persist=True)
 
 
-TABLE_RELEASE_FIELDS = {
-    "occupied": 0,
-    "latest_invoice_time": None,
-    "merged_with": None,
+# A table that is closed for self ordering: the guests' sessions of that opening stop being valid.
+# Releasing a table (bill printed, paid, cancelled) closes it; so does a transfer and the shift closing.
+SELF_ORDER_CLOSE_FIELDS = {
+    "self_order_open": 0,
+    "self_order_opened_at": None,
+    "self_order_opened_by": None,
+    "self_order_opening": None,
 }
+
+def self_order_close_fields():
+    """The fields to reset when a table closes for self ordering. Empty until the migration that adds
+    the columns has run, so code that is ahead of the schema (a deploy in progress, a site not yet
+    migrated) can still print, cancel and transfer."""
+    return SELF_ORDER_CLOSE_FIELDS if frappe.db.has_column("URY Table", "self_order_open") else {}
+
+
+def table_release_fields():
+    return {
+        "occupied": 0,
+        "latest_invoice_time": None,
+        "merged_with": None,
+        **self_order_close_fields(),
+    }
 
 
 def release_merge_cluster_tables(table_or_tables):
@@ -378,7 +396,7 @@ def release_merge_cluster_tables(table_or_tables):
         frappe.db.set_value(
             "URY Table",
             member,
-            TABLE_RELEASE_FIELDS,
+            table_release_fields(),
             update_modified=False,
         )
 
@@ -911,6 +929,20 @@ def _has_role(user_roles, role_permitted_rows):
     return any(row.role in user_roles for row in (role_permitted_rows or []))
 
 
+# Orders the guests placed themselves (self ordering). They have no waiter of their own: whoever of the
+# branch's staff takes orders may serve them, add to them and change them like any order. Taking dishes
+# back stays with can_reduce_sent_items (the cashier and the manager).
+CUSTOMER_ORDER_SOURCES = ("QR Table", "QR Pickup", "Kiosk", "Table Tablet")
+
+
+def _is_my_order(invoice):
+    """The order is the user's own: the user is its waiter, or the guests placed it (self ordering)."""
+    return (
+        frappe.session.user == invoice.waiter
+        or getattr(invoice, "custom_order_source", None) in CUSTOMER_ORDER_SOURCES
+    )
+
+
 def _order_ownership_flags(invoice, pos_profile_name=None):
     """Compute the same is_mine / has_elevated_access / is_billing_user /
     can_view / can_modify booleans that `get_table_order_context()` derives
@@ -922,7 +954,7 @@ def _order_ownership_flags(invoice, pos_profile_name=None):
     branch in `get_table_order_context()`.
     """
     order_exists = bool(invoice.name)
-    is_mine = order_exists and frappe.session.user == invoice.waiter
+    is_mine = order_exists and _is_my_order(invoice)
 
     pos_profile_name = pos_profile_name or invoice.get("pos_profile")
 
@@ -1104,7 +1136,7 @@ def get_table_order_context(table):
             )
 
         order = invoice.as_dict()
-        is_mine = frappe.session.user == invoice.waiter
+        is_mine = _is_my_order(invoice)
 
     assignment = (
         {"waiter": invoice.waiter, "is_mine": is_mine} if invoice else None
@@ -1368,7 +1400,7 @@ def sync_order(
     # exists — a brand-new invoice has no owner or billed state to protect.
     elevated_user = _has_role(user_role, posprofile.transfer_role_permissions)
     if invoice.name:
-        is_mine = frappe.session.user == invoice.waiter
+        is_mine = _is_my_order(invoice)
         can_view_order = is_mine or elevated_user or billing_user
         if not can_view_order:
             frappe.throw(_("Not permitted to modify this order"), frappe.PermissionError)
@@ -1797,7 +1829,7 @@ def table_transfer(table, newTable, invoice):
     frappe.db.set_value(
         "URY Table",
         current_table.name,
-        {"occupied": 0, "latest_invoice_time": None},
+        {"occupied": 0, "latest_invoice_time": None, **self_order_close_fields()},
     )
 
     pos_invoice.restaurant_table = new_table.name

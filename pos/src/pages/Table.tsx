@@ -21,6 +21,8 @@ import TableUnmergeDialog from '../components/TableUnmergeDialog';
 import TableTransferDialog from '../components/TableTransferDialog';
 import CaptainTransferDialog from '../components/CaptainTransferDialog';
 import TableCard from '../components/TableCard';
+import SelfOrderToggle from '../components/SelfOrderToggle';
+import { useSelfOrderTables } from '../hooks/useSelfOrderTables';
 import MergeLinkConnector from '../components/MergeLinkConnector';
 
 const TableView = () => {
@@ -34,6 +36,7 @@ const TableView = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
+  const selfOrder = useSelfOrderTables();
   const [tablesCache, setTablesCache] = useState<Record<string, Table[]>>({});
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
@@ -387,6 +390,16 @@ const TableView = () => {
       onPrint={(event) => handlePrintTable(table, event)}
       isPrinting={printingTable === table.name}
       isRestricted={isRestricted}
+      selfOrderSlot={
+        <SelfOrderToggle
+          state={selfOrder.state}
+          table={table.name}
+          isTakeAway={table.is_take_away === 1}
+          now={selfOrder.now}
+          busy={selfOrder.busy}
+          onToggle={(name, action) => void selfOrder.toggle(name, action)}
+        />
+      }
     />
     );
   };

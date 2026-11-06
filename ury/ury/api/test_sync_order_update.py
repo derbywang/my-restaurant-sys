@@ -93,11 +93,11 @@ class TestUpdateAnOrder(URYFlowTestCase):
 			place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], order_type="Take Away", invoice=name)
 		self.assertEqual(self._items(name), [FOOD_ITEM])
 
-	def test_a_captain_cannot_change_the_order_of_another_captain(self):
+	def test_a_captain_may_add_to_the_order_of_another_user(self):
+		"""An order has no owner to protect (2026-11); see test_captain_access for the limits that remain."""
 		name = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")
-		with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
-			place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], order_type="Take Away", invoice=name)
-		self.assertEqual(self._items(name), [FOOD_ITEM])
+		place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], order_type="Take Away", invoice=name)
+		self.assertEqual(self._items(name), [FOOD_ITEM, ALCOHOL_ITEM])
 
 	def test_a_new_order_on_a_table_with_an_unprinted_order_is_still_refused(self):
 		place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])

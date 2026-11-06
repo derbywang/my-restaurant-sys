@@ -497,6 +497,16 @@
 | 11 | **员工能分辨顾客订单** | 订单页、桌卡片上带「セルフ」标记（来自 `custom_order_source`）；POS 的订单列表接口返回该字段（自助机未付款列表本来就需要它，3.10） | 订单列表里有来源 | 3 |
 | 12 | **Administrator 提升权限留下的痕迹**：自助点餐的保存、`modified_by` 是 Administrator | 不处理（审计上分得出来：有 `custom_ordering_session`） | — | 不做 |
 
+**员工打开订单的规则（2026-11 门店决定；取代以前的“服务员只能打开自己的单”，上表第 2 项的“顾客订单对全员可见”是它的特例）**
+
+- 订单没有“所有者”要保护：同一分店的每位服务员都能打开该分店任何一桌的未结订单，加菜、写备注；服务员 A 点的单，服务员 B 能接手。
+- 限制只有两条：
+  1. **分店**：别的分店的订单不能打开（`get_order_invoice`、`get_table_order_context`、`sync_order`、补打厨房单都先查分店）。
+  2. **房间**：URY User 里给这位服务员指定了房间（`room` 有值）时，只能打开该房间里桌子的订单；没指定房间（分店级，`room` 为空）时，同分店的所有桌都能打开。收银员、店长（有转台权限或收款权限的人）不受房间限制。
+- 补打厨房单（`reprint_kot`）用同一条规则：同分店、在房间范围内的服务员都能补打，POS Profile 里的补打开关（`custom_enable_kot_reprint`）仍然要打开。
+- **不变**：减菜 / 取消已发送的菜仍只有收银员和店长（`can_reduce_sent_items`）；转台、转服务员仍需要转台权限；已打印账单的订单，没有收款权限的服务员不能再改。
+- 代码：`_order_ownership_flags` 和 `get_table_order_context` 里 `can_view` 不再看 `is_mine`；`sync_order` 去掉“只有本人 / 转台权限 / 收款权限才能改”一条，其余检查（分店、房间、已打印、减菜）原样；服务员端桌台页（`CaptainTables.tsx`）点别人的桌不再拦截。测试：`ury/ury/api/test_captain_access.py`。
+
 #### 5.1.1 拆单（会計分割）
 
 **事实**（读 `split_bill`）：

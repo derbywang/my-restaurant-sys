@@ -434,14 +434,12 @@ class TestGetTableOrderContext(FrappeTestCase):
         self.assertFalse(result["permissions"]["settle"])
         self.assertFalse(result["permissions"]["cancel"])
 
-    def test_other_captains_order_without_elevated_access_denied(self):
-        """Captain A viewing Captain B's table with no transfer/billing access:
-        every permission must be false (the ported V1 ownership check)."""
+    def test_other_captains_order_is_open_to_every_captain_of_the_branch(self):
+        """Captain A viewing Captain B's table: view and modify, but not taking dishes back, moving the table
+        or the captain (2026-11: an order has no owner to protect; the branch and the room are what limit)."""
         table_doc = self._table_doc()
         invoice_doc = self._invoice_doc(waiter="captain_b@example.com")
-        pos_profile = _make_pos_profile(
-            remove_items=1, custom_enable_kot_reprint=1
-        )
+        pos_profile = _make_pos_profile(remove_items=1, custom_enable_kot_reprint=1)
 
         result = self._run(
             session_user="captain_a@example.com",
@@ -452,8 +450,12 @@ class TestGetTableOrderContext(FrappeTestCase):
         )
 
         self.assertFalse(result["assignment"]["is_mine"])
-        for key, value in result["permissions"].items():
-            self.assertFalse(value, f"expected permissions.{key} to be False")
+        permissions = result["permissions"]
+        self.assertTrue(permissions["view"])
+        self.assertTrue(permissions["modify"])
+        self.assertTrue(permissions["reprint_kot"])
+        for key in ("transfer_table", "transfer_captain"):
+            self.assertFalse(permissions[key], f"expected permissions.{key} to be False")
 
     def test_other_captains_order_with_elevated_access_allowed(self):
         """Captain with transfer_role_permissions can view/modify another
@@ -566,41 +568,6 @@ class TestSyncOrderHardening(FrappeTestCase):
     on top of the pre-existing billing-role/write-permission/stale-write
     checks — ownership, billed-state, role-restricted Dine-In, table
     branch/room, and item reduction/removal."""
-
-    @patch("ury.ury.doctype.ury_order.ury_order.get_order_invoice")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.has_permission")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_doc")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_roles")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.session")
-    def test_denies_other_captains_order(
-        self, mock_session, mock_get_roles, mock_get_doc, mock_has_permission, mock_get_order_invoice
-    ):
-        mock_invoice = MagicMock()
-        mock_invoice.name = "POS-INV-001"
-        mock_invoice.waiter = "captain_b@example.com"
-        mock_invoice.invoice_printed = 0
-        mock_get_order_invoice.return_value = mock_invoice
-
-        mock_pos_profile = _make_pos_profile()  # no elevated/billing roles configured
-        mock_get_doc.return_value = mock_pos_profile
-
-        mock_get_roles.return_value = ["URY Captain"]
-        mock_session.user = "captain_a@example.com"
-        mock_has_permission.return_value = True
-
-        with self.assertRaises(frappe.PermissionError) as context:
-            sync_order(
-                items="[]",
-                cashier="fake_cashier",
-                owner="fake_owner",
-                mode_of_payment="Cash",
-                customer="Test Customer",
-                no_of_pax=2,
-                last_invoice=None,
-                waiter="fake_waiter",
-                pos_profile="Test Profile",
-            )
-        self.assertIn("Not permitted to modify this order", str(context.exception))
 
     @patch("ury.ury.doctype.ury_order.ury_order.get_order_invoice")
     @patch("ury.ury.doctype.ury_order.ury_order.frappe.has_permission")
@@ -843,48 +810,6 @@ class TestGetOrderInvoiceOwnership(FrappeTestCase):
     """Phase 3: get_order_invoice() previously fetched/returned an invoice
     with only a DocType-level read-permission + branch check. These cover
     the added Captain/waiter ownership + room-access validation."""
-
-    @patch("ury.ury.doctype.ury_order.ury_order.getBranch")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.has_permission")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_doc")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_value")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_roles")
-    @patch("ury.ury.doctype.ury_order.ury_order.frappe.session")
-    def test_denies_other_captains_order(
-        self,
-        mock_session,
-        mock_get_roles,
-        mock_get_value,
-        mock_get_doc,
-        mock_has_permission,
-        mock_getBranch,
-    ):
-        mock_invoice = MagicMock()
-        mock_invoice.name = "POS-INV-001"
-        mock_invoice.branch = "Test Branch"
-        mock_invoice.waiter = "captain_b@example.com"
-        mock_invoice.pos_profile = "Test POS Profile"
-        mock_invoice.get = lambda key, default=None: getattr(mock_invoice, key, default)
-
-        pos_profile = _make_pos_profile()  # no elevated/billing roles
-
-        def get_doc_side_effect(doctype, name=None):
-            if doctype == "POS Invoice":
-                return mock_invoice
-            if doctype == "POS Profile":
-                return pos_profile
-            raise AssertionError(f"Unexpected frappe.get_doc({doctype!r}, {name!r})")
-
-        mock_get_doc.side_effect = get_doc_side_effect
-        mock_get_value.return_value = "POS-INV-001"
-        mock_has_permission.return_value = True
-        mock_getBranch.return_value = "Test Branch"
-        mock_get_roles.return_value = ["URY Captain"]
-        mock_session.user = "captain_a@example.com"
-
-        with self.assertRaises(frappe.PermissionError) as context:
-            get_order_invoice(invoiceNo="POS-INV-001")
-        self.assertIn("Not permitted to view this order", str(context.exception))
 
     @patch("ury.ury.doctype.ury_order.ury_order.getRoom")
     @patch("ury.ury.doctype.ury_order.ury_order.getBranch")

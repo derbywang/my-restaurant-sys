@@ -495,14 +495,14 @@ class TestTheWaiterTakesOverTheGuestsOrder(SelfOrderingCase):
 		order = add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 1}])
 		self.assertEqual(order["invoice"], self.invoice)
 
-	def test_an_order_of_one_waiter_is_still_not_open_to_another_waiter(self):
-		"""The takeover is for the guests' orders only: the ownership rule for staff orders stays."""
+	def test_an_order_of_another_user_is_open_to_a_captain_of_the_branch(self):
+		"""Not only the guests' orders: no order has an owner to protect (2026-11, see test_captain_access)."""
 		invoice = place_order(MANAGER, [(FOOD_ITEM, 1)], table=TABLES[2])
 		frappe.db.set_value("POS Invoice", invoice, "waiter", MANAGER)
 		with as_user(CAPTAIN):
 			context = get_table_order_context(TABLES[2])
-		# a manager's order, the captain neither owns it nor has elevated access (billing is the cashier's)
-		self.assertFalse(context["permissions"]["view"])
+		self.assertTrue(context["permissions"]["view"])
+		self.assertFalse(context["permissions"]["reduce_items"])
 
 
 class TestWhatTheGuestsSeeWhenTheOrderIsOver(SelfOrderingCase):

@@ -974,7 +974,9 @@ def _order_ownership_flags(invoice, pos_profile_name=None):
     # be hard-denied by checks that previously didn't exist at all.
     is_super_user = frappe.session.user == "Administrator" or "System Manager" in frappe.get_roles()
 
-    can_view = is_super_user or ((is_mine or has_elevated_access or is_billing_user) if order_exists else True)
+    # An order has no owner to protect: whoever of the branch may open it (the branch is checked where the order
+    # is loaded; the room, when the user was given one, in _enforce_order_access).
+    can_view = True
 
     invoice_billed = order_exists and bool(invoice.get("invoice_printed"))
     can_modify = is_super_user or (can_view and (not invoice_billed or is_billing_user))
@@ -1163,10 +1165,9 @@ def get_table_order_context(table):
 
     # Ported V1 ownership check (Table.js:379-397): only applies once a table
     # is occupied. A free table has no owner to protect.
-    if order:
-        can_view = is_mine or has_elevated_access or is_billing_user
-    else:
-        can_view = True
+    # No owner to protect any more (2026-11): every captain of the branch may open the order. The branch was
+    # checked above, the room (when the user was given one) is checked next.
+    can_view = True
 
     # Room scoping: _enforce_order_access() (used by get_order_invoice/
     # sync_order) additionally requires the acting user's assigned room to
@@ -1211,7 +1212,7 @@ def get_table_order_context(table):
     can_reprint_kot = (
         bool(order)
         and bool(pos_profile.custom_enable_kot_reprint)
-        and (is_mine or has_elevated_access)
+        and can_view
     )
 
     # Gated by can_view (not just the bare DocType-level print permission)
@@ -1428,18 +1429,10 @@ def sync_order(
     if invoice.name and not frappe.has_permission("POS Invoice", "write", doc=invoice):
         frappe.throw(_("Not permitted to modify this order"), frappe.PermissionError)
 
-    # Reuse Phase 2's ownership formula (_has_role + is_mine/elevated/billing)
-    # directly: block a Captain from modifying another Captain's table order,
-    # and block modification of an already-billed/printed invoice unless the
-    # acting user holds billing access. Only applies once an order actually
-    # exists — a brand-new invoice has no owner or billed state to protect.
+    # Every captain of the branch may change an open order (get_order_invoice checked the branch and the room);
+    # an order whose bill was printed only by someone with billing access.
     elevated_user = _has_role(user_role, posprofile.transfer_role_permissions)
     if invoice.name:
-        is_mine = _is_my_order(invoice)
-        can_view_order = is_mine or elevated_user or billing_user
-        if not can_view_order:
-            frappe.throw(_("Not permitted to modify this order"), frappe.PermissionError)
-
         if bool(invoice.invoice_printed) and not billing_user:
             frappe.throw(
                 _("This order has already been billed and cannot be modified."),

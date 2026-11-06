@@ -4,7 +4,7 @@ from frappe.utils import cint
 from frappe.utils.print_format import print_by_server
 
 from ury.ury_pos.api import getBranch
-from ury.ury.doctype.ury_order.ury_order import _order_ownership_flags
+from ury.ury.doctype.ury_order.ury_order import _enforce_order_access
 
 
 @frappe.whitelist()
@@ -35,16 +35,9 @@ def reprint_kot(invoice_number):
     if not pos_invoice.pos_profile:
         frappe.throw(f"POS Profile not found for Invoice {invoice_number}.")
 
-    # Captain ownership/elevated-access check, reusing Phase 2's ownership
-    # formula. Matches get_table_order_context()'s can_reprint_kot gate
-    # exactly: is_mine OR has_elevated_access (billing access alone does not
-    # imply reprint rights there, so it isn't included here either).
-    flags = _order_ownership_flags(pos_invoice, pos_invoice.pos_profile)
-    if not (flags["is_mine"] or flags["has_elevated_access"]):
-        frappe.throw(
-            _("Not permitted to reprint KOT for another Captain's order."),
-            frappe.PermissionError,
-        )
+    # Every captain of the branch may reprint the ticket of any order (the same rule as opening it: the branch is
+    # checked above, and the room when the user was given one).
+    _enforce_order_access(pos_invoice, pos_invoice.pos_profile)
 
     try:
         pos_profile, restaurant_table, order_type = frappe.db.get_value(

@@ -54,25 +54,8 @@ class TestCaptainTotals(URYFlowTestCase):
 	def test_an_order_with_a_noted_alcohol_dish(self):
 		self._captain_asks(CAPTAIN, [(ALCOHOL_ITEM, 2, "cold")], TABLES[1])
 
-	def test_the_order_of_the_cashier_is_not_the_captains_to_see(self):
-		"""The rule of the tables holds for the totals and for opening by name (the Orders page used to bypass it)."""
-		name = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
-		with as_user(CAPTAIN):
-			with self.assertRaises(frappe.PermissionError):
-				get_order_invoice(invoiceNo=name, order_type="Dine In")
-			with self.assertRaises(frappe.PermissionError):
-				self._captain_asks_existing(name)
-
-	def _captain_asks_existing(self, name):
-		order = frappe.get_doc("POS Invoice", name)
-		preview_cart_totals(
-			[{"item": FOOD_ITEM, "item_name": FOOD_ITEM, "qty": 1}],
-			POS_PROFILE,
-			order.order_type,
-			customer=order.customer,
-			table=order.restaurant_table,
-			invoice=name,
-		)
+	def test_the_captain_sees_the_total_of_an_order_the_cashier_took(self):
+		self._captain_asks(CASHIER, [(FOOD_ITEM, 1)], TABLES[2])
 
 	def test_opening_by_name_gives_the_notes(self):
 		name = place_order(CAPTAIN, [(ALCOHOL_ITEM, 2, "cold")], table=TABLES[0])

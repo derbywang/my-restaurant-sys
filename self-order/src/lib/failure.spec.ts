@@ -27,6 +27,11 @@ describe('what went wrong, from the error of a call', () => {
     expect(classifyFailure(refusal('Age confirmation required'))).toBe('age')
   })
 
+  it('is "busy" when the order was being saved by someone else and the server asks to try again', () => {
+    expect(classifyFailure(refusal('Try again'))).toBe('busy')
+    expect(isOrderingOver('busy')).toBe(false)
+  })
+
   it('is a network problem when there was no answer at all', () => {
     expect(classifyFailure({ httpStatus: 0, message: 'Network Error', exception: '' })).toBe('network')
     expect(classifyFailure(new TypeError('Failed to fetch'))).toBe('network')

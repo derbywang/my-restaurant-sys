@@ -30,7 +30,7 @@ import os
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from ury.ury_pos.api import resolve_restaurant_menu
 from ury.ury.doctype.ury_order.ury_order import (
@@ -339,8 +339,8 @@ def _resolve_session(session_token, require_open=True):
     with _elevated():
         session = frappe.get_doc("URY Ordering Session", session_name)
         if session.expires_at and session.expires_at < now_datetime():
-            session.status = "Expired"
-            session.save(ignore_permissions=True)
+            # written without `save()`: requests of one page overlap, and a save checks the modified time
+            session.db_set("status", "Expired", update_modified=False)
             _fail("Session expired", _("Ordering session expired. Please rescan the QR code."), frappe.PermissionError)
 
         if require_open:
@@ -356,16 +356,28 @@ def _resolve_session(session_token, require_open=True):
                         frappe.PermissionError,
                     )
 
-        session.last_activity = now_datetime()
-        session.expires_at = add_to_date(
-            now_datetime(),
-            minutes=frappe.db.get_value(
-                "URY Self Ordering Profile", session.ordering_profile, "session_idle_timeout_minutes"
-            ) or 30,
-        )
-        session.save(ignore_permissions=True)
+        _keep_alive(session)
 
     return session
+
+
+# A page asks for the menu, the order and the total at the same moment, all with the same session. The session is
+# not saved by `save()` (it compares the modified time, so the second of two overlapping requests failed with
+# TimestampMismatchError) and a request that only reads does not write it at all unless the last write is old.
+ACTIVITY_WRITE_SECONDS = 30
+
+
+def _keep_alive(session):
+    """Move the end of the session on, at most every ACTIVITY_WRITE_SECONDS."""
+    now = now_datetime()
+    if session.last_activity and (now - get_datetime(session.last_activity)).total_seconds() < ACTIVITY_WRITE_SECONDS:
+        return
+    timeout = frappe.db.get_value(
+        "URY Self Ordering Profile", session.ordering_profile, "session_idle_timeout_minutes"
+    ) or 30
+    session.db_set(
+        {"last_activity": now, "expires_at": add_to_date(now, minutes=timeout)}, update_modified=False
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -780,6 +792,27 @@ def preview_customer_cart(session, items):
 
 @frappe.whitelist(allow_guest=True)
 def add_customer_items(session, items, age_confirmed=0):
+    """Put dishes on the order of the session (see `_add_customer_items`).
+
+    The order may be saved by someone else at the same moment (a waiter, the guests of the same table). The save
+    then fails with TimestampMismatchError; the work of this request is undone and done once more on what the
+    other one saved. If that fails too the guest is asked to try again, and nothing was changed."""
+    try:
+        return _add_customer_items(session, items, age_confirmed)
+    except frappe.TimestampMismatchError:
+        # A full rollback also ends the snapshot of the transaction (the database reads as of its first read),
+        # so the second try reads what the other request saved.
+        frappe.db.rollback()
+        frappe.local.message_log = []
+    try:
+        return _add_customer_items(session, items, age_confirmed)
+    except frappe.TimestampMismatchError:
+        frappe.db.rollback()
+        frappe.local.message_log = []
+        _fail("Try again", _("The order is busy right now. Please try again."))
+
+
+def _add_customer_items(session, items, age_confirmed=0):
     """Append-only customer order mutation. `items` is a list of
     {"item": <item_code>, "qty": <number>, "comment": <optional str>} —
     same shape sync_order()/price_items_for_invoice() already expect.
@@ -924,12 +957,13 @@ def add_customer_items(session, items, age_confirmed=0):
 
         try:
             invoice.save(ignore_permissions=True)
+        except frappe.TimestampMismatchError:
+            raise  # someone saved the order meanwhile: add_customer_items tries once more
         except Exception as e:
             frappe.throw(_("Error while placing order: {0}").format(e))
 
         if not session.invoice:
-            session.invoice = invoice.name
-            session.save(ignore_permissions=True)
+            session.db_set("invoice", invoice.name, update_modified=False)
 
         if invoice.invoice_printed == 0 and invoice.restaurant_table:
             frappe.db.set_value(

@@ -1311,6 +1311,158 @@ class TestTheReasonsAGuestIsRefusedHaveATitle(SelfOrderingCase):
 		self.refused("Order closed", add_customer_items, old, [{"item": FOOD_ITEM, "qty": 1}])
 
 
+class TestRequestsThatOverlap(SelfOrderingCase):
+	"""A page sends several requests at once (a reload asks for the menu, the order and the total), and the session
+	is the same in all of them. Saving the session in each of them made the later ones fail with
+	TimestampMismatchError ("Document has been modified after you have opened it"). The calls that only read do
+	not save the session; an order that meets another save of its invoice is tried once more."""
+
+	def _name(self, raw):
+		import hashlib
+
+		return frappe.db.get_value("URY Ordering Session", {"token_hash": hashlib.sha256(raw.encode()).hexdigest()}, "name")
+
+	def _long_idle(self, name):
+		frappe.db.set_value(
+			"URY Ordering Session", name, "last_activity", add_to_date(now_datetime(), minutes=-5), update_modified=False
+		)
+		frappe.db.commit()
+
+	def _touch_session_once(self, name, calls):
+		"""A stand-in for another request saving the session between our read and our write."""
+
+		def touch():
+			if not calls:
+				calls.append(1)
+				frappe.db.set_value("URY Ordering Session", name, "status", "Active")  # changes `modified`
+
+		return touch
+
+	def test_a_request_is_not_refused_when_another_one_saved_the_session_meanwhile(self):
+		from unittest.mock import patch
+
+		self.staff_open()
+		raw = self.scan()
+		name = self._name(raw)
+		self._long_idle(name)  # so that this request is the one that writes the session
+		calls = []
+		touch = self._touch_session_once(name, calls)
+		real = self_ordering.add_to_date
+
+		def other_request_saves_first(*args, **kwargs):
+			touch()
+			return real(*args, **kwargs)
+
+		with patch.object(self_ordering, "add_to_date", other_request_saves_first):
+			menu = get_customer_menu(raw)
+		self.assertTrue(menu["items"])
+		self.assertEqual(calls, [1])  # the other save did happen in between
+
+	def test_the_calls_that_only_read_do_not_write_the_session(self):
+		self.staff_open()
+		raw = self.scan()
+		name = self._name(raw)
+		fields = ["modified", "last_activity", "expires_at"]
+		before = frappe.db.get_value("URY Ordering Session", name, fields)
+		get_customer_menu(raw)
+		get_customer_order(raw)
+		get_order_status(raw)
+		self_ordering.preview_customer_cart(raw, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(frappe.db.get_value("URY Ordering Session", name, fields), before)
+
+	def test_a_session_that_has_been_idle_for_a_while_is_kept_alive_by_a_request(self):
+		self.staff_open()
+		raw = self.scan()
+		name = self._name(raw)
+		self._long_idle(name)
+		old = frappe.db.get_value("URY Ordering Session", name, "last_activity")
+		get_customer_menu(raw)
+		self.assertGreater(frappe.db.get_value("URY Ordering Session", name, "last_activity"), old)
+
+	def test_the_first_order_of_a_session_is_not_refused_when_the_session_was_saved_meanwhile(self):
+		from unittest.mock import patch
+
+		self.staff_open()
+		raw = self.scan()
+		name = self._name(raw)
+		calls = []
+		touch = self._touch_session_once(name, calls)
+		real = self_ordering._invoice_to_add_to
+
+		def other_request_saves_first(table):
+			touch()
+			return real(table)
+
+		with patch.object(self_ordering, "_invoice_to_add_to", other_request_saves_first):
+			order = add_customer_items(raw, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(calls, [1])
+		self.assertEqual(frappe.db.get_value("URY Ordering Session", name, "invoice"), order["invoice"])
+
+	def _first_order_then(self):
+		self.staff_open()
+		raw = self.scan()
+		invoice = self.order(raw)["invoice"]
+		frappe.db.commit()  # every request of a guest is a transaction of its own: the first order is saved
+		return raw, invoice
+
+	def _rows(self, invoice):
+		return frappe.db.count("POS Invoice Item", {"parent": invoice})
+
+	def _kots(self, invoice):
+		return frappe.db.count("URY KOT", {"invoice": invoice})
+
+	def _touch_invoice(self, invoice, times):
+		"""Another save of the invoice after we loaded it, the first `times` times it is loaded."""
+		real = self_ordering._resolve_or_create_pos_invoice
+		counter = {"n": 0}
+
+		def resolve(*args, **kwargs):
+			result = real(*args, **kwargs)
+			if result[1] and counter["n"] < times:
+				counter["n"] += 1
+				frappe.db.set_value("POS Invoice", result[1], "remarks", f"saved by someone else {counter['n']}")
+			return result
+
+		return resolve, counter
+
+	def test_an_order_that_meets_another_save_of_its_invoice_is_tried_once_more(self):
+		from unittest.mock import patch
+
+		raw, invoice = self._first_order_then()
+		resolve, counter = self._touch_invoice(invoice, times=1)
+		with patch.object(self_ordering, "_resolve_or_create_pos_invoice", resolve):
+			order = add_customer_items(raw, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(counter["n"], 1)  # it did meet the other save
+		self.assertEqual(order["invoice"], invoice)
+		self.assertEqual(self._rows(invoice), 2)  # the dish is on the order once, not twice
+		self.assertEqual(self._kots(invoice), 2)  # and the kitchen got one ticket for it
+
+	def test_an_order_that_keeps_meeting_other_saves_asks_the_guest_to_try_again_and_changes_nothing(self):
+		from unittest.mock import patch
+
+		raw, invoice = self._first_order_then()
+		resolve, counter = self._touch_invoice(invoice, times=99)
+		with patch.object(self_ordering, "_resolve_or_create_pos_invoice", resolve):
+			self.refused("Try again", add_customer_items, raw, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(counter["n"], 2)  # the first try and the one more
+		self.assertEqual(self._rows(invoice), 1)
+		self.assertEqual(self._kots(invoice), 1)
+
+	def test_the_answer_to_the_age_question_survives_the_second_try(self):
+		from unittest.mock import patch
+
+		self.staff_open()
+		raw = self.scan()
+		invoice = self.order(raw)["invoice"]
+		frappe.db.commit()
+		resolve, counter = self._touch_invoice(invoice, times=1)
+		with patch.object(self_ordering, "_resolve_or_create_pos_invoice", resolve):
+			add_customer_items(raw, [{"item": ALCOHOL_ITEM, "qty": 1}], age_confirmed=1)
+		self.assertEqual(counter["n"], 1)
+		self.assertEqual(self._rows(invoice), 2)
+		self.assertTrue(get_customer_menu(raw)["age_confirmed"])
+
+
 class TestTheAnswerIsKeptWhenGiven(SelfOrderingCase):
 	"""「はい」 is recorded on the session when it is given, not when the order is sent: a guest who answers and
 	reloads the page is not asked again. Only the guest's own session, and only to "yes"."""

@@ -10,6 +10,7 @@ export type FailureKind =
   | 'order_closed' // the order is paid, cancelled or its bill is printed
   | 'session_expired' // the session is not valid (any more)
   | 'age' // alcohol without the answer to the age question
+  | 'busy' // the order was being changed by someone else at the same moment; try again
   | 'network' // the server could not be reached
   | 'server' // the server failed
   | 'other'
@@ -20,6 +21,7 @@ const BY_TITLE: Record<string, FailureKind> = {
   'Order closed': 'order_closed',
   'Session expired': 'session_expired',
   'Age confirmation required': 'age',
+  'Try again': 'busy',
 }
 
 /** The titles of the messages the server sent with an error (they are in `_server_messages`, twice JSON-encoded). */

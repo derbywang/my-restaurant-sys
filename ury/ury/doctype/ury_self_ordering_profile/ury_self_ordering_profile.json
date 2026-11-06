@@ -16,6 +16,8 @@
   "pos_profile",
   "default_customer",
   "enabled",
+  "public_url",
+  "default_language",
   "ordering_modes_section",
   "enable_qr_table_ordering",
   "enable_qr_pickup_ordering",
@@ -92,6 +94,21 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled"
+  },
+  {
+   "fieldname": "public_url",
+   "fieldtype": "Data",
+   "label": "Public URL",
+   "description": "The address the guests reach the ordering page on, e.g. https://order.example.jp. It is written in the QR codes; the address of the request is never used.",
+   "options": "URL"
+  },
+  {
+   "default": "ja",
+   "description": "The language of what the guests read in the shop, e.g. the QR code stickers. It does not follow the system language.",
+   "fieldname": "default_language",
+   "fieldtype": "Link",
+   "label": "Default Language",
+   "options": "Language"
   },
   {
    "fieldname": "ordering_modes_section",
@@ -244,7 +261,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-05 22:00:00.000000",
+ "modified": "2026-11-07 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",

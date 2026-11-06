@@ -41,6 +41,25 @@ export function normalizePermissions(raw: unknown): PosPermissions {
   return result;
 }
 
+/**
+ * Someone who takes orders and does nothing at the register (a waiter): she lands on the waiter screen (/order)
+ * after login. Decided by what the server allows, never by a role name.
+ */
+export function isWaiterOnly(permissions: PosPermissions | null): boolean {
+  return Boolean(
+    permissions &&
+      permissions.take_orders &&
+      !permissions.settle_payment &&
+      !permissions.open_shift &&
+      !permissions.close_shift
+  );
+}
+
+/** The menu of the register offers the waiter screen to everyone who takes orders there (a cashier, a manager). */
+export function showsWaiterScreenLink(permissions: PosPermissions | null): boolean {
+  return Boolean(permissions?.take_orders) && !isWaiterOnly(permissions);
+}
+
 /** The discount box: the user may give discounts and the POS Profile has discounts switched on. */
 export function canShowDiscount(
   permissions: PosPermissions | null,
@@ -56,6 +75,12 @@ export function friendlyError(
   t: (key: string) => string
 ): string {
   if (isPermissionError(err)) return t('errors.not_permitted_billing');
+  return parseFrappeError(err, fallback);
+}
+
+/** What to show when an order cannot be opened: a translated line for a refusal (another store, another room). */
+export function openOrderError(err: unknown, fallback: string, t: (key: string) => string): string {
+  if (isPermissionError(err)) return t('errors.not_permitted_order');
   return parseFrappeError(err, fallback);
 }
 

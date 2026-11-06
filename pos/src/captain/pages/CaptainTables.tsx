@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Square } from 'lucide-react';
-import { Button, Spinner, showToast } from '@ury/ui';
+import { Button, Spinner } from '@ury/ui';
 import { useCaptainContext } from '../hooks/useCaptainContext';
 import LanguageMenu from '../../components/LanguageMenu';
 import SelfOrderToggle from '../../components/SelfOrderToggle';
@@ -28,7 +28,6 @@ export default function CaptainTables() {
   const navigate = useNavigate();
   const {
     context,
-    capabilities,
     branch,
     rooms,
     isLoading: contextLoading,
@@ -36,7 +35,6 @@ export default function CaptainTables() {
   } = useCaptainContext();
 
   const currentUser = context?.user ?? null;
-  const canAccessOtherCaptainsTables = Boolean(capabilities?.canAccessOtherCaptainsTables);
 
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [branchRooms, setBranchRooms] = useState<Room[]>([]);
@@ -147,25 +145,10 @@ export default function CaptainTables() {
     [currentUser]
   );
 
-  const handleTableTap = (table: Table, order: ActiveTableOrder | undefined) => {
-    const ownership = resolveOwnership(table, order);
-
-    if (ownership === 'free' || ownership === 'mine') {
-      navigate(`/order/table/${table.name}`);
-      return;
-    }
-
-    // Occupied by someone else (or occupancy with no resolvable owner):
-    // elevated/transfer access overrides the base restriction.
-    if (canAccessOtherCaptainsTables) {
-      navigate(`/order/table/${table.name}`);
-      return;
-    }
-
-    const ownerName = order ? ownerNames.get(order.waiter) ?? order.waiter : null;
-    showToast.error(
-      ownerName ? t('captain.assigned_to', { name: ownerName }) : t('captain.table_occupied')
-    );
+  // Every captain of the branch may open every table (the server limits by branch and, when the captain was given
+  // one, by room: its refusal is shown by the order screen).
+  const handleTableTap = (table: Table) => {
+    navigate(`/order/table/${table.name}`);
   };
 
   const isLoading = contextLoading || (roomsLoading && branchRooms.length === 0);
@@ -258,7 +241,7 @@ export default function CaptainTables() {
                   ownership={ownership}
                   ownerName={ownership === 'mine' ? undefined : ownerName}
                   mergePartners={mergePartners}
-                  onTap={() => handleTableTap(table, order)}
+                  onTap={() => handleTableTap(table)}
                   selfOrderSlot={
                     <SelfOrderToggle
                       state={selfOrder.state}

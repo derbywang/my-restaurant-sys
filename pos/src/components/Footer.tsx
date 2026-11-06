@@ -5,17 +5,22 @@ import {
   ClipboardList,
   Table,
   Settings,
+  ConciergeBell,
 } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { t } from '../i18n';
+import { useRootStore, type RootState } from '../store/root-store';
+import { showsWaiterScreenLink } from '../lib/pos-permissions';
 
 const Footer = () => {
+  const permissions = useRootStore((state: RootState) => state.permissions);
 
   const navItems = [
     { icon: LayoutDashboard, label: t('footer.dashboard'), path: '/dashboard' },
     { icon: LayoutGrid, label: t('footer.pos'), path: '/pos' },
     { icon: Table, label: t('footer.tables'), path: '/tables' },
     { icon: ClipboardList, label: t('footer.orders'), path: '/orders' },
+    { icon: ConciergeBell, label: t('footer.waiter'), path: '/order', hidden: !showsWaiterScreenLink(permissions) },
     { icon: Settings, label: t('footer.settings'), path: '/settings', hidden: true },
   ].filter((item) => !item.hidden);
 

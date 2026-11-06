@@ -228,6 +228,7 @@
     "dine_in_restricted": "La consommation sur place n'est pas disponible pour votre rôle",
     "payment_failed": "Le paiement n'a pas pu être effectué. Veuillez réessayer.",
     "not_permitted_billing": "Seul le caissier peut faire cela. Demandez au caissier d'encaisser ou de modifier l'addition.",
+    "not_permitted_order": "Cette commande ne peut pas être ouverte : elle n'appartient pas à votre établissement ou à votre salle.",
     "not_permitted_reduce": "Seul le caissier ou le responsable peut réduire ou supprimer un plat déjà commandé. Demandez au caissier.",
     "order_modified": "Cette commande a été modifiée. Veuillez recharger la page pour récupérer les dernières modifications.",
     "order_sync_failed": "Impossible de synchroniser cette commande. Veuillez recharger la page et réessayer.",
@@ -398,6 +399,7 @@
     "pos": "PDV",
     "tables": "Tables",
     "orders": "Commandes",
+    "waiter": "Salle",
     "settings": "Paramètres"
   },
   "product_dialog": {

@@ -4,6 +4,8 @@ import {
   NO_PERMISSIONS,
   canShowDiscount,
   friendlyError,
+  isWaiterOnly,
+  showsWaiterScreenLink,
   normalizePermissions,
 } from './pos-permissions';
 
@@ -74,5 +76,29 @@ describe('friendlyError', () => {
 
   it('falls back when there is nothing to show', () => {
     expect(friendlyError(undefined, 'payment failed', t)).toBe('payment failed');
+  });
+});
+
+describe('the waiter screen', () => {
+  const waiter = { ...NO_PERMISSIONS, take_orders: true, print_bill: true };
+  const cashier = { ...waiter, settle_payment: true, open_shift: true, close_shift: true };
+
+  it('is where someone who only takes orders lands', () => {
+    expect(isWaiterOnly(waiter)).toBe(true);
+    expect(isWaiterOnly(cashier)).toBe(false);
+    expect(isWaiterOnly({ ...waiter, settle_payment: true })).toBe(false);
+    expect(isWaiterOnly({ ...waiter, open_shift: true })).toBe(false);
+  });
+
+  it('is nowhere for someone who cannot take orders, or whose permissions are not known', () => {
+    expect(isWaiterOnly(null)).toBe(false);
+    expect(isWaiterOnly(NO_PERMISSIONS)).toBe(false);
+    expect(showsWaiterScreenLink(null)).toBe(false);
+    expect(showsWaiterScreenLink(NO_PERMISSIONS)).toBe(false);
+  });
+
+  it('is offered in the menu to those who work at the register too, not to the waiter who is there already', () => {
+    expect(showsWaiterScreenLink(cashier)).toBe(true);
+    expect(showsWaiterScreenLink(waiter)).toBe(false);
   });
 });

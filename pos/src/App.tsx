@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import HomeRedirect from './components/HomeRedirect';
 import AppLayout from './components/AppLayout';
 import Orders from './pages/Orders';
 import POS from './pages/POS';
@@ -42,7 +43,7 @@ function App() {
             <Router basename="/pos">
               <Routes>
                 <Route element={<AppLayout />}>
-                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route index element={<HomeRedirect />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/pos" element={<POS />} />
                   <Route path="/tables" element={<Table />} />

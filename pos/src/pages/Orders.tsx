@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { showToast } from '@ury/ui';
 import OrderStatusSidebar from '../components/OrderStatusSidebar';
 import { useRootStore } from '../store/root-store';
-import { friendlyError } from '../lib/pos-permissions';
-import { formatCurrency, parseFrappeError } from '@ury/core';
+import { friendlyError, openOrderError } from '../lib/pos-permissions';
+import { formatCurrency } from '@ury/core';
 import { Spinner } from '@ury/ui';
 import { Textarea } from '@ury/ui';
 import { usePOSStore, generateUniqueId } from '../store/pos-store';
@@ -250,7 +250,7 @@ export default function Orders() {
       // Redirect to POS page
       navigate('/pos');
     } catch (err) {
-      showToast.error(parseFrappeError(err, t('errors.failed_edit_order')));
+      showToast.error(openOrderError(err, t('errors.failed_edit_order'), (key: string) => t(key)));
     } finally {
       setEditLoading(false);
     }

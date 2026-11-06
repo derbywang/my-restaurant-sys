@@ -44,7 +44,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
   } = useOrderingSession(initialContext)
 
   function handleStartOver() {
-    if (window.confirm('Start over? Your current cart will be cleared.')) {
+    if (window.confirm(t('confirm.start_over'))) {
       resetSession()
     }
   }
@@ -52,7 +52,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        Loading menu…
+        {t('menu.loading')}
       </div>
     )
   }
@@ -76,13 +76,13 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
       <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
       <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
         <h1 className="text-lg font-semibold">
-          {isPickup ? 'Order for Pickup' : context?.table ? `Table ${context.table}` : 'Order'}
+          {isPickup ? t('header.pickup') : context?.table ? t('header.table', { table: context.table }) : t('header.order')}
         </h1>
         <button
           onClick={handleStartOver}
           className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground"
         >
-          Start Over
+          {t('header.start_over')}
         </button>
       </header>
 
@@ -117,13 +117,12 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
               disabled={payingOnline}
               onClick={payOnline}
             >
-              {payingOnline ? 'Starting payment…' : 'Pay Online'}
+              {payingOnline ? t('pay.starting') : t('pay.online')}
             </button>
           )}
           {paymentRequest && !paymentRequest.payment_url && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Payment request created ({paymentRequest.amount} {paymentRequest.currency}) — a staff
-              member will assist with payment.
+              {t('pay.request_created', { amount: paymentRequest.amount, currency: paymentRequest.currency })}
             </p>
           )}
           {!isPickup && context?.capabilities.request_bill_enabled && !order.billed && (
@@ -132,7 +131,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
               disabled={billRequested}
               onClick={handleRequestBill}
             >
-              {billRequested ? 'Bill requested — staff notified' : 'Request Bill'}
+              {billRequested ? t('pay.bill_requested') : t('pay.request_bill')}
             </button>
           )}
         </section>
@@ -152,7 +151,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
               <div className="text-sm font-medium">{item.item_name}</div>
               <div className="text-sm text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
               {cart[item.item] && (
-                <div className="mt-1 text-xs font-semibold text-primary">In cart: {cart[item.item].qty}</div>
+                <div className="mt-1 text-xs font-semibold text-primary">{t('cart.in_cart', { count: cart[item.item].qty })}</div>
               )}
             </div>
           </button>
@@ -191,7 +190,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             ))}
           </ul>
           <div className="mb-2 flex items-center justify-between text-sm font-semibold">
-            <span>{cartCount} item{cartCount > 1 ? 's' : ''}</span>
+            <span>{t('cart.items', { count: cartCount })}</span>
             <span className="tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
           </div>
           <CartTotals preview={cartPreview} failed={previewFailed} />
@@ -200,7 +199,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             disabled={submitting}
             className="w-full rounded-md bg-primary py-3 font-medium text-primary-foreground disabled:opacity-50"
           >
-            {submitting ? 'Placing order…' : 'Place Order'}
+            {submitting ? t('cart.placing') : t('cart.place')}
           </button>
         </div>
       )}

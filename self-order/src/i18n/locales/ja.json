@@ -7,7 +7,12 @@
     "ordered": "ご注文済み",
     "tax_line": "{{rate}}%対象 {{base}} の消費税",
     "order_so_far": "ご注文済みの内容",
-    "order_total_incl_tax": "お会計予定額（税込）"
+    "order_total_incl_tax": "お会計予定額（税込）",
+    "title": "カート",
+    "in_cart": "カート内：{{count}}",
+    "items": "{{count}}点",
+    "place": "注文する",
+    "placing": "送信中…"
   },
   "price": {
     "incl_tax": "（税込）"
@@ -46,5 +51,37 @@
     "total_failed": "合計金額を取得できませんでした。もう一度お試しください。",
     "close": "閉じる",
     "busy": "ただいま混み合っています。もう一度お試しください。"
+  },
+  "app": {
+    "starting": "起動しています…",
+    "device_failed": "この端末を起動できませんでした。スタッフにお声がけください。"
+  },
+  "menu": {
+    "loading": "メニューを読み込んでいます…",
+    "categories": "メニューのカテゴリー",
+    "all": "すべて",
+    "other": "その他"
+  },
+  "header": {
+    "table": "テーブル {{table}}",
+    "pickup": "お持ち帰りのご注文",
+    "order": "ご注文",
+    "start_over": "最初からやり直す",
+    "new_order": "新しいご注文"
+  },
+  "confirm": {
+    "start_over": "最初からやり直しますか？カートの中身は削除されます。",
+    "new_order": "新しいご注文を始めますか？カートの中身は削除されます。"
+  },
+  "idle": {
+    "title": "ご利用中ですか？",
+    "still_here": "はい、利用中です"
+  },
+  "pay": {
+    "online": "オンラインで支払う",
+    "starting": "お支払いを準備しています…",
+    "request_created": "お支払いのご案内を作成しました（{{amount}} {{currency}}）。スタッフがご案内します。",
+    "request_bill": "お会計をお願いする",
+    "bill_requested": "お会計をお願いしました（スタッフに通知済み）"
   }
 }

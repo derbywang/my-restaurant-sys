@@ -7,7 +7,12 @@
     "ordered": "Already ordered",
     "tax_line": "Tax on {{base}} at {{rate}}%",
     "order_so_far": "Your order so far",
-    "order_total_incl_tax": "Amount due (tax incl.)"
+    "order_total_incl_tax": "Amount due (tax incl.)",
+    "title": "Cart",
+    "in_cart": "In cart: {{count}}",
+    "items": "{{count}} items",
+    "place": "Place Order",
+    "placing": "Placing order…"
   },
   "price": {
     "incl_tax": " (tax incl.)"
@@ -46,5 +51,37 @@
     "total_failed": "Could not get the total. Please try again.",
     "close": "Close",
     "busy": "The order is busy right now. Please try again."
+  },
+  "app": {
+    "starting": "Starting up…",
+    "device_failed": "This device could not be started. Please contact staff."
+  },
+  "menu": {
+    "loading": "Loading menu…",
+    "categories": "Menu categories",
+    "all": "All Items",
+    "other": "Other"
+  },
+  "header": {
+    "table": "Table {{table}}",
+    "pickup": "Order for Pickup",
+    "order": "Order",
+    "start_over": "Start Over",
+    "new_order": "New Order"
+  },
+  "confirm": {
+    "start_over": "Start over? Your current cart will be cleared.",
+    "new_order": "Start a new order? Current cart will be cleared."
+  },
+  "idle": {
+    "title": "Still there?",
+    "still_here": "I'm still here"
+  },
+  "pay": {
+    "online": "Pay Online",
+    "starting": "Starting payment…",
+    "request_created": "Payment request created ({{amount}} {{currency}}) — a staff member will assist with payment.",
+    "request_bill": "Request Bill",
+    "bill_requested": "Bill requested — staff notified"
   }
 }

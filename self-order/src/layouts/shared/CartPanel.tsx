@@ -75,7 +75,7 @@ function CartPanel({
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Cart</h2>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.title')}</h2>
           {cartItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">Tap a menu item to add it to your cart.</p>
           ) : (
@@ -115,7 +115,7 @@ function CartPanel({
       <div className="border-t pt-3">
         <div className="mb-3 flex items-center justify-between text-sm font-semibold">
           <span>
-            {cartCount} item{cartCount !== 1 ? 's' : ''}
+            {t('cart.items', { count: cartCount })}
           </span>
           <span className="tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
         </div>
@@ -125,7 +125,7 @@ function CartPanel({
           disabled={submitting || cartCount === 0}
           className="w-full rounded-md bg-primary py-3 font-medium text-primary-foreground disabled:opacity-50"
         >
-          {submitting ? 'Placing order…' : 'Place Order'}
+          {submitting ? t('cart.placing') : t('cart.place')}
         </button>
         {context?.capabilities.customer_payment_enabled && order && !order.billed && (
           <button
@@ -133,7 +133,7 @@ function CartPanel({
             disabled={payingOnline}
             onClick={onPayOnline}
           >
-            {payingOnline ? 'Starting payment…' : 'Pay Online'}
+            {payingOnline ? t('pay.starting') : t('pay.online')}
           </button>
         )}
         {context?.capabilities.request_bill_enabled && order && !order.billed && (
@@ -142,7 +142,7 @@ function CartPanel({
             disabled={billRequested}
             onClick={onRequestBill}
           >
-            {billRequested ? 'Bill requested — staff notified' : 'Request Bill'}
+            {billRequested ? t('pay.bill_requested') : t('pay.request_bill')}
           </button>
         )}
       </div>

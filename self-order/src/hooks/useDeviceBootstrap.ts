@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { bootstrapDevice, type OrderingContext } from '../lib/api'
+import { t } from '../i18n'
 
 // Storage keys for a provisioned kiosk/tablet device's credentials. These
 // are set once at provisioning time (out of band — see
@@ -39,8 +40,8 @@ export function useDeviceBootstrap() {
       try {
         const context = await bootstrapDevice(deviceId, deviceCredential)
         setDeviceContext(context)
-      } catch (err) {
-        setDeviceError(err instanceof Error ? err.message : 'Unable to bootstrap this device.')
+      } catch {
+        setDeviceError(t('app.device_failed'))
       } finally {
         setDeviceLoading(false)
       }

@@ -1,4 +1,4 @@
-import { Minus, Plus, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
+import { Lock, Minus, Pencil, Plus, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
 import { t } from '../../i18n';
@@ -14,6 +14,8 @@ interface CaptainOrderLineProps {
   onRemove?: () => void;
   onRestore?: () => void;
   onEditNote?: () => void;
+  /** The note belongs to dishes the kitchen already has: the button says so instead of opening the note. */
+  noteLocked?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ const CaptainOrderLine: React.FC<CaptainOrderLineProps> = ({
   onRemove,
   onRestore,
   onEditNote,
+  noteLocked,
 }) => {
   const displayQty = variant === 'confirmed' ? line.confirmedQty : variant === 'reduction' ? Math.abs(line.delta) : line.delta;
   const sign = variant === 'delta' ? '+' : variant === 'reduction' ? '−' : '';
@@ -72,6 +75,21 @@ const CaptainOrderLine: React.FC<CaptainOrderLineProps> = ({
       </button>
 
       <div className="flex items-center gap-1 shrink-0">
+        {onEditNote && variant !== 'reduction' && (
+          <button
+            type="button"
+            onClick={onEditNote}
+            disabled={disabled}
+            className={cn(
+              'w-9 h-9 rounded-full border flex items-center justify-center disabled:opacity-40',
+              noteLocked ? 'border-gray-200 text-gray-400' : line.comment ? 'border-blue-300 text-blue-600' : 'border-gray-300 text-gray-600'
+            )}
+            aria-label={line.comment ? t('cart.edit_comment') : t('cart.add_comment')}
+            title={line.comment ? t('cart.edit_comment') : t('cart.add_comment')}
+          >
+            {noteLocked ? <Lock className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+          </button>
+        )}
         {variant === 'delta' && (onDecrement || onIncrement) && (
           <>
             <button

@@ -66,7 +66,9 @@
     "edit_item": "항목 편집",
     "add_comment": "메모 추가",
     "edit_comment": "메모 편집",
-    "pax": "인원"
+    "pax": "인원",
+    "sent_note_locked": "이미 주방으로 전송되었습니다. 변경은 주방에 직접 말씀해 주세요.",
+    "sent_note_locked_reducer": "이미 주방으로 전송되었습니다. 변경은 주방에 직접 말씀해 주세요. 여기서 변경하려면 메뉴를 취소한 후 다시 추가해 주세요."
   },
   "order": {
     "select_to_view": "주문을 선택하면 상세 내용이 표시됩니다",
@@ -270,7 +272,8 @@
       "session_elsewhere": "다른 곳에서 이미 개점되어 있습니다.",
       "generic": "개점할 수 없습니다. {{message}}",
       "load_failed": "POS 상태를 확인하지 못했습니다. 다시 시도해 주세요."
-    }
+    },
+    "sent_note_locked": "이미 주방으로 전송되었습니다. 변경은 주방에 직접 말씀해 주세요."
   },
   "success": {
     "order_cancelled": "주문이 취소되었습니다",

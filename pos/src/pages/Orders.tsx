@@ -9,7 +9,7 @@ import { friendlyError } from '../lib/pos-permissions';
 import { formatCurrency, parseFrappeError } from '@ury/core';
 import { Spinner } from '@ury/ui';
 import { Textarea } from '@ury/ui';
-import { usePOSStore } from '../store/pos-store';
+import { usePOSStore, generateUniqueId } from '../store/pos-store';
 import { useNavigate } from 'react-router-dom';
 import PaymentDialog from '../components/PaymentDialog';
 import BillSplitDialog from '../components/BillSplitDialog';
@@ -19,7 +19,9 @@ import SplitGroupPanel from '../components/SplitGroupPanel';
 import MergedBillPanel from '../components/MergedBillPanel';
 import { printOrder } from '../lib/print';
 import { call } from '@ury/core';
-import { splitBill } from '../lib/order-api';
+import type { OrderType } from '../data/order-types';
+import { getOrderByName, splitBill } from '../lib/order-api';
+import { cartLinesFromInvoice } from '../lib/invoice-cart';
 import {
   getOrdersTabForInvoice,
   getSplitGroup,
@@ -226,39 +228,23 @@ export default function Orders() {
     if (!selectedOrder) return;
     setEditLoading(true);
     try {
-      const res = await fetch(`/api/method/frappe.client.get?doctype=POS+Invoice&name=${selectedOrder.name}`);
-      if (!res.ok) throw new Error('Failed to fetch order details');
-      const data = await res.json();
-      const order = data.message;
-
-      // Build the cart items from the draft order
-      const items = (order.items || []).map((item: any) => ({
-        id: item.item_code,
-        name: item.item_name,
-        price: item.rate,
-        quantity: item.qty,
-        amount: item.amount,
-        image: item.image || null,
-        uniqueId: item.name,
-        item: item.item_code,
-        item_name: item.item_name,
-        item_image: null,
-        course: '',
-        description: item.description || '',
-        special_dish: 0,
-        tax_rate: 0,
-      }));
+      // through the rule of the tables: an order the user may not see (a waiter's of another waiter) is refused
+      const order = await getOrderByName(selectedOrder.name, selectedOrder.order_type);
+      if (!order) throw new Error('Failed to fetch order details');
+      const items = cartLinesFromInvoice(order.items, generateUniqueId);
 
       // Open the draft order as a new tab without disturbing existing tabs.
       // If the same draft is already open, it will just switch to that tab.
       posStore.openDraftOrderInNewTab({
         orderId: order.name,
-        orderType: order.order_type,
+        orderType: order.order_type as OrderType,
         customer: { id: order.customer, name: order.customer_name, phone: order.mobile_number },
         table: order.restaurant_table || null,
         room: order.custom_restaurant_room || null,
         items,
         modified: order.modified || null,
+        orderComment: order.custom_comments || '',
+        noOfPax: order.no_of_pax || 1,
       });
 
       // Redirect to POS page

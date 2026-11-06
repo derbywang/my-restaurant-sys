@@ -65,6 +65,18 @@ export async function getTableOrder(table_no: string): Promise<TableOrder> {
   }
 } 
 
+/**
+ * An open order by its name, under the same rule as opening it from its table: someone who is not allowed to see
+ * the order (another waiter's, for a waiter) gets a permission error, not the order.
+ */
+export async function getOrderByName(name: string, orderType?: string): Promise<POSInvoice | null> {
+  const res = (await call.get('ury.ury.doctype.ury_order.ury_order.get_order_invoice', {
+    invoiceNo: name,
+    order_type: orderType,
+  })) as TableOrder;
+  return res.message && res.message.name ? res.message : null;
+}
+
 export interface SyncOrderRequest {
   table?: string;
   customer?: string;

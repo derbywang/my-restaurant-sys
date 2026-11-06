@@ -212,6 +212,8 @@ interface POSStore extends POSState {
     room: string | null;
     items: OrderItem[];
     modified?: string | null;
+    orderComment?: string;
+    noOfPax?: number;
   }) => void;
   reorderTabs: (sourceIndex: number, destinationIndex: number) => void;
   setNoOfPax: (pax: number) => void;
@@ -228,7 +230,7 @@ interface POSStore extends POSState {
   setShowVoluntaryClosing: (show: boolean) => void;
 }
 
-const generateUniqueId = (item: OrderItem): string => {
+export const generateUniqueId = (item: OrderItem): string => {
   const variantId = item.selectedVariant?.id || 'default';
   const addonIds = item.selectedAddons?.map(addon => addon.id).sort().join('-') || 'no-addons';
   const commentStr = item.comment ? item.comment.trim() : '';
@@ -1174,10 +1176,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       selectedAggregator: null,
       orderId: draft.orderId,
       isUpdatingOrder: true,
-      orderComment: '',
+      orderComment: draft.orderComment ?? '',
       originalCartHash: generateCartHash({ activeOrders: draft.items, selectedCustomer: draft.customer, orderComment: '' }),
       lastModifiedTime: draft.modified ?? null,
-      noOfPax: 1,
+      noOfPax: draft.noOfPax ?? 1,
       selectedItem: null,
       error: null,
     });

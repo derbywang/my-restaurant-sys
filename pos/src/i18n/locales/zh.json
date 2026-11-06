@@ -66,7 +66,9 @@
     "edit_item": "编辑菜品",
     "add_comment": "添加备注",
     "edit_comment": "编辑备注",
-    "pax": "人数"
+    "pax": "人数",
+    "sent_note_locked": "已发送到厨房。请直接告知厨房进行更改。",
+    "sent_note_locked_reducer": "已发送到厨房。请直接告知厨房进行更改。如需在这里修改，请先取消该菜品再重新添加。"
   },
   "order": {
     "select_to_view": "选择订单以查看详情",
@@ -270,7 +272,8 @@
       "session_elsewhere": "您在其他位置已有开启的班次。",
       "generic": "无法开班。{{message}}",
       "load_failed": "无法检查收银班次状态，请重试。"
-    }
+    },
+    "sent_note_locked": "已发送到厨房。请直接告知厨房进行更改。"
   },
   "success": {
     "order_cancelled": "订单已取消",

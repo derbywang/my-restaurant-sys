@@ -65,7 +65,9 @@
     "edit_item": "Modifier l'article",
     "add_comment": "Ajouter un commentaire",
     "edit_comment": "Modifier le commentaire",
-    "pax": "Couverts"
+    "pax": "Couverts",
+    "sent_note_locked": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine.",
+    "sent_note_locked_reducer": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine. Pour le modifier ici, annulez le plat puis ajoutez-le de nouveau."
   },
   "order": {
     "select_to_view": "Sélectionnez une commande pour voir les détails",
@@ -242,7 +244,8 @@
       "session_elsewhere": "Vous avez déjà une session ouverte ailleurs.",
       "generic": "Impossible d'ouvrir la session PDV. {{message}}",
       "load_failed": "Impossible de vérifier l'état de la session PDV. Veuillez réessayer."
-    }
+    },
+    "sent_note_locked": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine."
   },
   "success": {
     "order_cancelled": "Commande annulée avec succès",

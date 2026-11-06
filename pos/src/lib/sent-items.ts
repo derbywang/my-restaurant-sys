@@ -25,3 +25,16 @@ export function canRemoveLine(line: SentLine, mayTakeBack: boolean): boolean {
 export function canClearOrder(lines: SentLine[], mayTakeBack: boolean): boolean {
   return mayTakeBack || lines.every((line) => sent(line) <= 0);
 }
+
+/**
+ * The note of a line that has dishes with the kitchen cannot be changed: the kitchen is told about quantities only, so a
+ * changed note would show on the screen and never reach the kitchen. `sync_order` refuses it too ("Sent note locked").
+ */
+export function noteIsLocked(line: { quantity?: number; sentQuantity?: number }): boolean {
+  return (line.sentQuantity ?? 0) > 0;
+}
+
+/** The i18n key of what is said when the note of a sent line is tapped. Those who may take dishes back are also told how. */
+export function noteLockedMessageKey(mayTakeBack: boolean): string {
+  return mayTakeBack ? 'cart.sent_note_locked_reducer' : 'cart.sent_note_locked';
+}

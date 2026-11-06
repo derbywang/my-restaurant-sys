@@ -38,3 +38,8 @@ export function syncFailureMessageKey(response: unknown, updating: boolean): str
 export function refusedTakingBack(response: unknown): boolean {
   return serverTitles(response).includes('reduce not permitted');
 }
+
+/** The server refused to change the note of a dish that was already sent (`sync_order` throws with this title). */
+export function refusedNoteChange(response: unknown): boolean {
+  return serverTitles(response).includes('sent note locked');
+}

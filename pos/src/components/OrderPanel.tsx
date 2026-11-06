@@ -19,8 +19,8 @@ import { DINE_IN } from '../data/order-types';
 import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
-import { refusedTakingBack, syncFailureMessageKey } from '../lib/order-sync';
-import { canClearOrder, canDecrease, canRemoveLine } from '../lib/sent-items';
+import { refusedNoteChange, refusedTakingBack, syncFailureMessageKey } from '../lib/order-sync';
+import { canClearOrder, canDecrease, canRemoveLine, noteIsLocked, noteLockedMessageKey } from '../lib/sent-items';
 import { ROUTE_AFTER_SUBMIT, tableForSubmit } from '../lib/order-tabs';
 
 const OrderPanel = () => {
@@ -81,6 +81,11 @@ const OrderPanel = () => {
   const totals = cartTotals.status === 'ready' || cartTotals.status === 'loading' ? cartTotals.totals : null;
 
   const handleEdit = (item: typeof activeOrders[0]) => {
+    // the note of a dish that is with the kitchen stays as it is (the kitchen would never get the change)
+    if (noteIsLocked(item)) {
+      showToast.error(t(noteLockedMessageKey(mayTakeBack)));
+      return;
+    }
     const menuItem = {
       ...item,
       variants: item.variants,
@@ -167,7 +172,9 @@ const OrderPanel = () => {
       showToast.error(
         refusedTakingBack(error)
           ? t('errors.not_permitted_reduce')
-          : parseFrappeError(error, t('errors.failed_process_order'))
+          : refusedNoteChange(error)
+            ? t('errors.sent_note_locked')
+            : parseFrappeError(error, t('errors.failed_process_order'))
       );
     } finally {
       setIsSubmitting(false);

@@ -66,7 +66,9 @@
     "edit_item": "Edit item",
     "add_comment": "Add comment",
     "edit_comment": "Edit comment",
-    "pax": "Pax"
+    "pax": "Pax",
+    "sent_note_locked": "Already sent to the kitchen. Please tell the kitchen directly to change it.",
+    "sent_note_locked_reducer": "Already sent to the kitchen. Please tell the kitchen directly to change it. To change it here, take the dish back and add it again."
   },
   "order": {
     "select_to_view": "Select an order to view details",
@@ -270,7 +272,8 @@
       "session_elsewhere": "You already have an open session elsewhere.",
       "generic": "Could not open the POS session. {{message}}",
       "load_failed": "Could not check the POS session status. Please try again."
-    }
+    },
+    "sent_note_locked": "Already sent to the kitchen. Please tell the kitchen directly to change it."
   },
   "success": {
     "order_cancelled": "Order cancelled successfully",

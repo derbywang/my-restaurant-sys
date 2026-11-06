@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ClipboardList, Loader2, UtensilsCrossed } from 'lucide-react';
+import { ChevronLeft, ClipboardList, Loader2, MessageSquare, UtensilsCrossed } from 'lucide-react';
 import { Button, Spinner, cn, showToast } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
 import { usePOSStore } from '../../store/pos-store';
@@ -28,7 +28,8 @@ import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
 import { t } from '../../i18n';
 import { customerId } from '../../lib/default-customer';
-import { syncFailureMessageKey } from '../../lib/order-sync';
+import { refusedNoteChange, syncFailureMessageKey } from '../../lib/order-sync';
+import { noteIsLocked, noteLockedMessageKey } from '../../lib/sent-items';
 
 type Mode = 'menu' | 'order';
 
@@ -64,13 +65,13 @@ export default function CaptainOrder() {
     activeOrders,
     removeFromOrder,
     updateQuantity,
-    updateItemComment,
     setSelectedItem,
     isUpdatingOrder,
     orderId,
     posProfile,
     paymentModes,
     orderComment,
+    setOrderComment,
     noOfPax,
     setNoOfPax,
     lastModifiedTime,
@@ -83,8 +84,10 @@ export default function CaptainOrder() {
   const [mode, setMode] = useState<Mode>('order');
   const [hasSetInitialMode, setHasSetInitialMode] = useState(false);
   const [editingItemUniqueId, setEditingItemUniqueId] = useState<string | null>(null);
-  const [noteEditingLine, setNoteEditingLine] = useState<OrderDeltaLine | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showOrderComment, setShowOrderComment] = useState(false);
+  // those who may take dishes back are also told how to change a note (take the dish back and add it again)
+  const mayTakeBack = useRootStore((state: RootState) => Boolean(state.permissions?.reduce_sent_items));
 
   // Secondary actions (PLAN.md §5/§6/§10): overflow menu state + the two
   // picker dialogs, reused as-is from the Cashier `Table.tsx` flow.
@@ -129,7 +132,20 @@ export default function CaptainOrder() {
         </div>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-gray-700">
+        <span className="flex items-center gap-1 text-sm font-semibold text-gray-700">
+          <button
+            type="button"
+            onClick={() => setShowOrderComment(true)}
+            disabled={isSubmitting}
+            className={cn(
+              'w-9 h-9 -ms-2 rounded-full flex items-center justify-center disabled:opacity-40',
+              orderComment ? 'text-blue-600' : 'text-gray-500'
+            )}
+            aria-label={orderComment ? t('cart.edit_comment') : t('cart.add_comment')}
+            title={orderComment ? t('cart.edit_comment') : t('cart.add_comment')}
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
           {totals ? t('captain.total_incl_tax') : t('captain.total')}
         </span>
         <span className={cn('text-lg font-semibold text-gray-900', cartTotals.status === 'loading' && 'opacity-50')}>
@@ -180,24 +196,26 @@ export default function CaptainOrder() {
     updateQuantity(line.uniqueId, restored);
   };
 
+  const lockedNote = (line: OrderDeltaLine) => noteIsLocked({ sentQuantity: line.baseQty });
+
   const handleEditNewOrChanged = (line: OrderDeltaLine) => {
     if (isInteractionDisabled) return;
+    if (lockedNote(line)) {
+      showToast.error(t(noteLockedMessageKey(mayTakeBack)));
+      return;
+    }
     const item = activeOrders.find((i) => i.uniqueId === line.uniqueId);
     if (!item) return;
     setSelectedItem({ ...item, variants: item.variants, addons: item.addons });
     setEditingItemUniqueId(item.uniqueId!);
   };
 
+  // the notes of what is already ordered are with the kitchen: tapping one says so
   const handleEditConfirmedNote = (line: OrderDeltaLine) => {
     if (isInteractionDisabled || !canModify) return;
-    setNoteEditingLine(line);
-  };
-
-  const handleSaveConfirmedNote = (comment: string) => {
-    if (noteEditingLine) {
-      updateItemComment(noteEditingLine.uniqueId, comment);
+    if (lockedNote(line)) {
+      showToast.error(t(noteLockedMessageKey(mayTakeBack)));
     }
-    setNoteEditingLine(null);
   };
 
   const handleSend = async () => {
@@ -277,7 +295,9 @@ export default function CaptainOrder() {
         error && typeof error === 'object' && '_server_messages' in error
           ? (error as { _server_messages?: unknown })._server_messages
           : undefined;
-      if (typeof serverMessages === 'string') {
+      if (refusedNoteChange(error)) {
+        showToast.error(t('errors.sent_note_locked'));
+      } else if (typeof serverMessages === 'string') {
         try {
           const messages = JSON.parse(serverMessages);
           const messageObj = JSON.parse(messages[0]);
@@ -469,6 +489,7 @@ export default function CaptainOrder() {
                     onDecrement={canModify && canReduce ? () => handleConfirmedReduce(line) : undefined}
                     onRemove={canModify && canRemove ? () => handleConfirmedRemove(line) : undefined}
                     onEditNote={canModify ? () => handleEditConfirmedNote(line) : undefined}
+                    noteLocked={lockedNote(line)}
                   />
                 ))}
               </div>
@@ -490,6 +511,7 @@ export default function CaptainOrder() {
                     onIncrement={() => handleDeltaIncrement(line)}
                     onDecrement={() => handleDeltaDecrement(line)}
                     onEditNote={() => handleEditNewOrChanged(line)}
+                    noteLocked={lockedNote(line)}
                   />
                 ))}
               </div>
@@ -714,12 +736,14 @@ export default function CaptainOrder() {
         />
       )}
 
-      <CommentDialog
-        isOpen={noteEditingLine !== null}
-        onClose={() => setNoteEditingLine(null)}
-        onSave={handleSaveConfirmedNote}
-        initialComment={noteEditingLine?.comment || ''}
-      />
+      {showOrderComment && (
+        <CommentDialog
+          isOpen
+          onClose={() => setShowOrderComment(false)}
+          onSave={setOrderComment}
+          initialComment={orderComment}
+        />
+      )}
 
       <TableTransferDialog
         open={isTransferTableOpen}

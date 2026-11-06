@@ -66,7 +66,9 @@
     "edit_item": "明細を編集",
     "add_comment": "コメントを追加",
     "edit_comment": "コメントを編集",
-    "pax": "人数"
+    "pax": "人数",
+    "sent_note_locked": "厨房へ送信済みです。変更はキッチンに直接お伝えください。",
+    "sent_note_locked_reducer": "厨房へ送信済みです。変更はキッチンに直接お伝えください。変更する場合は、取り消してから追加し直してください。"
   },
   "order": {
     "select_to_view": "伝票を選択すると詳細が表示されます",
@@ -270,7 +272,8 @@
       "session_elsewhere": "別の場所ですでにレジが開いています。",
       "generic": "レジを開けられませんでした。{{message}}",
       "load_failed": "レジの状態を確認できませんでした。もう一度お試しください。"
-    }
+    },
+    "sent_note_locked": "厨房へ送信済みです。変更はキッチンに直接お伝えください。"
   },
   "success": {
     "order_cancelled": "注文を取り消しました",

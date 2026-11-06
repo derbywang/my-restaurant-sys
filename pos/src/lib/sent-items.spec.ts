@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canClearOrder, canDecrease, canRemoveLine } from './sent-items';
+import { canClearOrder, canDecrease, canRemoveLine, noteIsLocked, noteLockedMessageKey } from './sent-items';
 
 const NEW_LINE = { quantity: 2 };
 const SENT_LINE = { quantity: 2, sentQuantity: 2 };
@@ -43,5 +43,22 @@ describe('emptying the order', () => {
   it('is open to anyone while nothing was sent', () => {
     expect(canClearOrder([NEW_LINE, { quantity: 1 }], false)).toBe(true);
     expect(canClearOrder([], false)).toBe(true);
+  });
+});
+
+describe('the note of a line', () => {
+  it('can be written on a line that was not sent yet', () => {
+    expect(noteIsLocked(NEW_LINE)).toBe(false);
+    expect(noteIsLocked({ sentQuantity: 0 })).toBe(false);
+  });
+
+  it('is locked once any of the line was sent, also when more was added after', () => {
+    expect(noteIsLocked(SENT_LINE)).toBe(true);
+    expect(noteIsLocked(SENT_AND_ADDED)).toBe(true);
+  });
+
+  it('is said to those who may take dishes back with how to change it, to the others without', () => {
+    expect(noteLockedMessageKey(false)).toBe('cart.sent_note_locked');
+    expect(noteLockedMessageKey(true)).toBe('cart.sent_note_locked_reducer');
   });
 });

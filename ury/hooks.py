@@ -272,7 +272,8 @@ on_session_creation = [
 website_path_resolver = [
     "ury.ury.controllers.setup_redirect.website_path_resolver"
 ]
-# after_request = ["ury.utils.after_request"]
+# Pages and ordering calls are never cached (ury/ury/api/cache_headers.py)
+after_request = ["ury.ury.api.cache_headers.after_request"]
 
 website_redirects = [
     {

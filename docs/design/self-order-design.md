@@ -661,9 +661,70 @@
 | 7 | **平板和自助机用局域网地址** | **店里服务器的局域网 IP 必须固定**（路由器上做 DHCP 预留，或在服务器上设静态 IP；换了地址，所有平板和自助机都要重新设置）。路由器上最好再给它一个固定的本地名字（例如 `ury.lan`），设置链接用这个名字而不是裸 IP。店内的桌上平板访问店里服务器的**局域网地址**，不绕到 Cloudflare：互联网断了平板仍能工作（桌上二维码的顾客会受影响，设备不会）。设备设置链接（3.2 的 `/order/setup#...`）用局域网地址生成。局域网用 http 还是 https 要定：页面没有用到摄像头等需要安全上下文的功能，用 http 可以；如果要 https，就在路由器的 DNS 里把公网域名解析到服务器的内网 IP，并在 nginx 上用能在内网使用的证书（要验证） |
 | 8 | **真实的客户端 IP** | Frappe 日志和限流要看到顾客的真实 IP：nginx 用 `CF-Connecting-IP` 作为真实 IP（`real_ip_header`，`set_real_ip_from` 填 cloudflared 所在的地址）。**验证**：访问后看日志里的 IP |
 | 9 | **限流和防滥用** | 这些接口无需登录，会创建会话。在 Cloudflare 上对 `get_ordering_context`、`add_customer_items` 设每个 IP 每分钟的次数上限（具体数字试营业期间根据实际调整）；会话每天清理（3.6）。服务器侧不信任任何客户端传来的价格、桌号、订单类型（现有设计） |
-| 10 | **缓存** | 不要开「Cache Everything」。`/order/` 页面 `no_cache = 1`；带哈希的静态文件可以缓存；接口响应不缓存 |
+| 10 | **缓存** | 详见下面的 9.2.1。要点：页面和点餐接口由 ury 在响应头里写 `Cache-Control: no-store`（代码已做）；`/assets` 里带哈希的构建文件在 nginx 上设长缓存；Cloudflare 不开 Cache Everything，`/order*` 和 `/api/*` 设 Bypass cache |
 | 11 | **源站不直接暴露** | 路由器不做端口转发；服务器防火墙只允许局域网访问 80/443 以外的端口；打印机的 9100 端口只在局域网 |
 | 12 | **超时** | Cloudflare 的请求超时约 100 秒；我们的接口都很快，不受影响。号码票用后台任务，不在请求里等 |
+
+### 9.2.1 缓存（页面不缓存，构建文件长缓存）
+
+**为什么**：`/order/` 的 HTML 里有 CSRF token，并写着当前构建的 JS / CSS 文件名。如果这份 HTML 被浏览器或 Cloudflare 缓存，下次部署后旧文件已被删除，顾客得到的就是空白页，或者拿到别人的 token。（读代码、查响应头得到：Frappe 页面模块里的 `no_cache = 1` 只是不让 Frappe 缓存渲染结果，**不会写 HTTP 头**；部署前 `/order/`、`/pos`、`/mosaic/…` 的响应没有任何 `Cache-Control`，只是因为没有 `ETag` / `Last-Modified` 和默认规则才没有被缓存。）
+
+| 层 | 做什么 | 在哪里 | 状态 |
+|---|---|---|---|
+| 应用（ury） | 对 `/order`、`/pos`、`/mosaic`、`/ury` 的页面（含其下所有路径）和 `/api/method/ury.ury.api.self_ordering.*` 的响应写 `Cache-Control: no-store`；`/assets` 不动 | `ury/ury/api/cache_headers.py`，在 `ury/hooks.py` 的 `after_request` 注册；测试 `ury.ury.api.test_cache_headers`（11 个） | **已做**（随代码部署，无需配置） |
+| nginx（frappe_docker 的镜像） | 让 ury 的构建文件（文件名带哈希）有长缓存 | 见下 | **部署时配置** |
+| Cloudflare | 不开 Cache Everything；`/order*` 和 `/api/*` Bypass cache；`/assets/*` 用默认 | Cloudflare 控制台 | **部署时配置** |
+
+**nginx：给构建文件长缓存**
+
+- 要改的文件：frappe_docker 的 nginx 模板 `resources/nginx-template.conf`（镜像里是 `/templates/nginx/frappe.conf.template`，启动时由 `nginx-entrypoint.sh` 用环境变量展开成 `/etc/nginx/conf.d/frappe.conf`）。开发容器里这份模板的副本在 `/workspace/resources/core/nginx/nginx-template.conf`，可以对着看。具体的文件位置和怎么挂载进容器，**以《开发环境搭建及部署》为准**（我没有那份文档，这里按我对 frappe_docker 的了解写）。
+- 现在这份模板对 `/assets` 没有设任何缓存头（bench 自带的模板才有 `max-age=31536000`）。在 `location /assets { ... }` **之前**加一段只针对 ury 构建文件的规则（文件在各自的 `assets/` 目录，名字带内容哈希，所以可以放心长缓存；其他 `/assets` 里的文件不动）：
+
+```nginx
+	# ury 的构建文件：文件名带哈希，内容变了名字就变
+	location ~ ^/assets/ury/(order|pos|mosaic|ury)/assets/ {
+		include /etc/nginx/snippets/security_headers.conf;
+		add_header Cache-Control "public, max-age=31536000, immutable";
+		try_files $uri =404;
+	}
+```
+
+- **必须保留 `include … security_headers.conf`**：nginx 的规则是，一个 `location` 里只要有自己的 `add_header`，就**不再继承** `server` 层的 `add_header`，安全头（HSTS 等）会丢。模板里 `/files/…` 那段也是这样处理的。
+- 改完要重启 / 重新创建 nginx 容器。
+
+**部署后怎么用 curl 确认响应头**（在服务器上或任何能访问的电脑上；把 `ORDER_HOST` 换成实际的域名；公网域名上也做一遍，那一遍等于检查 Cloudflare 有没有改写）：
+
+```bash
+H=https://ORDER_HOST
+# 1. 页面和点餐接口：必须是 Cache-Control: no-store
+for p in /order/ /order/x /pos /mosaic/Kitchen "/api/method/ury.ury.api.self_ordering.get_customer_menu?session=x"; do
+  echo "== $p"; curl -s -o /dev/null -D - "$H$p" | grep -iE '^(HTTP|cache-control|cf-cache-status|age)'
+done
+# 2. 构建文件：文件名从页面里取，必须是 public, max-age=31536000, immutable
+JS=$(curl -s "$H/order/" | grep -o '/assets/ury/order/assets/[^"]*\.js' | head -1)
+curl -s -o /dev/null -D - "$H$JS" | grep -iE '^(HTTP|cache-control|cf-cache-status|strict-transport)'
+```
+
+- 期望：第 1 组每一行都是 `Cache-Control: no-store`，且没有 `CF-Cache-Status: HIT`（`DYNAMIC` 或 `BYPASS` 才对）；第 2 组是长缓存，并且仍然有 `Strict-Transport-Security`（说明安全头没丢）。
+- 再确认一次：访问两次 `/order/`，第二次的 `CF-Cache-Status` 不能是 `HIT`。
+
+**Cloudflare**
+
+| 设置 | 值 |
+|---|---|
+| Cache Everything | **不开**（任何规则里都不要选 Cache Everything / Edge Cache TTL 强制） |
+| `/order*`（页面） | Cache Rule：URL 路径以 `/order` 开头 → **Bypass cache** |
+| `/api/*`（所有接口，包含点餐的 GET 接口） | Cache Rule：URL 路径以 `/api/` 开头 → **Bypass cache** |
+| `/assets/*`（构建文件） | 用默认（Cloudflare 按文件扩展名缓存 JS / CSS，并遵守源站的 `Cache-Control`） |
+
+- 源站已经写了 `no-store`，Cloudflare 本来就会遵守；Bypass 规则是第二道保险，防止以后有人开了 Cache Everything。
+
+**部署之后让所有平板刷新一次（写进部署流程）**
+
+- 桌上平板的页面常开，不会自己重新载入；部署新版本后它们仍在跑旧的 JS，直到刷新。旧的 JS 遇到服务器拒绝时会显示提示画面，但不会自己更新。
+- **每次部署后（`yarn build` / `bench build` + 重启之后）：让所有桌上平板刷新页面一次**（最简单的是店员在每台平板上下拉刷新，或用设备管理工具远程刷新）。部署清单里的最后一步写上它，并在部署记录里标记"平板已刷新"。
+- 顾客用手机扫码的页面不受影响（HTML 是 no-store，每次扫码拿到的都是最新的）。
+- 自动检查版本并刷新（空闲时对比构建版本号）属于新功能，**放到开店后**。
 
 ### 9.3 站点数据和账号（需要逐项确认后再改）
 
@@ -834,6 +895,8 @@ bench --site <站点> set-config qz_certificate_file qz/digital-certificate.txt
 ### 9.6 其他部署事项
 
 - 服务器的局域网 IP 固定（9.2 第 7 项）。
+- **每次部署后让所有桌上平板刷新一次**（9.2.1）；用 curl 确认响应头（9.2.1）。
+- **改了 `hooks.py`（例如 `after_request` 缓存钩子）后要重启服务**（`bench restart` 或重启 web 容器）：钩子在进程启动时读入，只 `migrate` 不会生效；重启后用 curl 确认响应头。
 - 路由器：服务器、收银台打印机（如接局域网）的 IP 预留；Wi-Fi 覆盖桌上平板所在的位置。
 
 ### 9.7 【开店后】自助机上线时要补的部署项

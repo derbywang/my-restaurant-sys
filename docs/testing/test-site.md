@@ -70,7 +70,7 @@ bench --site ury-test.localhost run-tests --app ury
 | `ury.ury.api.test_ury_kot_reprint` | 4 通过 | — |
 | `ury.ury.doctype.ury_kot_error_log.test_ury_kot_error_log` | 5 通过 | — |
 | `ury.ury.doctype.ury_menu_course.test_ury_menu_course` | 3 通过 | — |
-| `ury.ury_pos.test_api` | 25 中 2 失败 | `TestSubmitChecklistSEC10.test_submit_checklist_all_mandatory_checked`、`...mandatory_unchecked`（`0 != 2`、`0 != 3`） |
+| `ury.ury_pos.test_api` | 25 中 4 失败 | `TestSubmitChecklistSEC10.test_submit_checklist_all_mandatory_checked`、`...mandatory_unchecked`（`0 != 2`、`0 != 3`）；**2026-11-07 起多出 2 个**：`TestMergeBillsSEC07.test_merge_bills_no_permission_primary`、`..._secondary`（`Expected 'rollback' to have been called once. Called 0 times.`，mock 测试，原因待查）。撤掉当天的改动后同样失败，与服务员权限的改动无关；待另行排查 |
 | `ury.ury.doctype.ury_order.test_ury_order` | 28 中 1 失败 + 1 错误 | `test_sync_order_authorized`（`MagicMock != 'authorized@example.com'`）、`test_sync_order_unauthorized`（`POS Profile Test Profile not found`） |
 | `ury.ury.api.test_ury_waiter_print` | 18 中 3 失败 | `test_build_combined_kot_doc_aggregates_same_item`、`..._merges_multiple_kots`、`test_first_time_add_shows_single_quantity`（数量是 `str` 不是数字：`1 != '3'`） |
 | `ury.ury.api.test_ury_service_line` | 12 中 2 错误 | `test_occupied_table_stage_fired_when_kot_not_served`、`test_table_stage_over_when_minutes_exceed_75`（`datetime - str`） |

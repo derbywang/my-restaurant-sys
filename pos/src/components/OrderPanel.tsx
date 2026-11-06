@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Trash2, Edit, FrownIcon, Plus, Loader2, MessageSquare } from 'lucide-react';
 import { usePOSStore } from '../store/pos-store';
 import { cn } from '@ury/ui';
@@ -20,7 +21,7 @@ import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
 import { refusedTakingBack, syncFailureMessageKey } from '../lib/order-sync';
 import { canClearOrder, canDecrease, canRemoveLine } from '../lib/sent-items';
-import { tableForSubmit } from '../lib/order-tabs';
+import { ROUTE_AFTER_SUBMIT, tableForSubmit } from '../lib/order-tabs';
 
 const OrderPanel = () => {
   const { 
@@ -47,6 +48,7 @@ const OrderPanel = () => {
     setNoOfPax,
     lastModifiedTime
   } = usePOSStore();
+  const navigate = useNavigate();
   const user = useRootStore((state: RootState) => state.user);
   // taking back a dish that was already sent: the cashier and the manager (the server decides)
   const mayTakeBack = useRootStore((state: RootState) => Boolean(state.permissions?.reduce_sent_items));
@@ -159,6 +161,7 @@ const OrderPanel = () => {
       // Reset all states after successful order submission
       resetOrderState();
       showToast.success(isUpdatingOrder ? t('success.order_updated') : t('success.order_created'));
+      navigate(ROUTE_AFTER_SUBMIT);
     } catch (error) {
       console.error('Failed to sync order:', error);
       showToast.error(

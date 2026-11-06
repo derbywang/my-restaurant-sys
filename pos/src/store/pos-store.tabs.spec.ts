@@ -266,3 +266,29 @@ describe('closing a tab with unsaved changes', () => {
     expect(state.activeOrders).toEqual([]);
   });
 });
+
+describe('after an order was sent (the tab is reset)', () => {
+  it('the only tab is left clean: no dishes, no order, no table, no customer note', async () => {
+    const { usePOSStore } = await loadStore(savedWhileEditing({ selectedOrderType: 'Dine In', selectedTable: 'MD-05' }));
+    usePOSStore.getState().resetOrderState();
+    const state = usePOSStore.getState();
+    expect(state.tabOrder).toHaveLength(1);
+    expect(state.activeOrders).toEqual([]);
+    expect(state.orderId).toBeNull();
+    expect(state.isUpdatingOrder).toBe(false);
+    expect(state.selectedTable).toBeNull();
+    expect(state.orderComment).toBe('');
+  });
+
+  it('with other tabs open the cashier is back on the last of them, and the sent one is gone', async () => {
+    const { usePOSStore } = await loadStore(savedWhileEditing());
+    const sent = usePOSStore.getState().activeTabId;
+    usePOSStore.getState().addTab();
+    const other = usePOSStore.getState().activeTabId;
+    usePOSStore.getState().switchTab(sent);
+    usePOSStore.getState().resetOrderState();
+    const state = usePOSStore.getState();
+    expect(state.tabOrder.map((tab) => tab.id)).toEqual([other]);
+    expect(state.activeTabId).toBe(other);
+  });
+});

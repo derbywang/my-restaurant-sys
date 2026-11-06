@@ -22,3 +22,7 @@ export function tabCloseAction(tab: {
   if (!tab.isUpdatingOrder) return 'remove_cart';
   return tab.cartHash !== tab.originalCartHash ? 'unsaved_changes' : 'close';
 }
+
+/** Where the cashier lands after an order was sent: the table page (the same as the waiters). The tab of the
+ * order is reset, so the cashier cannot add the next table's dishes to a blank take away tab by mistake. */
+export const ROUTE_AFTER_SUBMIT = '/tables';

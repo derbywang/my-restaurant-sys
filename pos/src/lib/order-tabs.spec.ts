@@ -40,3 +40,11 @@ describe('tabCloseAction', () => {
     expect(tabCloseAction({ ...base, isUpdatingOrder: true, cartHash: 'b' })).toBe('unsaved_changes');
   });
 });
+
+import { ROUTE_AFTER_SUBMIT } from './order-tabs';
+
+describe('after an order was sent', () => {
+  it('the cashier lands on the table page', () => {
+    expect(ROUTE_AFTER_SUBMIT).toBe('/tables');
+  });
+});

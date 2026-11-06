@@ -43,6 +43,7 @@
     "other": "We could not complete that. Please try again or ask a member of staff.",
     "age": "We could not confirm your age. Please try again.",
     "no_code": "This link has no ordering code. Please scan the QR code on your table again.",
-    "total_failed": "Could not get the total. Please try again."
+    "total_failed": "Could not get the total. Please try again.",
+    "close": "Close"
   }
 }

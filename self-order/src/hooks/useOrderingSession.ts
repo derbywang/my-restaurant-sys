@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import {
   addItems,
   bootstrap,
@@ -18,6 +18,8 @@ import {
 } from '../lib/api'
 import { tokenFromSearch } from '../lib/qr-link'
 import { canResume } from '../lib/resume'
+import { noticeReducer } from '../lib/notice'
+import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
 import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
 import { t } from '../i18n'
 import {
@@ -64,7 +66,16 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const [cart, setCart] = useState<Cart>({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The red notice: a failure shows it, the next request that succeeds (and the guest's close button) takes it away.
+  const [error, dispatchNotice] = useReducer(noticeReducer, null)
+  const setError = useCallback(
+    (text: string | null) => dispatchNotice(text === null ? { type: 'ok' } : { type: 'fail', text }),
+    [],
+  )
+  const dismissError = useCallback(() => dispatchNotice({ type: 'dismiss' }), [])
+  // The cart is kept for a reload of the page once it has been restored (lib/cart-store.ts): saving before that
+  // would overwrite the stored cart with the empty one the page starts with.
+  const [cartRestored, setCartRestored] = useState(false)
   const [billRequested, setBillRequested] = useState(false)
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequestResult | null>(null)
   const [payingOnline, setPayingOnline] = useState(false)
@@ -146,16 +157,20 @@ export function useOrderingSession(initialContext?: OrderingContext) {
         menuResponse = await getMenu(ctx.session)
       }
       setContext(ctx)
-      setMenu(menuResponse.items.filter((item) => !item.disabled))
+      const menuItems = menuResponse.items.filter((item) => !item.disabled)
+      setMenu(menuItems)
+      setCart(loadCart(sessionStorage, ctx.session, menuItems))
+      setCartRestored(true)
       setAgeConfirmed(Boolean(menuResponse.age_confirmed))
       await loadOrder(ctx.session)
+      setError(null) // the page works: a notice of an earlier problem is over
     } catch (err) {
       handleFailure(err)
     } finally {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialContext, token, handleFailure])
+  }, [initialContext, token, handleFailure, setError])
 
   useEffect(() => {
     init()
@@ -185,6 +200,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     sessionStorage.removeItem(SESSION_KEY)
     sessionStorage.removeItem(CONTEXT_KEY)
     sessionStorage.removeItem(TOKEN_KEY)
+    clearStoredCart(sessionStorage)
+    setCartRestored(false)
     setCart({})
     setOrder(null)
     setBillRequested(false)
@@ -254,6 +271,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
           if (!current) return
           setCartPreview(preview)
           setPreviewFailed(false)
+          setError(null) // the total came: an earlier "could not connect" is over
         })
         .catch((err) => {
           if (!current) return
@@ -271,7 +289,12 @@ export function useOrderingSession(initialContext?: OrderingContext) {
       current = false
       window.clearTimeout(timer)
     }
-  }, [session, cartKey, order?.grand_total, handleFailure])
+  }, [session, cartKey, order?.grand_total, handleFailure, setError])
+
+  // keep the cart for a reload of the page
+  useEffect(() => {
+    if (session && cartRestored) saveCart(sessionStorage, session, cart)
+  }, [session, cart, cartRestored])
   const cartTotal = cartPreview?.rounded_total ?? null
 
   async function submitCart() {
@@ -342,6 +365,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     cartPreview,
     previewFailed,
     closed,
+    dismissError,
     ageQuestion,
     answerAge,
   }

@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import ErrorBanner from '../components/ErrorBanner'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
 import { useIdleReset } from '../hooks/useIdleReset'
@@ -47,6 +48,7 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
     cartPreview,
     previewFailed,
     closed,
+    dismissError,
     ageQuestion,
     answerAge,
   } = useOrderingSession(initialContext)
@@ -112,9 +114,7 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
         </button>
       </header>
 
-      {error && (
-        <div className="mx-10 mt-4 rounded-md bg-destructive/10 p-4 text-base text-destructive">{error}</div>
-      )}
+      <ErrorBanner text={error} onClose={dismissError} className="mx-10 mt-4 p-4 text-base" />
 
       <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 overflow-y-auto p-10">

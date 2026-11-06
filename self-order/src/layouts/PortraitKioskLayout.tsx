@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import ErrorBanner from '../components/ErrorBanner'
 import { useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '@ury/core'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
@@ -60,6 +61,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     cartPreview,
     previewFailed,
     closed,
+    dismissError,
     ageQuestion,
     answerAge,
   } = useOrderingSession(initialContext)
@@ -144,9 +146,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
         </button>
       </header>
 
-      {error && (
-        <div className="mx-6 mt-3 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
+      <ErrorBanner text={error} onClose={dismissError} className="mx-6 mt-3 p-3 text-sm" />
 
       {order && order.items.length > 0 && (
         <section className="mx-6 mt-4 rounded-lg border p-4">

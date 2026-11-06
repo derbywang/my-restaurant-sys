@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import ErrorBanner from '../components/ErrorBanner'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
 import { useIdleReset } from '../hooks/useIdleReset'
@@ -45,6 +46,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
     cartPreview,
     previewFailed,
     closed,
+    dismissError,
     ageQuestion,
     answerAge,
   } = useOrderingSession(initialContext)
@@ -110,9 +112,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
         </button>
       </header>
 
-      {error && (
-        <div className="mx-6 mt-3 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
+      <ErrorBanner text={error} onClose={dismissError} className="mx-6 mt-3 p-3 text-sm" />
 
       <div className="flex flex-1 overflow-hidden">
         <main className="w-[68%] overflow-y-auto p-6">

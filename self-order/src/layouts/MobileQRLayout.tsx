@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import ErrorBanner from '../components/ErrorBanner'
 import { formatCurrency } from '@ury/core'
 import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
@@ -37,6 +38,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     cartPreview,
     previewFailed,
     closed,
+    dismissError,
     ageQuestion,
     answerAge,
   } = useOrderingSession(initialContext)
@@ -84,9 +86,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
         </button>
       </header>
 
-      {error && (
-        <div className="mx-4 mt-3 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
+      <ErrorBanner text={error} onClose={dismissError} className="mx-4 mt-3 p-3 text-sm" />
 
       {order && order.items.length > 0 && (
         <section className="mx-4 mt-4 rounded-lg border p-3">

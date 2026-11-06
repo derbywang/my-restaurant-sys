@@ -246,6 +246,7 @@ import Masonry from "masonry-layout";
 import io from "socket.io-client";
 import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from "../lib/realtime";
 import { t, timeNow } from "../lib/language";
+import { elapsedLabel, elapsedMinutes } from "../lib/elapsed";
 
 let host = window.location.hostname;
 let port = window.location.port;
@@ -523,13 +524,10 @@ export default {
     },
 
     updateTimeRemaining() {
-      // console.log("update time", this.kot_channel);
+      const now = new Date();
       this.kot.forEach((kot) => {
-        kot.timeRemaining = this.calculateTimeRemaining(kot.time);
-
-        const timeRemaining = kot.timeRemaining.split(":");
-        const minutes =
-          parseInt(timeRemaining[0]) * 60 + parseInt(timeRemaining[1]);
+        kot.timeRemaining = elapsedLabel(kot.date, kot.time, now);
+        const minutes = elapsedMinutes(kot.date, kot.time, now);
 
         if (
           minutes === this.kot_alert_time &&
@@ -544,24 +542,6 @@ export default {
           kot.timecolor = "text-black";
         }
       });
-    },
-    calculateTimeRemaining(targetTime) {
-      const currentTime = new Date();
-      const [targetHours, targetMinutes, targetSeconds] = targetTime.split(":");
-      const targetDate = new Date(
-        currentTime.getFullYear(),
-        currentTime.getMonth(),
-        currentTime.getDate(),
-        targetHours,
-        targetMinutes,
-        targetSeconds
-      );
-
-      const timeDifference = currentTime - targetDate;
-      const hoursRemaining = Math.floor(timeDifference / 3600000);
-      const minutesRemaining = Math.floor((timeDifference % 3600000) / 60000);
-
-      return `${hoursRemaining} : ${minutesRemaining}`;
     },
     fetchkotwithmasonry() {
       return this.fetchKOT().then(() => {

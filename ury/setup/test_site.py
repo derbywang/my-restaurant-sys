@@ -337,13 +337,17 @@ def open_pos(user=CASHIER, strict=False):
 
 
 def place_order(user, items, table=None, order_type="Dine In", invoice=None, customer=CUSTOMER, no_of_pax=1, room=ROOM, last_modified_time=None):
-    """Take (or update) an order through `sync_order`. `items` is [(item_code, qty), ...];
-    prices are set by the server from the menu. Returns the draft POS Invoice name."""
+    """Take (or update) an order through `sync_order`. `items` is [(item_code, qty), ...] or, with a note for
+    the kitchen, [(item_code, qty, comment), ...]; prices are set by the server from the menu.
+    Returns the draft POS Invoice name."""
     require_test_site()
     from ury.ury.doctype.ury_order.ury_order import sync_order
 
     profile = frappe.get_doc("POS Profile", POS_PROFILE)
-    rows = [{"item": item, "item_name": item, "rate": 0, "qty": qty} for item, qty in items]
+    rows = [
+        {"item": line[0], "item_name": line[0], "rate": 0, "qty": line[1], **({"comment": line[2]} if len(line) > 2 else {})}
+        for line in items
+    ]
     with as_user(user):
         result = sync_order(
             items=rows,

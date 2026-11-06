@@ -1346,6 +1346,41 @@ def _order_uses_table(invoice):
     )
 
 
+def check_sent_notes_unchanged(sent_notes, requested_items):
+    """Refuse a change of the note of a dish that is already with the kitchen.
+
+    The kitchen is told about quantities only, so a changed note would show on the screen and never reach
+    the kitchen. A dish added now may carry its own note; to change a sent one it is taken back and added
+    again (two requests, the first needs the permission to take dishes back). Within one dish: the lines
+    that stay (same note) are matched first; if some sent quantity went away and some quantity with another
+    note came in at the same time, a note was changed.
+
+    `sent_notes` is [(item_code, qty, note)] of the order as saved, `requested_items` the lines of the request.
+    """
+    if not sent_notes:
+        return
+
+    sent, asked = {}, {}
+    for item_code, qty, note in sent_notes:
+        sent.setdefault(item_code, {})
+        sent[item_code][note] = sent[item_code].get(note, 0) + qty
+    for line in requested_items:
+        note = (line.get("comment") or "").strip()
+        notes = asked.setdefault(line.get("item"), {})
+        notes[note] = notes.get(note, 0) + flt(line.get("qty"))
+
+    for item_code, sent_by_note in sent.items():
+        asked_by_note = asked.get(item_code, {})
+        kept = {note: min(qty, asked_by_note.get(note, 0)) for note, qty in sent_by_note.items()}
+        dropped = sum(qty - kept[note] for note, qty in sent_by_note.items())
+        brought = sum(qty - kept.get(note, 0) for note, qty in asked_by_note.items())
+        if dropped > 0 and brought > 0:
+            frappe.throw(
+                _("This dish has already been sent to the kitchen. The note cannot be changed here."),
+                title="Sent note locked",
+            )
+
+
 @frappe.whitelist()
 def sync_order(
     items,
@@ -1582,6 +1617,7 @@ def sync_order(
         invoice.invoice_created = 1
 
     past_item = []
+    sent_notes = []  # (item_code, qty, note) of the lines the kitchen already has
     for item in invoice.items:
         previous_item = {
             "item_code": item.item_code,
@@ -1590,6 +1626,7 @@ def sync_order(
             "comments": "",
         }
         past_item.append(previous_item)
+        sent_notes.append((item.item_code, flt(item.qty), (item.comment or "").strip()))
         
 
     # Conditional checking for 'items' type:
@@ -1627,6 +1664,8 @@ def sync_order(
                     frappe.PermissionError,
                     title="Reduce not permitted",  # the POS recognises the refusal by this title
                 )
+
+    check_sent_notes_unchanged(sent_notes, items)
 
     invoice.items = []
 

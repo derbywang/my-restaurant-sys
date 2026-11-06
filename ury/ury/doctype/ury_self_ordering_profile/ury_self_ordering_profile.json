@@ -165,7 +165,7 @@
    "label": "Billing & Payment"
   },
   {
-   "default": "1",
+   "default": "0",
    "fieldname": "enable_request_bill",
    "fieldtype": "Check",
    "label": "Enable Request Bill"

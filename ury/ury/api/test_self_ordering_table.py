@@ -1034,6 +1034,41 @@ class TestTheOrderTheGuestsSeeIsTheOneTheyOrderOn(SelfOrderingCase):
 		self.assertEqual(seen["grand_total"], 1100)
 
 
+class TestPayingAndAskingForTheBillAreOffUntilTheStaffSideIsThere(SelfOrderingCase):
+	"""「お会計をお願いする」 and 「オンラインで支払う」 do nothing the staff could see until the POS shows the
+	calls (batch 4). A profile has both off unless someone turns them on, the page is told so and the server
+	refuses the calls."""
+
+	def test_both_are_off_by_default_in_the_doctype(self):
+		import json
+		from pathlib import Path
+
+		path = Path(frappe.get_app_path("ury")) / "ury/doctype/ury_self_ordering_profile/ury_self_ordering_profile.json"
+		fields = {f["fieldname"]: f for f in json.loads(path.read_text())["fields"]}
+		for name in ("enable_request_bill", "enable_customer_payment", "enable_payment_link"):
+			self.assertEqual(str(fields[name].get("default", "0")), "0", name)
+
+	def test_the_page_is_told_that_neither_is_offered(self):
+		self.staff_open()
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, {"enable_request_bill": 0, "enable_customer_payment": 0})
+		token = generate_qr_token(PROFILE, TABLE)
+		capabilities = get_ordering_context(token=token)["capabilities"]
+		self.assertFalse(capabilities["request_bill_enabled"])
+		self.assertFalse(capabilities["customer_payment_enabled"])
+
+	def test_the_server_refuses_both_calls(self):
+		from ury.ury.api.self_ordering import create_payment_request, request_bill
+
+		self.staff_open()
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, {"enable_request_bill": 0, "enable_customer_payment": 0})
+		session = self.scan()
+		add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
+		with self.assertRaises(frappe.ValidationError):
+			request_bill(session)
+		with self.assertRaises(frappe.ValidationError):
+			create_payment_request(session)
+
+
 class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):
 	"""総額表示: the guests are shown prices with the tax, calculated by the server, and the total of the
 	cart and of the order is the amount the bill will have. The tax-exclusive price is not sent at all."""

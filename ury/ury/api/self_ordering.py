@@ -676,11 +676,14 @@ def _sanitize_invoice_for_customer(invoice):
 def get_customer_order(session):
     session = _resolve_session(session, require_open=False)
     empty = {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False}
-    if not session.invoice:
-        return {**empty, "state": "none"}
-
+    # A session that has not ordered yet is shown the order its dishes would go on (the open order of the
+    # table that is not printed, the same rule as when it orders and as the total of the cart): the guests
+    # of one table share an order. The printed order of the last guests is never one.
     with _elevated():
-        invoice = frappe.get_doc("POS Invoice", session.invoice)
+        name = session.invoice or (_invoice_to_add_to(session.table) if session.table else None)
+        if not name:
+            return {**empty, "state": "none"}
+        invoice = frappe.get_doc("POS Invoice", name)
 
     order = _sanitize_invoice_for_customer(invoice)
     if order["state"] in ("cancelled", "paid"):

@@ -42,6 +42,7 @@ from ury.ury.api.self_ordering import (
 	get_order_status,
 	get_ordering_context,
 	open_table_for_ordering,
+	preview_customer_cart,
 )
 from ury.ury.doctype.ury_order.ury_order import cancel_order, table_transfer
 
@@ -982,6 +983,55 @@ class TestWhichOrderTheFirstDishGoesTo(SelfOrderingCase):
 		order = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
 		self.assertEqual(order["invoice"], self.source)
 		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "custom_ordering_session"), None)
+
+
+class TestTheOrderTheGuestsSeeIsTheOneTheyOrderOn(SelfOrderingCase):
+	"""A phone that has not ordered yet is shown the order of the table its dishes would go on (the same
+	rule as when it orders), so the order and the total with the cart agree; never an order that is printed."""
+
+	def _ordered_total(self, session):
+		return preview_customer_cart(session, [])["ordered_total"]
+
+	def test_a_phone_that_has_not_ordered_sees_the_order_another_phone_started(self):
+		self.staff_open()
+		first, second = self.scan(), self.scan()
+		order = add_customer_items(first, [{"item": FOOD_ITEM, "qty": 2}])
+		seen = get_customer_order(second)
+		self.assertEqual(seen["state"], "open")
+		self.assertEqual(seen["invoice"], order["invoice"])
+		self.assertEqual([row["qty"] for row in seen["items"]], [2])
+		self.assertEqual(seen["grand_total"], self._ordered_total(second))
+
+	def test_the_order_of_the_waiter_is_seen_before_anything_is_ordered(self):
+		order = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLE)
+		self.staff_open()
+		session = self.scan()
+		seen = get_customer_order(session)
+		self.assertEqual(seen["invoice"], order)
+		self.assertEqual(seen["grand_total"], self._ordered_total(session))
+		self.assertGreater(seen["grand_total"], 0)
+
+	def test_nothing_is_shown_when_the_table_has_no_order(self):
+		self.staff_open()
+		self.assertEqual(get_customer_order(self.scan())["state"], "none")
+
+	def test_the_printed_order_of_the_last_guests_is_not_shown_to_the_new_guests(self):
+		old = place_order(CAPTAIN, [(FOOD_ITEM, 2)], table=TABLE)
+		print_bill(old, CASHIER)
+		self.staff_open()
+		seen = get_customer_order(self.scan())
+		self.assertEqual(seen["state"], "none")
+		self.assertEqual(seen["items"], [])
+
+	def test_only_the_order_of_the_new_guests_is_shown_while_the_old_one_is_printed(self):
+		old = place_order(CAPTAIN, [(FOOD_ITEM, 2)], table=TABLE)
+		print_bill(old, CASHIER)
+		self.staff_open()
+		first, second = self.scan(), self.scan()
+		new = add_customer_items(first, [{"item": FOOD_ITEM, "qty": 1}])["invoice"]
+		seen = get_customer_order(second)
+		self.assertEqual(seen["invoice"], new)
+		self.assertEqual(seen["grand_total"], 1100)
 
 
 class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):

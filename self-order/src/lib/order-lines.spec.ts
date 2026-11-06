@@ -49,3 +49,29 @@ describe('the lines of "ご注文済みの内容"', () => {
     expect(mergeOrderLines([])).toEqual([])
   })
 })
+
+import { orderSignature } from './order-lines'
+
+describe('orderSignature', () => {
+  const line = (item_code: string, qty: number, comment = ''): OrderItem =>
+    ({ item_code, item_name: item_code, qty, comment, price_incl_tax: 0, amount_incl_tax: 0 }) as OrderItem
+  const order = (items: OrderItem[], grand_total = 1000, billed = false) => ({ invoice: 'INV-1', billed, grand_total, items })
+
+  it('is empty without an order', () => {
+    expect(orderSignature(null)).toBe('')
+  })
+  it('stays the same for the same order', () => {
+    expect(orderSignature(order([line('A', 1)]))).toBe(orderSignature(order([line('A', 1)])))
+  })
+  it('changes when a dish is added, the amount, the state or the order changes', () => {
+    const base = orderSignature(order([line('A', 1)]))
+    expect(orderSignature(order([line('A', 2)]))).not.toBe(base)
+    expect(orderSignature(order([line('A', 1), line('B', 1)]))).not.toBe(base)
+    expect(orderSignature(order([line('A', 1)], 2000))).not.toBe(base)
+    expect(orderSignature(order([line('A', 1)], 1000, true))).not.toBe(base)
+    expect(orderSignature({ ...order([line('A', 1)]), invoice: 'INV-2' })).not.toBe(base)
+  })
+  it('changes when only a dish is swapped for another of the same count and amount', () => {
+    expect(orderSignature(order([line('A', 1)]))).not.toBe(orderSignature(order([line('B', 1)])))
+  })
+})

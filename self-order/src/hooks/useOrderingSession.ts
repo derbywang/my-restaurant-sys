@@ -19,6 +19,8 @@ import {
 import { tokenFromSearch } from '../lib/qr-link'
 import { canResume } from '../lib/resume'
 import { noticeReducer } from '../lib/notice'
+import { startAutoRefresh } from '../lib/auto-refresh'
+import { orderSignature } from '../lib/order-lines'
 import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
 import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
 import { t } from '../i18n'
@@ -257,6 +259,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   // changes (and after an order is placed), and the last answer stays on the screen until the next one comes.
   const session = context?.session
   const cartKey = JSON.stringify(toPreviewPayload(cart))
+  const orderKey = orderSignature(order)
   useEffect(() => {
     if (!session) return
     if (cartKey === '[]') {
@@ -289,7 +292,23 @@ export function useOrderingSession(initialContext?: OrderingContext) {
       current = false
       window.clearTimeout(timer)
     }
-  }, [session, cartKey, order?.grand_total, handleFailure, setError])
+  }, [session, cartKey, orderKey, handleFailure, setError])
+
+  // What the table has ordered changes from other phones and from the staff: ask again when the page comes back to
+  // the front and about every 30 seconds. A problem of the network is not shown for this (the guest did nothing);
+  // when the ordering turned out to be over the notice comes.
+  const closedNow = closed !== null
+  useEffect(() => {
+    if (!session || closedNow) return
+    return startAutoRefresh(async () => {
+      try {
+        const current = await getCurrentOrder(session)
+        setOrder(current)
+      } catch (err) {
+        if (isOrderingOver(classifyFailure(err))) handleFailure(err)
+      }
+    })
+  }, [session, closedNow, handleFailure])
 
   // keep the cart for a reload of the page
   useEffect(() => {

@@ -19,3 +19,15 @@ export function mergeOrderLines(lines: OrderItem[]): OrderItem[] {
   }
   return [...merged.values()]
 }
+
+/**
+ * A short text that changes when the order the page shows changes (another order, a dish added, the bill printed,
+ * the amount). The total of the cart is asked for again when it changes, since the total is the cart with the order.
+ */
+export function orderSignature(
+  order: { invoice: string | null; billed: boolean; grand_total: number; items: OrderItem[] } | null
+): string {
+  if (!order) return ''
+  const lines = order.items.map((l) => `${l.item_code}:${l.qty}:${(l.comment ?? '').trim()}`).join('|')
+  return `${order.invoice ?? ''}#${order.billed ? 'billed' : 'open'}#${order.grand_total}#${lines}`
+}

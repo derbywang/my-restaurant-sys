@@ -550,6 +550,45 @@ class TestWhatTheGuestsSeeWhenTheOrderIsOver(SelfOrderingCase):
 		self.assertEqual(get_customer_order(session)["state"], "none")
 
 
+class TestAGuestCannotOrderOnACancelledOrder(SelfOrderingCase):
+	"""The cashier cancels the order of the guests (cancel_order does not touch the session). The same session
+	orders again: refused, the cancelled order stays as it was, and no new order is started."""
+
+	def _cancelled(self):
+		self.staff_open()
+		session = self.scan()
+		invoice = self.order(session)["invoice"]
+		with as_user(CASHIER):
+			cancel_order(invoice, "test")
+		return session, invoice
+
+	def _state(self, invoice):
+		return (
+			frappe.db.get_value("POS Invoice", invoice, ["docstatus", "grand_total"]),
+			frappe.get_all("POS Invoice Item", filters={"parent": invoice}, fields=["item_code", "qty"], order_by="idx"),
+			sorted(frappe.get_all("POS Invoice", filters={"restaurant_table": TABLE}, pluck="name")),
+		)
+
+	def test_the_table_is_closed_so_the_session_is_refused(self):
+		session, invoice = self._cancelled()
+		before = self._state(invoice)
+		self.assertEqual(frappe.db.get_value("URY Ordering Session", {"invoice": invoice}, "status"), "Active")
+		self.refused("Table closed", add_customer_items, session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(self._state(invoice), before)
+
+	def test_even_when_the_table_is_opened_again(self):
+		session, invoice = self._cancelled()
+		before = self._state(invoice)
+		self.staff_open()
+		# the strictest case: the old session belongs to the new opening; only the cancelled order is left to stop it
+		frappe.db.set_value(
+			"URY Ordering Session", {"invoice": invoice}, "table_opening", frappe.db.get_value("URY Table", TABLE, "self_order_opening")
+		)
+		frappe.db.commit()
+		self.refused("Order closed", add_customer_items, session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(self._state(invoice), before)
+
+
 class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 	"""Whatever the guests send, the order only grows; a mistake is for the staff (the cashier) to correct."""
 

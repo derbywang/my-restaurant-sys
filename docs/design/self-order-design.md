@@ -248,6 +248,8 @@
 
 ### 3.6 默认顾客、密钥、营业状态
 
+- **以后可以考虑**：有订单的会话现在永久保留（订单的 `custom_ordering_session` 指向它，是「这张单是谁、哪台设备下的」的记录；删了会让已提交订单的链接断开）。数据量很小（一单一行，一天 100 单约一年 3.6 万行）。如果以后想收紧：订单结账或取消满 N 天（例如 90 天）后，先清空订单的 `custom_ordering_session`，再删会话。要改已提交订单的字段，开店前不做。
+- **取消订单后的会话**：收银员取消自助点餐订单时会话不关，但已失效：取消会释放桌子（关闭自助点餐、`self_order_opening` 清空），旧会话得到「Table closed」；即使桌子又被开启，指向已取消订单的会话得到「Order closed」，不会加到已取消的订单上，也不会新开一单（`TestAGuestCannotOrderOnACancelledOrder`）。
 - **默认顾客**：`add_customer_items` 用 `profile.default_customer`，为空时回落到 POS Profile 的 `customer`（向导已经写好），两者都空才报错。Self Ordering Profile 的 `validate` 在 `default_customer` 为空时自动填入 POS Profile 的 `customer`。
 - **二维码密钥**：`qr_signing_secret` 为空时在 `validate` 里自动生成随机值（现在要手填）。更换密钥会让所有已贴的二维码失效，Desk 表单上改动时要有警告文字。
 - **营业状态**：判断「该分店有**未交班的开班记录**」，**不看开班日期**——`POS Opening Entry` 里 `branch` = 该分店、`docstatus = 1`、`status = "Open"` 的记录至少有一条。跨零点营业、忘记交班时，昨天的开班记录还是 Open，仍然算营业中；交班提交后记录变为 Closed，才算打烊。这和 `posOpening()` 的判断一致，但 `posOpening()` 用的是登录用户的分店，顾客是访客，所以新增一个按分店名判断的函数 `branch_is_open(branch)`，`posOpening()` 也改成调用它（只加一个按分店名的入口，行为不变）。

@@ -158,6 +158,7 @@ before_uninstall = "ury.uninstall.uninstall"
 # has_permission = {
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
 # }
+has_permission = {"User": "ury.user_security.user_has_permission"}
 
 # DocType Class
 # ---------------
@@ -173,6 +174,7 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
+    "User": {"validate": "ury.user_security.check_privileged_roles"},
     "POS Invoice": {
         "before_insert": "ury.ury.hooks.ury_pos_invoice.before_insert",
         "before_validate": "ury.ury.hooks.ury_pos_invoice.before_validate",

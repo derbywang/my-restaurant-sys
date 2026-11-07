@@ -19,3 +19,4 @@ ury.patches.v2_0.default_app
 ury.patches.v2_0.cashier_print_permission
 ury.patches.v2_0.remove_pos_v1_entry
 ury.patches.v2_0.age_check_item_groups
+ury.patches.v3_0.restrict_user_role_permissions

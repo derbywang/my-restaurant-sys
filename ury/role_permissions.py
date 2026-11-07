@@ -35,7 +35,7 @@ permissions_map = {
 		("Territory", {"permlevel": 0, "select": 1, "read": 1}),
 		("UOM", {"permlevel": 0, "select": 1, "read": 1}),
 		("User", {"permlevel": 0, "select": 1, "read": 1}),
-		("User", {"permlevel": 1, "read": 1, "write": 1}),
+		("User", {"permlevel": 1, "read": 1}),
 		("Warehouse", {"permlevel": 0, "select": 1, "read": 1}),
 	],
 
@@ -75,7 +75,7 @@ permissions_map = {
 		("Territory", {"permlevel": 0, "select": 1, "read": 1}),
 		("UOM", {"permlevel": 0, "select": 1, "read": 1}),
 		("User", {"permlevel": 0, "select": 1, "read": 1}),
-		("User", {"permlevel": 1, "read": 1, "write": 1}),
+		("User", {"permlevel": 1, "read": 1}),
 		("Warehouse", {"permlevel": 0, "select": 1, "read": 1}),
 	],
 
@@ -103,7 +103,7 @@ permissions_map = {
 		("Landed Cost Voucher", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "report": 1}),
 		("Material Request", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1, "report": 1}),
 		("Mode of Payment", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "report": 1}),
-		("Module Profile", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
+		("Module Profile", {"permlevel": 0, "select": 1, "read": 1}),
 		("Payment Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1, "report": 1}),
 		("Payment Ledger Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "report": 1}),
 		("Payment Term", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
@@ -123,8 +123,8 @@ permissions_map = {
 		("Purchase Receipt", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1, "report": 1}),
 		("Quality Goal", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
 		("Quality Review", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
-		("Role", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
-		("Role Profile", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
+		("Role", {"permlevel": 0, "select": 1, "read": 1}),
+		("Role Profile", {"permlevel": 0, "select": 1, "read": 1}),
 		("Sales Invoice", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1, "report": 1}),
 		("Sales Order", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1, "report": 1}),
 		("Sales Taxes and Charges Template", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
@@ -138,7 +138,7 @@ permissions_map = {
 		("Tax Category", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
 		("Territory", {"permlevel": 0, "select": 1, "read": 1}),
 		("UOM", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
-		("User", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
+		("User", {"permlevel": 0, "select": 1, "read": 1}),
 		("User", {"permlevel": 1, "read": 1}),
 		("Warehouse", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1}),
 		("Work Order", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "report": 1}),
@@ -178,7 +178,7 @@ permissions_map = {
 		("Journal Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "report": 1, "export": 1}),
 		("Landed Cost Voucher", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "report": 1, "export": 1}),
 		("Mode of Payment", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "import": 1}),
-		("Module Profile", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1}),
+		("Module Profile", {"permlevel": 0, "select": 1, "read": 1, "export": 1}),
 		("Payment Ledger Entry", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "report": 1, "export": 1}),
 		("Payment Term", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "import": 1}),
 		("Payment Terms Template", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "export": 1}),
@@ -192,8 +192,8 @@ permissions_map = {
 		("Product Bundle", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "import": 1, "print": 1}),
 		("Quality Goal", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "import": 1}),
 		("Quality Review", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1}),
-		("Role", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1}),
-		("Role Profile", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "export": 1, "import": 1}),
+		("Role", {"permlevel": 0, "select": 1, "read": 1, "export": 1}),
+		("Role Profile", {"permlevel": 0, "select": 1, "read": 1, "export": 1}),
 		("Sales Invoice", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "report": 1, "export": 1, "print": 1}),
 		("Sales Order", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "submit": 1, "cancel": 1, "report": 1, "export": 1, "print": 1}),
 		("Sales Taxes and Charges Template", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "export": 1}),
@@ -208,6 +208,23 @@ permissions_map = {
 		("Warehouse", {"permlevel": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "import": 1, "share": 1}),
 	]
 }
+
+# Taken away from the sites that already have them (the patch restrict_user_role_permissions): who gets which role is
+# decided by the User, Role, Role Profile and Module Profile; only a System Manager writes them. The waiter and the
+# cashier wrote the roles of their own account (permission level 1 of the User); the manager and the URY Admin wrote
+# the User at level 0, new_password included.
+REVOKED = [
+	("User", "URY Captain", 1, ("write",)),
+	("User", "URY Cashier", 1, ("write",)),
+	("User", "URY Manager", 0, ("write", "create")),
+	("Role", "URY Manager", 0, ("write", "create")),
+	("Role Profile", "URY Manager", 0, ("write", "create")),
+	("Module Profile", "URY Manager", 0, ("write", "create")),
+	("Role", "URY Admin", 0, ("write", "create", "delete", "import")),
+	("Role Profile", "URY Admin", 0, ("write", "create", "delete", "import")),
+	("Module Profile", "URY Admin", 0, ("write", "create", "delete", "import")),
+]
+
 
 def setup_role_permissions():
 	print("Configuring URY role permissions...")

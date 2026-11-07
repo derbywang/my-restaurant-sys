@@ -89,6 +89,18 @@
 - `frontend/` 有 23 个（T7 已清掉向导相关的 16 个）、`self-order/` 有 3 个类型错误（检查命令：`npx tsc -p tsconfig.app.json --noEmit`）。主要在 `pages/Dashboard/*`、`pages/Reports/*`（`XxxRow[]` 缺索引签名）、`layout/Header.tsx`。**清掉之后，再给这两个应用的 `build` 脚本加 typecheck**（`pos/` 已经是 `yarn typecheck && vite build`）。
 
 ## 部署与上线前待办
+- **部署检查命令 `deploy_check`（待做；2026-11 评估，等权限 JSON、migrate 和实机验证做完后再定时机）**：9.3 的部署清单已积了好几项要手动查的东西，建议合成一条只读命令，像 `menu_items_without_kitchen` 那样一次跑完、列出不合格项：`bench --site <站点> execute ury.ury.api.deploy_check.run`。
+  - **能自动检查的项**（返回 `[{check, ok, detail}]`，不合格的排前面，最后用退出码或 `frappe.throw` 区分）：
+    1. scheduler 是否启用（`frappe.utils.scheduler.is_scheduler_disabled()` / `scheduler status`），`delete_old_sessions` 和 `kotValidationThread` 在 Scheduled Job Type 里是否有行、没有停用；
+    2. `URY KOT` 有没有 Custom DocPerm（应为 0）；`ury_kot.json` 的权限与库里一致（尤其 Captain、Cashier、Manager 没有 `cancel`）；
+    3. 关键角色权限：Captain 对 `POS Invoice` 无 `cancel`，Cashier / Manager / Admin 有（用 `frappe.permissions.has_permission` 或直接读 Custom DocPerm）；
+    4. 缺厨房的菜（复用 `menu_items_without_kitchen`）；
+    5. 新列是否存在（`URY Table.self_order_open` 等，9.3 里已列）、未执行的补丁是否为 0；
+    6. 开发 / 正式差异项：`common_site_config` 的 `webserver_host`、`socketio_port`；Self Ordering Profile 的 `public_url`、默认顾客；URY User 的语言是否为日语；`Error Log` 里有没有未处理的 `KOT Error` / `URY Setup Error`；
+    7. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
+  - **`ury.install.after_install` 的 `try/except`**：现在出错只 `print("Error during installation")` 然后 `pass`，安装照样算成功，权限写到一半、后面的日本税制 / 货币 / 语言设置没做都不会报错。建议至少把**完整的错误（traceback）写进 Error Log**（标题 `URY Setup Error`，和 `add_roles_to_administrator` 一致），并把失败的步骤记下；更好的做法是**每一步单独 `try/except`**，一步失败不影响后面的步骤，最后汇总打印并 `raise` 让安装明确失败（或让 `deploy_check` 能发现缺了哪一步）。注意：已有站点已装好，不会重新跑，改动只影响新站点。
+  - **工作量**：检查命令约 0.5 天（逻辑简单，要写测试：每项都有一条通过和一条不合格的用例，用测试站点的事务内改动构造）；`after_install` 分步和写 Error Log 约 0.25 天（要在一个临时站点上实际装一次验证，可用 `ury-wizard.localhost` 以外的新临时站点）。
+  - **建议时机**：开店前（12/4 之前）做检查命令，三友寿司正式服务器部署时就能用上，并把 9.3 里能自动检查的几项改成"运行该命令，结果必须为空"；`after_install` 的改动同时做，卖给其他店之前必须有。开店前只修 bug 的窗口从 12/4 起，所以最好在 11 月内完成。
 - ~~**旧版 POS（urypos，路由 `/urypos`）**~~：已关闭。删了路由规则和 `www/urypos.html`，根 `package.json` 的 `build` / `postinstall` 不再构建和安装它，POS 里「切换到 Version 1」的按钮、Desk 首页的「POS V1」入口（补丁 `remove_pos_v1_entry`）也去掉了；`urypos/` 源码保留（上游代码）。部署后 `/urypos` 返回 404（测试 `ury.test_urypos_closed`）。
 - **`--frozen-lockfile`**：根 `yarn.lock`、`mosaic/yarn.lock`、`urypos/yarn.lock` 已纳入版本库，但 bench 的 `yarn install --check-files` 不会强制锁文件不变。做正式部署（frappe_docker 镜像构建）时，再决定怎么让镜像构建使用 `--frozen-lockfile`。
 - **实时推送（Socket.IO）**：正式环境确认 nginx 已转发 `/socket.io`（开发环境不经 nginx：pos / mosaic 直接连 9000 端口，`webserver_host = 127.0.0.1`，厨房屏幕自动更新，KOT 出错提醒可以在开发站点测试）。KOT 错误提示（`KotAlertListener`）依赖它：KOT 校验失败时后端向 `kot_error_<分店>_<生产单元>` 推送，POS 按 `get_production_units_for_branch` 返回的名字订阅。开店前要验证：让一张 KOT 校验失败，该分店的收银端能弹出提示。

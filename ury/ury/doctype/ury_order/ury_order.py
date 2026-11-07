@@ -2281,6 +2281,9 @@ def cancel_kot(invoice_id):
     for item in kot_list:
         kot_doc = frappe.get_doc("URY KOT", item.name)
         kot_doc.docstatus = 2
+        # A step of cancel_order, which has checked that the user may cancel this order: voiding the tickets
+        # does not depend on the user's rights on the tickets (the manager has no cancel right on them)
+        kot_doc.flags.ignore_permissions = True
         kot_doc.save()
 
 

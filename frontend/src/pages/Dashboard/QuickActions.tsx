@@ -450,7 +450,6 @@ export const QuickActions: React.FC = () => {
                   { value: 'URY Cashier', label: t('dashboard.quick.role_cashier') },
                   { value: 'URY Captain', label: t('dashboard.quick.role_captain') },
                   { value: 'URY Manager', label: t('dashboard.quick.role_manager') },
-                  { value: 'URY Kitchen User', label: t('dashboard.quick.role_kitchen') },
                 ]}
               />
             </div>

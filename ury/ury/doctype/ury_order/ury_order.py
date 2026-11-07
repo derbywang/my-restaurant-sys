@@ -19,6 +19,17 @@ from frappe import cache
 class URYOrder(Document):
     pass
 
+def _require_staff_for_tables(*tables):
+    """Merging tables is for the staff who take orders, at the branch of the tables."""
+    if frappe.session.user == "Guest" or not frappe.has_permission("POS Invoice", "create"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    if frappe.session.user != "Administrator" and "System Manager" not in frappe.get_roles():
+        branch = getBranch()
+        for table in tables:
+            if frappe.db.get_value("URY Table", table, "branch") != branch:
+                frappe.throw(_("Not permitted for a table of another branch"), frappe.PermissionError)
+
+
 @frappe.whitelist()
 def merge_free_tables(table1, table2):
     """Merges two tables in the same room; allows one occupied and one free."""
@@ -30,6 +41,8 @@ def merge_tables_batch(anchor_table, tables):
 
     if isinstance(tables, str):
         tables = json.loads(tables)
+
+    _require_staff_for_tables(anchor_table, *[t for t in tables if t])
 
     targets = list(
         dict.fromkeys(
@@ -480,6 +493,8 @@ def _has_open_pos_invoices_for_cluster(tables):
 
 @frappe.whitelist()
 def unmerge_tables(table):
+
+    _require_staff_for_tables(table)
 
     cluster = _get_cluster_table_names(
         table

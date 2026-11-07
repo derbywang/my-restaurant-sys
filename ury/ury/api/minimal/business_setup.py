@@ -4,6 +4,25 @@ from frappe import _
 from ury.setup.names import cash_mode_name
 
 
+# The setup endpoints work with ignore_permissions: only an administrator may call them, and the accounts they make
+# get one of the staff roles (a waiter must not be able to make a System Manager).
+SETUP_ROLES = ("System Manager", "URY Admin")
+STAFF_ROLES = ("URY Cashier", "URY Captain", "URY Manager")
+
+
+def require_setup_rights():
+    user = frappe.session.user
+    if user == "Administrator":
+        return
+    if user == "Guest" or not set(frappe.get_roles()) & set(SETUP_ROLES):
+        frappe.throw(frappe._("Not permitted to change the setup"), frappe.PermissionError)
+
+
+def check_staff_role(role):
+    if role not in STAFF_ROLES:
+        frappe.throw(frappe._("The role of a new account must be one of: {0}").format(", ".join(STAFF_ROLES)))
+
+
 def item_group_for_kind(kind=None):
     """Item group for an item created by the wizard. On Japanese sites it comes from the item's
     種類 (食品 / 酒類 / 非食品) and sits under the group that carries its consumption tax (the
@@ -103,8 +122,7 @@ def get_branches():
 
 @frappe.whitelist()
 def update_business_setup(branch=None, restaurant=None):
-    if frappe.session.user == "Guest":
-        frappe.throw("Not permitted")
+    require_setup_rights()
 
     if branch:
         if isinstance(branch, str):
@@ -157,6 +175,8 @@ def update_business_setup(branch=None, restaurant=None):
 
 @frappe.whitelist()
 def create_setup_user(email, name, password=None, role="URY Cashier"):
+    require_setup_rights()
+    check_staff_role(role)
     if frappe.db.exists("User", email):
         return {"status": "exists", "email": email}
     
@@ -177,8 +197,13 @@ def create_setup_user(email, name, password=None, role="URY Cashier"):
 
 @frappe.whitelist()
 def submit_configure_data(data):
+    require_setup_rights()
     if isinstance(data, str):
         data = frappe.parse_json(data)
+    # the accounts are made at the end: refuse a wrong role before anything is changed
+    for account in data.get("users", []):
+        if account.get("email"):
+            check_staff_role(account.get("role", "URY Cashier"))
         
     results = {}
     user = frappe.session.user

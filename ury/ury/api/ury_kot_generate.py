@@ -193,6 +193,107 @@ def process_items_for_kot(
 
 
 # Process items to create a cancel KOT document
+def kitchen_ledger(invoice_id):
+    """What the kitchen got and not yet had taken back, from the submitted tickets:
+    ({production: {item_code: [[note, quantity], ...]}}, {production: [names of the tickets that sent]}).
+
+    The orders of one split bill are one ledger (the dishes were sent on the ticket of the old bill, and the new
+    bills hold some of them), so a bill can only take back what the kitchen got and the bills together never more.
+    The tickets that sent a dish stay in the ledger when their order was cancelled (they are then cancelled too,
+    docstatus 2; only `cancel_kot` does that in the code). One that was cancelled in the Desk and amended counts
+    through its amended ticket only. A dish is counted by item_code and note; which order line a ticket belongs to is not recorded."""
+    group = frappe.db.get_value("POS Invoice", invoice_id, "custom_split_group")
+    invoices = {invoice_id}
+    if group:
+        invoices.update(frappe.get_all("POS Invoice", filters={"custom_split_group": group}, pluck="name"))
+    tickets = frappe.get_all(
+        "URY KOT",
+        filters={
+            "invoice": ["in", list(invoices)],
+            "docstatus": ["in", [1, 2]],
+            "type": ["in", ["New Order", "Order Modified", "Cancelled", "Partially cancelled"]],
+        },
+        fields=["name", "type", "production", "amended_from"],
+        order_by="creation asc, name asc",
+    )
+    # A ticket cancelled in the Desk and amended is replaced by the amended one: count only the new one
+    amended = {ticket.amended_from for ticket in tickets if ticket.amended_from}
+    tickets = [ticket for ticket in tickets if ticket.name not in amended]
+    by_name = {ticket.name: ticket for ticket in tickets}
+    rows = frappe.get_all(
+        "URY KOT Items",
+        filters={"parent": ["in", list(by_name)], "parenttype": "URY KOT"} if by_name else {"name": ""},
+        fields=["parent", "item", "quantity", "cancelled_qty", "comments"],
+        order_by="idx asc",
+    )
+    rows_of = {}
+    for row in rows:
+        rows_of.setdefault(row.parent, []).append(row)
+
+    ledger, origins = {}, {}
+    for ticket in tickets:
+        buckets_of = ledger.setdefault(ticket.production, {})
+        for row in rows_of.get(ticket.name, []):
+            buckets = buckets_of.setdefault(row.item, [])
+            note = (row.comments or "").strip()
+            if ticket.type in ("New Order", "Order Modified"):
+                for bucket in buckets:
+                    if bucket[0] == note:
+                        bucket[1] += int(row.quantity or 0)
+                        break
+                else:
+                    buckets.append([note, int(row.quantity or 0)])
+                origins.setdefault(ticket.production, [])
+                if ticket.name not in origins[ticket.production]:
+                    origins[ticket.production].append(ticket.name)
+            else:
+                _take_from_buckets(buckets, note, abs(int(row.cancelled_qty or 0)))
+    return ledger, origins
+
+
+def _take_from_buckets(buckets, note, quantity):
+    """Take up to `quantity` out of the buckets: the one with the same note first, then the others, the last added
+    first. Returns [(note of the bucket, quantity taken)]; no bucket goes below zero."""
+    taken = []
+    ordered = [b for b in buckets if b[0] == note] + [b for b in reversed(buckets) if b[0] != note]
+    for bucket in ordered:
+        if quantity <= 0:
+            break
+        part = min(bucket[1], quantity)
+        if part > 0:
+            bucket[1] -= part
+            quantity -= part
+            taken.append((bucket[0], part))
+    return taken
+
+
+def _requests_for_ledger(requests, buckets_of):
+    """Share what is to be taken back between the buckets of one production unit: first each request takes from the
+    bucket with its own note, then what is left of the requests from what is left of the dish. Returns
+    [(request, note, quantity)] in the order of the requests."""
+    wanted = [abs(int(request["qty"])) for request in requests]
+    taken = [[] for _ in requests]
+    for exact in (True, False):
+        for index, request in enumerate(requests):
+            buckets = buckets_of.get(request["item_code"], [])
+            if wanted[index] <= 0 or not buckets:
+                continue
+            note = (request.get("comments") or "").strip()
+            if exact:
+                candidates = [b for b in buckets if b[0] == note]
+                got = _take_from_buckets(candidates, note, wanted[index])
+            else:
+                got = _take_from_buckets(buckets, note, wanted[index])
+            for got_note, part in got:
+                wanted[index] -= part
+                taken[index].append((got_note, part))
+    return [
+        (request, note, part)
+        for request, parts in zip(requests, taken)
+        for note, part in parts
+    ]
+
+
 def process_items_for_cancel_kot(
     invoice_id,
     customer,
@@ -204,41 +305,55 @@ def process_items_for_cancel_kot(
     kot_type,
     invoiceItems,
 ):
-
-    kot_items = create_order_items(items)
-    pos_profile = frappe.get_doc("POS Profile", pos_profile_id)
-    productions = frappe.db.get_all(
-        "URY Production Unit", filters={"branch": pos_profile.branch}, fields=["name"]
-    )
+    """Tickets that take dishes back from the kitchen: only what the kitchen got (see kitchen_ledger), to the
+    production units that got it (not to the units the menu names now), never more than it still has."""
+    requests = create_order_items(items)
+    ledger, origins = kitchen_ledger(invoice_id)
 
     created_kot_names = []
-
-    for production in productions:
-        productionDoc = frappe.get_doc("URY Production Unit", production.name)
-        productionItemGroups = [
-            item_group.item_group for item_group in productionDoc.item_groups
+    for production, buckets_of in ledger.items():
+        shares = _requests_for_ledger(requests, buckets_of)
+        if not shares:
+            continue
+        if not production or not frappe.db.exists("URY Production Unit", production):
+            frappe.log_error(
+                title="KOT Error",
+                message=(
+                    f"No cancel ticket for {invoice_id}: the production unit {production!r} that got "
+                    f"{', '.join(sorted({r['item_code'] for r, _n, _q in shares}))} does not exist any more."
+                ),
+            )
+            continue
+        cancel_items = [
+            {
+                "item_code": request["item_code"],
+                "item_name": request["item_name"],
+                "qty": -part,
+                "comments": note,
+            }
+            for request, note, part in shares
         ]
-        production_items = [
-            item
-            for item in kot_items
-            if frappe.get_doc("Item", item["item_code"]).item_group
-            in productionItemGroups
+        sent_items = {request["item_code"] for request, _n, _q in shares}
+        original = [
+            name
+            for name in origins.get(production, [])
+            if sent_items & {r.item for r in frappe.get_all("URY KOT Items", filters={"parent": name}, fields=["item"])}
         ]
-
-        if production_items:
-            kot_name = create_cancel_kot_doc(
+        created_kot_names.append(
+            create_cancel_kot_doc(
                 invoice_id,
                 restaurant_table,
-                production_items,
+                cancel_items,
                 kot_type,
                 customer,
                 comments,
                 pos_profile_id,
                 cancel_kot_naming_series,
                 invoiceItems,
-                production.name,
+                production,
+                original_kots=original,
             )
-            created_kot_names.append(kot_name)
+        )
 
     return created_kot_names
 
@@ -255,6 +370,7 @@ def create_cancel_kot_doc(
     cancel_kot_naming_series,
     invoiceItems,
     production,
+    original_kots=None,
 ):
     pos_invoice = frappe.get_doc("POS Invoice", invoice_id)
     order_number = pos_invoice.custom_ury_order_number  
@@ -270,19 +386,15 @@ def create_cancel_kot_doc(
         fields=("name"),
     )
 
-    # Find original KOTs related to the cancel items
-    original_kots = []
-    for cancelItem in cancel_items:
-        for kot in kot_list:
-            kot_doc = frappe.get_doc("URY KOT", kot.name)
-            kot_cancel_items = kot_doc.kot_items
-            itemCheckFlag = False
-            for kotItem in kot_cancel_items:
-                if cancelItem["item_code"] == kotItem.item:
-                    itemCheckFlag = True
-            if itemCheckFlag:
-                original_kots.append(kot_doc.name)
-                break
+    # The original KOTs: the ones that sent these dishes (the caller knows them from the ledger)
+    if original_kots is None:
+        original_kots = []
+        for cancelItem in cancel_items:
+            for kot in kot_list:
+                kot_doc = frappe.get_doc("URY KOT", kot.name)
+                if any(cancelItem["item_code"] == kotItem.item for kotItem in kot_doc.kot_items):
+                    original_kots.append(kot_doc.name)
+                    break
 
     # Remove duplicate KOT names and join them into a single string
     set_kots = [*set(original_kots)]

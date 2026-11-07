@@ -525,6 +525,8 @@
 4. **桌台开启状态**：拆单不改变桌台的开启状态。后面的打印 / 付款按 3.1 处理：桌上任何一张订单被打印就关闭；只有桌上不再有未结订单（桌台释放）才因付款关闭；原订单先付款、新订单还挂着时，桌台没有释放，开启状态不因这次付款而关闭，但原订单（会话所指的）已付款，该会话进入「終了」状态不能再下单（5.1 第 3 项）。
 5. KOT：拆单本身不出 KOT（菜已经出过）；顾客追加到原订单时，`past_item` 取原订单自己的行，差额正确。
 6. 拆单完成后店员如果再拆，规则 1～5 不变。
+7. **取消 / 减菜时的厨房单（`process_items_for_cancel_kot`）**：取消单只取消**厨房实际收到过的**，数量不超过厨房还留着的净数量，并发给**当初收到这道菜的生产单位**（不按取消时的菜单配置重新路由；那个生产单位已不存在时跳过并写 Error Log `KOT Error`，不阻止取消）。账本（`kitchen_ledger`）由已提交的厨房单按生产单位、`item_code`、备注记出，**同一个拆单组（`custom_split_group`）的所有订单共用一本**：拆单不改厨房单（它们仍挂在源订单上），新订单上取消或减菜才找得到厨房收到过的菜，各订单只取消自己的行，合计不会超出厨房收到的。合单不移动行，厨房单各挂各的订单，不受影响。整单取消时原来的发送票会被置为已作废（`docstatus = 2`），账本照样把它们算作发送过的。代码里只有 `cancel_kot` 会把发送票置为 `docstatus = 2`；在 Desk 里手动取消并修订（Amend）的票，只算修订后的那一张（排除被 `amended_from` 指向的原票），不会重复计数；手动取消但没有修订的票仍算作发送过（厨房可能已经看到 / 打印过）。测试：`test_cancel_kot_ledger`（15 条：缺厨房的菜、从没出过单的订单、追加时没出单的份、备注不同的两行、分类被移走后仍发给原生产单位、减菜封顶、生产单位不存在、拆单后新订单取消 / 减菜 / 两张订单合计、合单）。
+   - **已知限制（开店前不处理）**：账本按菜和备注计数，**不区分具体是哪一行订单明细**（`URY KOT Items` 没有记录订单明细行，`split_bill` 移动行时也不保留行名）。同一道菜在同一拆单组里既有发过厨房的份、也有没发过的份时（极少见：例如拆单恰好把没发过的那几份移到新订单），取消时数量可能算到另一张订单上：一张多取消、另一张少取消，但全组合计不会超过厨房收到的。**以后可以考虑**按订单明细行追踪厨房单（在 `URY KOT Items` 里记订单明细行，拆单时带着走）。
 
 **测试**（`test_self_ordering_pos.py`）：
 
@@ -745,6 +747,7 @@ curl -s -o /dev/null -D - "$H$JS" | grep -iE '^(HTTP|cache-control|cf-cache-stat
 - **`migrate` 之后确认新列存在**：`URY Table` 的 `self_order_open`、`self_order_opened_at`、`self_order_opened_by`、`self_order_opening`，`URY Ordering Session` 的 `table_opening`，`URY Self Ordering Profile` 的 `table_open_minutes`（`show columns from \`tabURY Table\` like 'self_order%'`）。代码里释放桌台、转台、交班关闭桌台的地方有一层保护 `self_order_close_fields()`（用 `frappe.db.has_column` 判断，列不存在时不碰它），是为了代码比数据库结构先到的这段时间（开发站点没来得及 migrate、部署进行中）也能正常打印和取消；所有站点都 migrate 之后这层保护就不需要了，以后适当的时候去掉（改成直接用 `SELF_ORDER_CLOSE_FIELDS`，同时去掉 `get_open_tables` 里对应的判断）。
 - **员工账号的语言设为日语**：POS、管理后台、厨房屏幕都按登录用户的 `User.language` 显示（`frappe.boot.lang`），没有设置时用 System Settings 的语言。三友寿司的每个员工账号（收银员、店长、服务员、厨房）都要把语言设为日语，System Settings 的默认语言也设为日语（开发站点现在是 en，收银员账号也是 en，所以显示英文）。改的是站点数据，部署时按清单确认后再改；员工也可以用界面里的语言菜单自己切换。
 - **开店前检查：菜单里所有的菜，其菜品分类都属于某个生产单位**（`URY Production Unit` 的菜品分类子表）。不属于的菜能点、能结账，但**不出厨房单**（2026-11 开发站点验证时发现：`process_items_for_kot` 原来只给点单的人一条英文 msgprint，自助点餐和别人都不知道）。部署时和每次改菜单、改生产单位之后运行只读检查，结果必须为空：`bench --site <站点> execute ury.ury.api.kitchen_check.menu_items_without_kitchen`（列出菜单、菜、菜品分类）。保存 URY Menu 时也会给出警告（不阻止保存）。万一仍漏了，点单时收银台会收到通知（`kot_error_<分店>_<生产单位>` 频道，`kind = no_kitchen`），点单的人看到同一句翻译好的提示。
+- **确认 scheduler 已启用**（`bench --site <站点> scheduler status`）：每日清理旧会话（`delete_old_sessions`）和每分钟的厨房单校验（`kotValidationThread`）都靠它；关着的话这些任务登记了也不会运行。开发站点 2026-11-07 确认是启用的。新任务登记要 `migrate`（会写入 Scheduled Job Type）。
 - 创建 URY Ordering Device（每张桌的平板）。
 - 每道菜的「セルフオーダー可」；确认「酒類」的菜没有被取消勾选；`age_check_item_groups` 包含「酒類」。
 - 部署后（`bench migrate` 之后）按顺序：先备份，再 migrate，核对补丁和 Error Log。

@@ -2045,8 +2045,11 @@ def cancel_order(invoice_id, reason):
         cancel_kot(invoice_id)
 
     except Exception as e:
-        # If an exception occurs (e.g., "kot" app not found), it will be caught here without effecting execution
-        pass
+        # The order is cancelled all the same, but the kitchen may not have been told: leave a trace
+        frappe.log_error(
+            title="KOT Error",
+            message=f"The cancel tickets of {invoice_id} could not be made: {e}\n{frappe.get_traceback()}",
+        )
 
     # 已提交的订单走标准取消流程；草稿订单（进行中的订单）不能调用 cancel()，在 else 中直接改状态
     if pos_invoice.docstatus == 1:
@@ -2242,6 +2245,7 @@ def cancel_kot(invoice_id):
             "item_code": item.get("item", item.get("item_code")),
             "qty": item.qty,
             "item_name": item.item_name,
+            "comment": item.get("comment") or "",
         }
         items.append(order_item)
 

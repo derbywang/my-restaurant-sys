@@ -18,6 +18,14 @@ class URYSelfOrderingProfile(Document):
 
     def validate(self):
         self.validate_public_url()
+        self.set_defaults()
+
+    def set_defaults(self):
+        """What the setup already knows: the customer of the POS Profile, and a secret for the QR codes."""
+        if not self.default_customer and self.pos_profile:
+            self.default_customer = frappe.db.get_value("POS Profile", self.pos_profile, "customer")
+        if not self.qr_signing_secret:
+            self.qr_signing_secret = frappe.generate_hash(length=48)
 
     def validate_public_url(self):
         """The address written in the QR codes: scheme and host (and port) only, `https://order.example.jp`."""

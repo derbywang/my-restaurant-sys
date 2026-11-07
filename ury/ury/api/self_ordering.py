@@ -551,7 +551,7 @@ def _prices_incl_tax(item_codes, profile, order_type):
     """{item: price with tax} for the dishes that have a price. Must run elevated."""
     if not item_codes:
         return {}
-    args = (profile.pos_profile, order_type, profile.default_customer)
+    args = (profile.pos_profile, order_type, _default_customer(profile))
     try:
         return prices_incl_tax(item_codes, *args, trusted_branch=profile.branch)
     except frappe.ValidationError:
@@ -777,7 +777,7 @@ def preview_customer_cart(session, items):
             return {"currency": None, "rounded_total": 0, "ordered_total": 0, "taxes": []}
 
         doc = cart_document(
-            ordered + cart, profile.pos_profile, order_type, profile.default_customer,
+            ordered + cart, profile.pos_profile, order_type, _default_customer(profile),
             session.table, invoice_name, trusted_branch=profile.branch,
         )
         totals = totals_of(doc)
@@ -925,9 +925,10 @@ def _add_customer_items(session, items, age_confirmed=0):
             invoice.order_type = order_type
 
         if not invoice.customer:
-            if not profile.default_customer:
+            customer = _default_customer(profile)
+            if not customer:
                 frappe.throw(_("Self ordering profile has no default customer configured"), frappe.ValidationError)
-            invoice.customer = profile.default_customer
+            invoice.customer = customer
 
         invoice.pos_profile = profile.pos_profile
         invoice.custom_order_source = session.source
@@ -974,6 +975,7 @@ def _add_customer_items(session, items, age_confirmed=0):
                 {"occupied": 1, "latest_invoice_time": invoice.creation},
             )
 
+        shown = len(frappe.local.message_log)
         try:
             # the whole order as it is now, line by line; the guest's note of a new line goes with it
             current_items_for_kot = [
@@ -988,8 +990,62 @@ def _add_customer_items(session, items, age_confirmed=0):
             kot_execute(invoice.name, invoice.customer, invoice.restaurant_table, current_items_for_kot, past_item, None)
         except Exception as e:
             frappe.log_error(f"Self-order KOT creation failed: {e}", "KOT Error")
+            _announce_kot_failure(invoice)
+        finally:
+            # what the kitchen code says (a dish no kitchen makes) is for the staff, who are told on the register;
+            # the guest's answer carries none of it. This drops EVERY message added during kot_execute, so a
+            # message meant for the guest must never be raised inside kot_execute.
+            del frappe.local.message_log[shown:]
 
     return _sanitize_invoice_for_customer(invoice)
+
+
+def _default_customer(profile):
+    """The customer of the guests' orders: the profile's, else the POS Profile's (the setup wizard fills it)."""
+    return profile.default_customer or frappe.db.get_value("POS Profile", profile.pos_profile, "customer")
+
+
+def _announce_kot_failure(invoice):
+    """The order is saved but its kitchen ticket was not made: tell the registers of the branch, on the channels
+    they already listen to for failed tickets (kot_error_<branch>_<production unit>; the POS shows a message).
+    Sent after the order is committed, so the message never names an order that does not exist."""
+    try:
+        for unit in frappe.get_all("URY Production Unit", filters={"branch": invoice.branch}, pluck="name"):
+            frappe.publish_realtime(
+                f"kot_error_{invoice.branch}_{unit}",
+                {
+                    "kind": "self_order",
+                    "invoice": invoice.name,
+                    "table": invoice.restaurant_table,
+                    "branch": invoice.branch,
+                    "production": unit,
+                },
+                after_commit=True,
+            )
+    except Exception as e:  # the announcement must not undo the order
+        frappe.log_error(f"Self-order KOT failure could not be announced: {e}", "KOT Error")
+
+
+def delete_old_sessions(days=7):
+    """Daily: remove the sessions of guests who only scanned. A session is old when it ended (Expired, Closed) or
+    ran out (Active, but past its end) more than `days` days ago. One that has an order stays: it is the record
+    of who ordered it (the order points to it)."""
+    cutoff = add_to_date(now_datetime(), days=-days)
+    without_order = {"invoice": ["is", "not set"]}
+    ended = frappe.get_all(
+        "URY Ordering Session",
+        filters={**without_order, "status": ["in", ["Expired", "Closed"]], "modified": ["<", cutoff]},
+        pluck="name",
+    )
+    ran_out = frappe.get_all(
+        "URY Ordering Session",
+        filters={**without_order, "status": "Active", "expires_at": ["<", cutoff]},
+        pluck="name",
+    )
+    old = [*ended, *ran_out]
+    for name in old:
+        frappe.delete_doc("URY Ordering Session", name, force=True, ignore_permissions=True)
+    return len(old)
 
 
 # ---------------------------------------------------------------------------

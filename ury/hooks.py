@@ -209,6 +209,9 @@ doc_events = {
 # ---------------
 
 scheduler_events = {
+    "daily": [
+        "ury.ury.api.self_ordering.delete_old_sessions",
+    ],
     "cron":{
 		"* * * * *":[
 			"ury.ury.api.ury_kot_validation.kotValidationThread"

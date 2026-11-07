@@ -77,3 +77,24 @@ class TestTheCaptain(LedgerCase):
 
 	def test_the_captain_has_no_cancel_right_on_orders(self):
 		self.assertFalse(frappe.has_permission("POS Invoice", "cancel", user=CAPTAIN))
+
+
+class TestTheRightsOnTheTickets(LedgerCase):
+	"""Nobody but the administrators cancels or deletes a kitchen ticket in the Desk: that goes round the ledger and the
+	cancel tickets (a deleted ticket leaves no trace). Cancelling an order voids the tickets as a system step, and the
+	tickets are made with the create and submit rights, which stay."""
+
+	def roles(self, right):
+		return set(frappe.permissions.get_doctype_roles("URY KOT", right))
+
+	def test_the_waiter_the_cashier_and_the_manager_cannot_cancel_a_ticket(self):
+		self.assertFalse(self.roles("cancel") & {"URY Captain", "URY Cashier", "URY Manager"})
+		self.assertIn("URY Admin", self.roles("cancel"))
+
+	def test_nor_delete_one(self):
+		self.assertFalse(self.roles("delete") & {"URY Captain", "URY Cashier", "URY Manager"})
+		self.assertIn("URY Admin", self.roles("delete"))
+
+	def test_they_still_make_and_submit_tickets(self):
+		for right in ("create", "submit"):
+			self.assertTrue(self.roles(right) >= {"URY Captain", "URY Cashier", "URY Manager"}, right)

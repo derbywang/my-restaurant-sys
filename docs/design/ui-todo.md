@@ -89,6 +89,8 @@
 - `frontend/` 有 23 个（T7 已清掉向导相关的 16 个）、`self-order/` 有 3 个类型错误（检查命令：`npx tsc -p tsconfig.app.json --noEmit`）。主要在 `pages/Dashboard/*`、`pages/Reports/*`（`XxxRow[]` 缺索引签名）、`layout/Header.tsx`。**清掉之后，再给这两个应用的 `build` 脚本加 typecheck**（`pos/` 已经是 `yarn typecheck && vite build`）。
 
 ## 部署与上线前待办
+- **待清理（不急，以后一起处理）**：开发站点上遗留的测试账号 `test_authorized_user@example.com`（有 System Manager，没有任何 URY 角色，应是以前的测试留下的）；测试站点也有同名账号。清理前先列出它名下有什么单据 / 日志，确认后再删，不要用"先执行再回滚"。
+- **安全：设置类接口缺权限检查（开店前必须修，排在 `URY KOT` 权限 JSON 之后马上做；2026-11-07 发现）**：`ury/ury/api/minimal/business_setup.py` 的 `create_setup_user`、`update_business_setup`、`submit_configure_data` 只检查不是 Guest，内部全程 `ignore_permissions`，`create_setup_user` 的 `role` 来自请求：任何已登录用户（包括服务员）都能创建任意角色（含 System Manager）的账号、改公司 / 餐厅 / 菜单 / 支付方式。已存在的邮箱不会被改（`exists` 直接返回），所以不是接管账号。方案和测试计划见设计文档（待定稿）。
 - **部署检查命令 `deploy_check`（待做；2026-11 评估，等权限 JSON、migrate 和实机验证做完后再定时机）**：9.3 的部署清单已积了好几项要手动查的东西，建议合成一条只读命令，像 `menu_items_without_kitchen` 那样一次跑完、列出不合格项：`bench --site <站点> execute ury.ury.api.deploy_check.run`。
   - **能自动检查的项**（返回 `[{check, ok, detail}]`，不合格的排前面，最后用退出码或 `frappe.throw` 区分）：
     1. scheduler 是否启用（`frappe.utils.scheduler.is_scheduler_disabled()` / `scheduler status`），`delete_old_sessions` 和 `kotValidationThread` 在 Scheduled Job Type 里是否有行、没有停用；

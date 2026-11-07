@@ -2,3 +2,5 @@ Scan the QR code to place your order,QRコードを読み取ってご注文く�
 Table QR codes,テーブル用QRコード
 Print table QR codes,テーブル用QRを印刷
 Set the Public URL first: it is written in the QR codes.,先に公開URLを設定してください。QRコードにはこのアドレスが印刷されます。
+No kitchen ticket was made for: {0}. Please check with the kitchen.,次の商品は厨房伝票が出ませんでした：{0}。厨房に確認してください。
+"No production unit makes these dishes, so they will get no kitchen ticket: {0}",次の商品はどの生産単位（厨房）でも作られないため、厨房伝票が出ません：{0}

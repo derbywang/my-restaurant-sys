@@ -10,6 +10,9 @@ class URYMenu(Document):
         for d in self.items:
             if not d.rate:
                 d.rate = frappe.db.get_value("Item", d.item, "standard_rate")
+        from ury.ury.api.kitchen_check import warn_menu_without_kitchen
+
+        warn_menu_without_kitchen(self)
 
     def on_update(self):
         """Sync Price List"""

@@ -422,6 +422,13 @@
     "open_secondary": "打开已合并账单",
     "merged_items": "已合并账单的菜品"
   },
+  "kot_alert": {
+    "no_kitchen": "以下商品没有打出厨房单：{{items}}。请与厨房确认。",
+    "self_order": "自助点餐的厨房单没有打出来，请与厨房确认。",
+    "self_order_table": "自助点餐（{{table}}）的厨房单没有打出来，请与厨房确认。",
+    "generic": "厨房单出现问题，请与厨房确认。",
+    "generic_invoice": "厨房单出现问题（{{invoice}}），请与厨房确认。"
+  },
   "footer": {
     "dashboard": "仪表盘",
     "pos": "收银",

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { subscribeKotErrorChannels } from './kot-channels';
 import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from '@ury/core';
 
 // Mirrors the connection pattern used by the legacy Vue KDS app
@@ -145,21 +146,18 @@ export function useKotErrorChannels(
     onErrorRef.current = onError;
   }, [onError]);
 
-  // Stable primitive dependency: the subscription must not tear down and
-  // re-attach just because the caller passed a new array with the same items.
-  const productionKey = productions.join(' ');
+  // Stable primitive dependency: the subscription must not tear down and re-attach just because the caller passed
+  // a new array with the same items. JSON, not a space-joined string: unit names contain spaces.
+  const productionKey = JSON.stringify(productions);
 
   useEffect(() => {
-    const productionList = productionKey.split(' ').filter(Boolean);
+    const productionList: string[] = JSON.parse(productionKey);
     if (!branch || productionList.length === 0) {
       return;
     }
 
-    const channelNames = productionList.map(
-      (production) => `kot_error_${branch}_${production}`,
-    );
     const handler = (payload: KotErrorPayload) => onErrorRef.current(payload);
-    let activeSocket: Socket | null = null;
+    let stop: (() => void) | null = null;
     let cancelled = false;
 
     getRealtimeSocket()
@@ -167,8 +165,7 @@ export function useKotErrorChannels(
         if (cancelled) {
           return;
         }
-        activeSocket = s;
-        channelNames.forEach((channelName) => s.on(channelName, handler));
+        stop = subscribeKotErrorChannels(s, branch, productionList, handler);
       })
       .catch((error) => {
         console.error('Failed to subscribe to KOT error channels:', error);
@@ -176,7 +173,7 @@ export function useKotErrorChannels(
 
     return () => {
       cancelled = true;
-      channelNames.forEach((channelName) => activeSocket?.off(channelName, handler));
+      stop?.();
     };
   }, [branch, productionKey]);
 }

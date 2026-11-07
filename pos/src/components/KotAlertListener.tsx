@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKotErrorChannels } from '../lib/realtime';
 import { showToast } from '@ury/ui';
 import { usePOSStore } from '../store/pos-store';
 import { getProductionUnitsForBranch } from '../lib/production-api';
+import { kotAlertMessage, createAlertDedupe } from '../lib/kot-alert';
+import { t } from '../i18n';
 
 /**
  * KotAlertListener: A headless component that subscribes to all KOT error channels
@@ -59,12 +61,11 @@ const KotAlertListener: React.FC = () => {
   }, [branch]);
 
   // Memoize error handler to avoid unnecessary re-subscriptions
+  // the same alert comes once per production unit's channel: show it once
+  const seen = useRef(createAlertDedupe(3000));
   const handleKotError = useCallback((payload: Record<string, unknown>) => {
-    // Extract error message from payload
-    const message =
-      (payload?.message as string) ||
-      (payload?.error as string) ||
-      'An unknown KOT error occurred';
+    if (!seen.current(payload)) return;
+    const message = kotAlertMessage(payload, (key, params) => t(key, params));
 
     showToast.error(message);
   }, []);

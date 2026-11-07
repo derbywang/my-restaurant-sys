@@ -422,6 +422,13 @@
     "open_secondary": "합쳐진 전표 열기",
     "merged_items": "합쳐진 전표의 항목"
   },
+  "kot_alert": {
+    "no_kitchen": "다음 상품의 주방 전표가 출력되지 않았습니다: {{items}}. 주방에 확인해 주세요.",
+    "self_order": "셀프 주문의 주방 전표가 출력되지 않았습니다. 주방에 확인해 주세요.",
+    "self_order_table": "셀프 주문({{table}})의 주방 전표가 출력되지 않았습니다. 주방에 확인해 주세요.",
+    "generic": "주방 전표에 문제가 있습니다. 주방에 확인해 주세요.",
+    "generic_invoice": "주방 전표에 문제가 있습니다({{invoice}}). 주방에 확인해 주세요."
+  },
   "footer": {
     "dashboard": "대시보드",
     "pos": "POS",

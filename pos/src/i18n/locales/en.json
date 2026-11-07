@@ -422,6 +422,13 @@
     "open_secondary": "Open merged bill",
     "merged_items": "Items from merged bill"
   },
+  "kot_alert": {
+    "no_kitchen": "No kitchen ticket was made for: {{items}}. Please check with the kitchen.",
+    "self_order": "The kitchen ticket of a self-order was not made. Please check with the kitchen.",
+    "self_order_table": "The kitchen ticket of the self-order ({{table}}) was not made. Please check with the kitchen.",
+    "generic": "There is a problem with a kitchen ticket. Please check with the kitchen.",
+    "generic_invoice": "There is a problem with a kitchen ticket ({{invoice}}). Please check with the kitchen."
+  },
   "footer": {
     "dashboard": "Dashboard",
     "pos": "POS",

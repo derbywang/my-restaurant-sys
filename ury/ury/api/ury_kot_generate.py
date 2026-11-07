@@ -130,14 +130,16 @@ def process_items_for_kot(
     if productions:
         all_production_item_groups = get_all_production_item_groups(pos_profile.branch)
         
-        # Iterate through each item and check if item group belongs to a production unit
-        for item in kot_items:
-            item_group = frappe.db.get_value("Item", item["item_code"], "item_group")
-            item_code = item["item_code"]
-            if item_group not in all_production_item_groups:
-                frappe.msgprint(
-                    f"Item group '{item_group}' for item '{item_code}' is not in any production."
-                )
+        # A dish whose group is in no production unit gets no ticket: say so (the order itself is kept)
+        from frappe import _
+
+        from ury.ury.api.kitchen_check import NO_TICKET, announce_no_kitchen, items_without_kitchen
+
+        unrouted = items_without_kitchen(pos_profile.branch, [item["item_code"] for item in kot_items])
+        if unrouted:
+            names = ", ".join(dish["item_name"] or dish["item_code"] for dish in unrouted)
+            frappe.msgprint(_(NO_TICKET).format(names), indicator="red")
+            announce_no_kitchen(pos_profile.branch, invoice_id, restaurant_table, unrouted)
         for production in productions:
             productionItemGroupslist = frappe.get_all(
                 "URY Production Item Groups",

@@ -232,7 +232,7 @@
 ### 3.5 备注进厨房单、KOT 失败可见
 
 - **备注**：`add_customer_items` 现在把顾客对菜品的备注存进发票行，但调用 `kot_execute` 时 `comments` 固定是空字符串，厨房看不到。`sync_order` 的比较函数已经能处理「同一道菜在两行」（提交 `249129f`），所以自助点餐改为**按行**构造 `current_items` / `past_item`（不再按菜品合计），每个新行带自己的备注。顾客的备注原样发给厨房，不翻译。
-- **KOT 失败**：现在只 `log_error`。改为：同时沿用 KOT 校验失败的实时频道（`kot_error_<分店>_<生产单位>`，POS 的 `KotAlertListener` 已订阅），让收银台弹出提示；订单仍然保存（客人已经下单），收银员知道要去厨房确认。开发环境的 Socket.IO 已经可以用（`webserver_host = 127.0.0.1`，pos / mosaic 连 9000 端口），这个提示可以在开发站点上测试；正式环境另外要验证 nginx 转发（`ui-todo.md`）。
+- **KOT 失败**：现在只 `log_error`。改为：同时沿用 KOT 校验失败的实时频道（`kot_error_<分店>_<生产单位>`，POS 的 `KotAlertListener` 已订阅），让收银台弹出提示（载荷 `kind = self_order`、`invoice`、`table`，POS 按桌号显示翻译好的一句话；该分店每个生产单位的频道都发，`after_commit`）；订单仍然保存（客人已经下单），收银员知道要去厨房确认。 **真实的失败方式是“菜品分类不在任何生产单位”，不是抛异常**（后者只在出单代码本身出错时发生）：两种都要通知，前者由 `kitchen_check.announce_no_kitchen` 在 `process_items_for_kot` 里统一发（收银员、服务员、自助点餐都生效），载荷 `kind = no_kitchen`、菜名清单；后者 `kind = self_order`。**顾客看不到这条消息**：自助点餐下单时，厨房代码写的提示（「厨房伝票が出ませんでした」，给员工的话）会从返回给顾客的消息里去掉，只通知收银台。**同一条通知会从该分店每个生产单位的频道各发一次**，收银台订阅了全部频道，所以 `KotAlertListener` 按（类型、订单、桌号、菜名）去重，3 秒内同样的通知只弹一次（`createAlertDedupe`）。**已知限制**：通知是实时推送，不留存；下单的那一刻收银台没有打开 `/pos`（或断线）就收不到，这道菜没有厨房单也没人知道。开店前靠部署检查（9.3）把菜单里所有菜都挂上生产单位来避免；以后可以考虑留一条可查的记录（例如 Error Log 或列表）。**频道名含空格**：生产单位名（如 `Kitchen - 三友寿司`）和分店名（如 `三友寿司 二号店`）都可能带空格，订阅时名字必须保持完整（`pos/src/lib/kot-channels.ts`，旧代码按空格拆开，收银台订阅了错的频道，提醒从未弹出过，已修）。`KotAlertListener` 挂在 `ScreenSizeProvider` 外面，窗口小于 1024px 显示小屏提示页时监听照常运行。**以后可以考虑**：频道改为每个分店一个（`kot_error_<分店>`，载荷带 `production`）：收银台只订阅一个频道，就不需要去重，也不再依赖生产单位名；代价是厨房屏幕（mosaic `kot.vue` 现在按生产单位订阅）要按载荷里的 `production` 过滤，`ury_kot_validation.py` 和 `kitchen_check.py` 的发送端、两端的测试都要改。开店前不动服务器的频道设计。开发环境的 Socket.IO 已经可以用（`webserver_host = 127.0.0.1`，pos / mosaic 连 9000 端口），这个提示可以在开发站点上测试；正式环境另外要验证 nginx 转发（`ui-todo.md`）。
 #### 3.5.1 员工端的备注（1b；2026-11 门店决定）
 
 现状（读代码）：收银 POS 的菜品备注在「双击菜单里的菜」或「购物车行右边的铅笔图标」打开的对话框（「特別なご要望」）里写，整单备注是购物车底部的对话气泡图标；服务员端只能点购物车里一行的**菜名文字**（没有任何图标提示）写备注，**没有整单备注入口**。决定：
@@ -253,7 +253,7 @@
 - **营业状态**：判断「该分店有**未交班的开班记录**」，**不看开班日期**——`POS Opening Entry` 里 `branch` = 该分店、`docstatus = 1`、`status = "Open"` 的记录至少有一条。跨零点营业、忘记交班时，昨天的开班记录还是 Open，仍然算营业中；交班提交后记录变为 Closed，才算打烊。这和 `posOpening()` 的判断一致，但 `posOpening()` 用的是登录用户的分店，顾客是访客，所以新增一个按分店名判断的函数 `branch_is_open(branch)`，`posOpening()` 也改成调用它（只加一个按分店名的入口，行为不变）。
   - 没有未交班记录时：`get_ordering_context`、每次会话请求、`open_table_for_ordering` 都返回 `title = "Store closed"`，画面显示「ただいま準備中です」。
   - 交班提交时，该分店的桌台开启全部关闭（3.1），所以交班后不会有人继续下单。
-- **过期会话的清理**：访客每次扫码都会创建一条 Ordering Session（并立即提交）。用每天一次的计划任务删除状态为 Expired / Closed 且超过 7 天的会话，避免长期堆积（这些端点在公网上，见第 9 章）。
+- **过期会话的清理**：访客每次扫码都会创建一条 Ordering Session。每天一次的计划任务（`delete_old_sessions`，注册在 `hooks.py` 的 `daily`，要 migrate 才会登记成计划任务）删除超过 7 天的会话：状态 Expired / Closed 且 7 天没有更新的，和状态还是 Active 但结束时间已过 7 天的（访客没再回来，状态没有机会变成 Expired）。**已经有订单的会话保留**（订单的 `custom_ordering_session` 指向它，是谁下的单的记录）。避免长期堆积（这些端点在公网上，见第 9 章）。
 - **配置的建立**：向导目前不创建 Self Ordering Profile。开店前由我们在 Desk 创建一次并写进部署清单（分店、POS Profile、默认顾客、启用 `enable_qr_table_ordering` / `enable_kiosk_ordering`，关闭 `enable_qr_pickup_ordering`——门店没有「入口二维码外带」这种用法），不做向导步骤。
 
 ### 3.7 付款：到收银台
@@ -742,6 +742,7 @@ curl -s -o /dev/null -D - "$H$JS" | grep -iE '^(HTTP|cache-control|cf-cache-stat
 - **`migrate` 之前先列出这次会执行的补丁**（任何站点，包括开发站点和测试站点）：对比每个应用的 `patches.txt` 和该站点的 Patch Log，列出还没执行的补丁，再看会同步的 DocType 和 `after_migrate` 钩子，确认没有意外再执行。（测试站点第一次 migrate 时意外执行了 5 个更早的补丁，就是因为事先没有列。）规则同时写在 `CLAUDE.md`。
 - **`migrate` 之后确认新列存在**：`URY Table` 的 `self_order_open`、`self_order_opened_at`、`self_order_opened_by`、`self_order_opening`，`URY Ordering Session` 的 `table_opening`，`URY Self Ordering Profile` 的 `table_open_minutes`（`show columns from \`tabURY Table\` like 'self_order%'`）。代码里释放桌台、转台、交班关闭桌台的地方有一层保护 `self_order_close_fields()`（用 `frappe.db.has_column` 判断，列不存在时不碰它），是为了代码比数据库结构先到的这段时间（开发站点没来得及 migrate、部署进行中）也能正常打印和取消；所有站点都 migrate 之后这层保护就不需要了，以后适当的时候去掉（改成直接用 `SELF_ORDER_CLOSE_FIELDS`，同时去掉 `get_open_tables` 里对应的判断）。
 - **员工账号的语言设为日语**：POS、管理后台、厨房屏幕都按登录用户的 `User.language` 显示（`frappe.boot.lang`），没有设置时用 System Settings 的语言。三友寿司的每个员工账号（收银员、店长、服务员、厨房）都要把语言设为日语，System Settings 的默认语言也设为日语（开发站点现在是 en，收银员账号也是 en，所以显示英文）。改的是站点数据，部署时按清单确认后再改；员工也可以用界面里的语言菜单自己切换。
+- **开店前检查：菜单里所有的菜，其菜品分类都属于某个生产单位**（`URY Production Unit` 的菜品分类子表）。不属于的菜能点、能结账，但**不出厨房单**（2026-11 开发站点验证时发现：`process_items_for_kot` 原来只给点单的人一条英文 msgprint，自助点餐和别人都不知道）。部署时和每次改菜单、改生产单位之后运行只读检查，结果必须为空：`bench --site <站点> execute ury.ury.api.kitchen_check.menu_items_without_kitchen`（列出菜单、菜、菜品分类）。保存 URY Menu 时也会给出警告（不阻止保存）。万一仍漏了，点单时收银台会收到通知（`kot_error_<分店>_<生产单位>` 频道，`kind = no_kitchen`），点单的人看到同一句翻译好的提示。
 - 创建 URY Ordering Device（每张桌的平板）。
 - 每道菜的「セルフオーダー可」；确认「酒類」的菜没有被取消勾选；`age_check_item_groups` 包含「酒類」。
 - 部署后（`bench migrate` 之后）按顺序：先备份，再 migrate，核对补丁和 Error Log。

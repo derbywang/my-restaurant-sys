@@ -394,6 +394,13 @@
     "open_secondary": "Ouvrir l'addition fusionnée",
     "merged_items": "Articles de l'addition fusionnée"
   },
+  "kot_alert": {
+    "no_kitchen": "Aucun ticket cuisine n'a été imprimé pour : {{items}}. Vérifiez auprès de la cuisine.",
+    "self_order": "Le ticket cuisine d'une commande en libre-service n'a pas été imprimé. Vérifiez auprès de la cuisine.",
+    "self_order_table": "Le ticket cuisine de la commande en libre-service ({{table}}) n'a pas été imprimé. Vérifiez auprès de la cuisine.",
+    "generic": "Un ticket cuisine pose problème. Vérifiez auprès de la cuisine.",
+    "generic_invoice": "Un ticket cuisine pose problème ({{invoice}}). Vérifiez auprès de la cuisine."
+  },
   "footer": {
     "dashboard": "Tableau de bord",
     "pos": "PDV",

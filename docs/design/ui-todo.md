@@ -110,7 +110,7 @@
     7. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
   - **`ury.install.after_install` 的 `try/except`**：现在出错只 `print("Error during installation")` 然后 `pass`，安装照样算成功，权限写到一半、后面的日本税制 / 货币 / 语言设置没做都不会报错。建议至少把**完整的错误（traceback）写进 Error Log**（标题 `URY Setup Error`，和 `add_roles_to_administrator` 一致），并把失败的步骤记下；更好的做法是**每一步单独 `try/except`**，一步失败不影响后面的步骤，最后汇总打印并 `raise` 让安装明确失败（或让 `deploy_check` 能发现缺了哪一步）。注意：已有站点已装好，不会重新跑，改动只影响新站点。
   - **工作量**：检查命令约 0.5 天（逻辑简单，要写测试：每项都有一条通过和一条不合格的用例，用测试站点的事务内改动构造）；`after_install` 分步和写 Error Log 约 0.25 天（要在一个临时站点上实际装一次验证，可用 `ury-wizard.localhost` 以外的新临时站点）。
-  - **建议时机**：开店前（12/4 之前）做检查命令，三友寿司正式服务器部署时就能用上，并把 9.3 里能自动检查的几项改成"运行该命令，结果必须为空"；`after_install` 的改动同时做，卖给其他店之前必须有。开店前只修 bug 的窗口从 12/4 起，所以最好在 11 月内完成。
+  - **建议时机**：开店前做检查命令（必须在店内正式服务器搭建之前完成，见 `launch-plan.md`），三友寿司正式服务器部署时就能用上，并把 9.3 里能自动检查的几项改成"运行该命令，结果必须为空"；`after_install` 的改动同时做，卖给其他店之前必须有。开店前只修 bug 的窗口从 12/4 起，所以最好在 11 月内完成。
 - ~~**旧版 POS（urypos，路由 `/urypos`）**~~：已关闭。删了路由规则和 `www/urypos.html`，根 `package.json` 的 `build` / `postinstall` 不再构建和安装它，POS 里「切换到 Version 1」的按钮、Desk 首页的「POS V1」入口（补丁 `remove_pos_v1_entry`）也去掉了；`urypos/` 源码保留（上游代码）。部署后 `/urypos` 返回 404（测试 `ury.test_urypos_closed`）。
 - **`--frozen-lockfile`**：根 `yarn.lock`、`mosaic/yarn.lock`、`urypos/yarn.lock` 已纳入版本库，但 bench 的 `yarn install --check-files` 不会强制锁文件不变。做正式部署（frappe_docker 镜像构建）时，再决定怎么让镜像构建使用 `--frozen-lockfile`。
 - **实时推送（Socket.IO）**：正式环境确认 nginx 已转发 `/socket.io`（开发环境不经 nginx：pos / mosaic 直接连 9000 端口，`webserver_host = 127.0.0.1`，厨房屏幕自动更新，KOT 出错提醒可以在开发站点测试）。KOT 错误提示（`KotAlertListener`）依赖它：KOT 校验失败时后端向 `kot_error_<分店>_<生产单元>` 推送，POS 按 `get_production_units_for_branch` 返回的名字订阅。开店前要验证：让一张 KOT 校验失败，该分店的收银端能弹出提示。

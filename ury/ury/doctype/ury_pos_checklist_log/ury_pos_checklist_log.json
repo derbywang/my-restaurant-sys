@@ -84,7 +84,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-02 19:24:36.171289",
+ "modified": "2026-11-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY POS Checklist Log",
@@ -118,7 +118,7 @@
   },
   {
    "create": 1,
-   "export": 1,
+   "export": 0,
    "read": 1,
    "role": "URY Captain",
    "select": 1,
@@ -129,7 +129,8 @@
    "read": 1,
    "role": "URY Cashier",
    "select": 1,
-   "write": 1
+   "write": 1,
+   "export": 0
   },
   {
    "create": 1,

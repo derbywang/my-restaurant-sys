@@ -33,7 +33,7 @@
  ],
  "icon": "fa fa-code-fork",
  "links": [],
- "modified": "2026-09-02 19:26:17.345395",
+ "modified": "2026-11-08 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Menu Course",
@@ -55,7 +55,7 @@
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
    "report": 1,
@@ -65,7 +65,7 @@
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
    "report": 1,

@@ -1,8 +1,30 @@
 import frappe
+from frappe import _
 from frappe.utils import today
+
+from ury.ury.report_api.utils import require_manager
+
+# What the admin app (/ury) reads through get_module_records: only these DocTypes, and for each only the
+# fields its pages show. Nothing else is returned (the User, for one, has an api_key, a password reset key,
+# the last IP ... that no page needs). A field the DocType does not have is skipped.
+MODULE_RECORD_FIELDS = {
+	"Branch": ["name"],
+	"URY Room": ["name", "room_name", "room_type", "branch", "kot_printing", "print_format", "block_takeaway"],
+	"URY Table": [
+		"name", "table_name", "no_of_seats", "minimum_seating", "restaurant", "restaurant_room", "branch",
+		"table_shape", "is_take_away", "status",
+	],
+	"URY Production Unit": ["name", "production", "production_unit_name", "branch"],
+	"URY Menu": ["name", "menu_name", "branch"],
+	"URY Menu Course": ["name"],
+	"Item Group": ["name", "item_group_name"],
+	"Item": ["name", "item_name", "standard_rate", "custom_course", "image"],
+	"User": ["name", "email", "first_name", "last_name", "full_name", "user_type", "enabled"],
+}
 
 @frappe.whitelist()
 def get_dashboard_summary(branch=None):
+    require_manager()
     filters = {}
     if branch and branch != 'all':
         pass
@@ -20,6 +42,7 @@ def get_dashboard_summary(branch=None):
 
 @frappe.whitelist()
 def get_dashboard_charts(branch=None):
+    require_manager()
     return {
         "sales_trend": [],
         "hourly_sales": [],
@@ -32,13 +55,14 @@ def get_dashboard_charts(branch=None):
 
 @frappe.whitelist()
 def get_recent_transactions(branch=None, limit=10):
+    require_manager()
     filters = {"docstatus": ["in", [0, 1]]}
     if branch and branch != 'all':
         pass # Add branch filter if applicable for POS Invoice, usually 'custom_branch' or 'branch'
     
     if frappe.db.exists("DocType", "POS Invoice"):
         try:
-            invoices = frappe.get_all("POS Invoice", 
+            invoices = frappe.get_list("POS Invoice",
                 filters=filters,
                 fields=["name", "customer", "posting_date", "posting_time", "grand_total", "status", "order_type", "restaurant_table as restaurant_table", "owner as cashier"],
                 order_by="creation desc",
@@ -57,22 +81,22 @@ def get_recent_transactions(branch=None, limit=10):
 
 @frappe.whitelist()
 def get_module_records(doctype, branch=None):
-    if not frappe.db.exists("DocType", doctype):
-        return []
-    
+    require_manager()
+    if doctype not in MODULE_RECORD_FIELDS:
+        frappe.throw(_("This DocType cannot be read here."), frappe.PermissionError)
+
+    meta = frappe.get_meta(doctype)
     filters = {}
     if branch and branch != 'all':
-        meta = frappe.get_meta(doctype)
         if meta.has_field("branch"):
             filters["branch"] = branch
         elif meta.has_field("custom_branch"):
             filters["custom_branch"] = branch
-            
-    try:
-        records = frappe.get_all(doctype, filters=filters, fields=["*"])
-        if doctype == "User":
-            for r in records:
-                r["roles"] = frappe.get_all("Has Role", filters={"parent": r.name}, fields=["role"])
-        return records
-    except Exception:
-        return []
+
+    fields = [f for f in MODULE_RECORD_FIELDS[doctype] if f == "name" or meta.has_field(f)]
+    # get_list: the permissions of the user still apply
+    records = frappe.get_list(doctype, filters=filters, fields=fields, limit_page_length=0)
+    if doctype == "User":
+        for r in records:
+            r["roles"] = frappe.get_all("Has Role", filters={"parent": r.name, "parenttype": "User"}, fields=["role"])
+    return records

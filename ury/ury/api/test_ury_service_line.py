@@ -59,8 +59,8 @@ class TestGetServiceLine(FrappeTestCase):
         # bare for "now", once with t.latest_invoice_time to normalize it.
         # A plain return_value would collapse both calls to the same value
         # and always yield a zero minute delta, so use side_effect to mimic
-        # real get_datetime's passthrough-on-datetime-arg behavior.
-        mock_get_datetime.side_effect = lambda *args: now if not args else args[0]
+        # real get_datetime's passthrough-on-datetime-arg behavior (and it parses a string, which the source passes).
+        mock_get_datetime.side_effect = lambda *args: now if not args else (args[0] if isinstance(args[0], datetime) else datetime.fromisoformat(args[0]))
 
         mock_get_all.return_value = [
             frappe._dict({
@@ -175,7 +175,7 @@ class TestGetServiceLine(FrappeTestCase):
         mock_cache_instance.get_value.return_value = None
 
         now = datetime(2026, 8, 19, 15, 45, 0)
-        mock_get_datetime.side_effect = lambda *args: now if not args else args[0]
+        mock_get_datetime.side_effect = lambda *args: now if not args else (args[0] if isinstance(args[0], datetime) else datetime.fromisoformat(args[0]))
 
         mock_get_all.return_value = [
             frappe._dict({

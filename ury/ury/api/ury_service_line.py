@@ -1,10 +1,14 @@
 import frappe
 
+from ury.ury.api.pos_permissions import require_sales_view
+
 from frappe.utils import get_datetime, add_to_date, today
 
 
 @frappe.whitelist(methods=["GET"])
 def get_service_line(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_service_line:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:
@@ -67,6 +71,8 @@ def get_service_line(branch=None):
 
 @frappe.whitelist(methods=["GET"])
 def get_running_low(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_running_low:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:

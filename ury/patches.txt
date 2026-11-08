@@ -22,3 +22,4 @@ ury.patches.v2_0.age_check_item_groups
 ury.patches.v3_0.restrict_user_role_permissions
 ury.patches.v3_0.encrypt_qr_signing_secret
 ury.patches.v3_0.rename_last_seen
+ury.patches.v3_0.revoke_staff_export

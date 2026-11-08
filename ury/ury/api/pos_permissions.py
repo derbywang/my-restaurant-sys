@@ -20,6 +20,18 @@ def can_bill(doc=None):
 	return bool(frappe.has_permission("POS Invoice", "submit", doc=doc))
 
 
+def can_view_sales():
+	"""The sales figures of the POS dashboard: whoever may settle a bill (cashier, manager, admin), not a captain."""
+	return can_bill()
+
+
+def require_sales_view():
+	"""Raise PermissionError for a user who may not see the sales figures. Every function behind the POS
+	dashboard calls this FIRST, before it reads its cache (the cache is shared by all users)."""
+	if not can_view_sales():
+		frappe.throw(_("You do not have permission to see the sales figures."), frappe.PermissionError)
+
+
 def require_billing_permission(doc=None):
 	"""Raise PermissionError, before anything is written, for a user who may not settle bills."""
 	if not can_bill(doc):
@@ -59,6 +71,8 @@ def get_pos_permissions():
 		"take_orders": bool(frappe.has_permission("POS Invoice", "create")),
 		"print_bill": bool(frappe.has_permission("POS Invoice", "print")),
 		"settle_payment": billing,
+		# the dashboard page with the day's sales: whoever may settle a bill
+		"view_dashboard": can_view_sales(),
 		"cancel_order": bool(frappe.has_permission("POS Invoice", "cancel")),
 		"apply_discount": billing and bool(DISCOUNT_ROLES.intersection(frappe.get_roles())),
 		"merge_bills": billing,

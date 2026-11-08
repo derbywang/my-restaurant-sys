@@ -1,10 +1,14 @@
 import frappe
 
+from ury.ury.api.pos_permissions import require_sales_view
+
 from frappe.utils import get_datetime, datetime, add_to_date, today
 
 
 @frappe.whitelist(methods=["GET"])
 def get_dashboard_stats(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_stats:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:
@@ -77,6 +81,8 @@ def get_dashboard_stats(branch=None):
 
 @frappe.whitelist(methods=["GET"])
 def get_needs_attention(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_needs_attention:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:
@@ -163,6 +169,8 @@ def _business_day_bounds(branch):
 
 @frappe.whitelist(methods=["GET"])
 def get_shift_metrics(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_shift_metrics:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:
@@ -222,6 +230,8 @@ def get_shift_metrics(branch=None):
 
 @frappe.whitelist(methods=["GET"])
 def get_baseline(branch=None, weeks=6):
+	require_sales_view()
+
 	weekday = get_datetime().weekday()
 	hour = get_datetime().hour
 	cache_key = f"ury_dashboard_baseline:{branch}:{weekday}:{hour}"
@@ -283,6 +293,8 @@ def get_baseline(branch=None, weeks=6):
 
 @frappe.whitelist(methods=["GET"])
 def get_floor_load(branch=None):
+	require_sales_view()
+
 	cache_key = f"ury_dashboard_floor_load:{branch}"
 	cached = frappe.cache().get_value(cache_key)
 	if cached:

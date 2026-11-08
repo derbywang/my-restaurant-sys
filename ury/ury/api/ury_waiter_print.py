@@ -26,6 +26,7 @@ def _is_takeaway_table(restaurant_table):
 
 
 def _aggregate_kot_items(kot_docs):
+	"""One row per (item, comment): the same dish on several tickets of one update is added up."""
 	add_items = {}
 	cancel_items = {}
 
@@ -35,22 +36,25 @@ def _aggregate_kot_items(kot_docs):
 			if kot.type in CANCEL_KOT_TYPES:
 				if key not in cancel_items:
 					cancel_items[key] = {
-					"item": row.item,
-					"item_name": row.item_name,
-					"quantity": int(row.quantity or 0),
-					"cancelled_qty": int(row.cancelled_qty or 0),
-					"comments": row.comments,
-					"course": row.course,
+						"item": row.item,
+						"item_name": row.item_name,
+						"quantity": 0,
+						"cancelled_qty": 0,
+						"comments": row.comments,
+						"course": row.course,
 					}
+				cancel_items[key]["quantity"] += int(row.quantity or 0)
+				cancel_items[key]["cancelled_qty"] += int(row.cancelled_qty or 0)
 			elif kot.type in ADD_KOT_TYPES:
 				if key not in add_items:
 					add_items[key] = {
-					"item": row.item,
-					"item_name": row.item_name,
-					"quantity": int(row.quantity or 0),
-					"comments": row.comments,
-					"course": row.course,
+						"item": row.item,
+						"item_name": row.item_name,
+						"quantity": 0,
+						"comments": row.comments,
+						"course": row.course,
 					}
+				add_items[key]["quantity"] += int(row.quantity or 0)
 
 	return list(add_items.values()) + list(cancel_items.values())
 

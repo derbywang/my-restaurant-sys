@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
 import SplitNotice from '../components/SplitNotice'
 import { useMemo, useRef, useState } from 'react'
@@ -65,6 +66,8 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     dismissError,
     ageQuestion,
     answerAge,
+    billSwitch,
+    dismissBillSwitch,
   } = useOrderingSession(initialContext)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY)
@@ -146,6 +149,8 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
           {t('header.new_order')}
         </button>
       </header>
+
+      <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-6 mt-3" />
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-6 mt-3 p-3 text-sm" />
 

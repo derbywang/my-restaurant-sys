@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
@@ -51,6 +52,8 @@ function TabletLayout({ initialContext }: LayoutProps) {
     dismissError,
     ageQuestion,
     answerAge,
+    billSwitch,
+    dismissBillSwitch,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -116,6 +119,8 @@ function TabletLayout({ initialContext }: LayoutProps) {
           {atTable ? t('header.clear_cart') : t('header.new_order')}
         </button>
       </header>
+
+      <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-6 mt-3" />
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-6 mt-3 p-3 text-sm" />
 

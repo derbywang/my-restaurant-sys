@@ -68,3 +68,24 @@ describe('the notice for a bill that was split (会計分割)', () => {
     expect(en.split.message).not.toMatch(/ask (a member of )?staff/i)
   })
 })
+
+describe('the notice when the page moves to another part of a split bill', () => {
+  it('ja is the text the shop decided on', () => {
+    expect(ja.bill_switch.title).toBe('ご注文先が変わりました')
+    expect(ja.bill_switch.message).toBe(
+      '一部のお客様のお会計伝票を発行しました。このあとご注文いただく商品は、まだお会計前の伝票に加わります。',
+    )
+    expect(ja.bill_switch.staff).toBe('お会計伝票をお受け取りのお客様が追加でご注文される場合は、スタッフにお声がけください。')
+  })
+
+  it('is not an error, and does not say the ordering is over', () => {
+    const text = `${ja.bill_switch.title}${ja.bill_switch.message}${ja.bill_switch.staff}`
+    expect(text).not.toMatch(/エラー|失敗|終了|締め切/)
+  })
+
+  it('en says the same in the same three parts', () => {
+    expect(en.bill_switch.title).toBeTruthy()
+    expect(en.bill_switch.message).toBeTruthy()
+    expect(en.bill_switch.staff).toMatch(/staff/i)
+  })
+})

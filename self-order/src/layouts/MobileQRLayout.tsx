@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
 import SplitNotice from '../components/SplitNotice'
 import { formatCurrency } from '@ury/core'
@@ -42,6 +43,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     dismissError,
     ageQuestion,
     answerAge,
+    billSwitch,
+    dismissBillSwitch,
   } = useOrderingSession(initialContext)
 
   function handleStartOver() {
@@ -86,6 +89,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
           {t('header.start_over')}
         </button>
       </header>
+
+      <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-4 mt-3" />
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-4 mt-3 p-3 text-sm" />
 

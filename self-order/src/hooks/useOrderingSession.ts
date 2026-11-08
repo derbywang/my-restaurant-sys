@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import {
   addItems,
   bootstrap,
@@ -17,6 +17,7 @@ import {
   type PaymentRequestResult,
 } from '../lib/api'
 import { tokenFromSearch } from '../lib/qr-link'
+import { billSwitched } from '../lib/bill-switch'
 import { canResume } from '../lib/resume'
 import { noticeReducer } from '../lib/notice'
 import { startAutoRefresh } from '../lib/auto-refresh'
@@ -90,6 +91,16 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const [ageQuestion, setAgeQuestion] = useState<MenuItem | null>(null)
   // asked once per session: after a yes the next alcohol goes straight in (the server keeps the answer too)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
+
+  // the page follows another part of a split bill (the bill it showed was printed, paid or cancelled): the guests are
+  // told where the next dishes go, once, until they close the note
+  const [billSwitch, setBillSwitch] = useState(false)
+  const lastOrder = useRef<CustomerOrder | null>(null)
+  useEffect(() => {
+    if (billSwitched(lastOrder.current, order)) setBillSwitch(true)
+    if (order?.invoice) lastOrder.current = order
+  }, [order])
+  const dismissBillSwitch = useCallback(() => setBillSwitch(false), [])
 
   const loadOrder = useCallback(async (session: string) => {
     const current = await getCurrentOrder(session)
@@ -203,6 +214,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     sessionStorage.removeItem(CONTEXT_KEY)
     sessionStorage.removeItem(TOKEN_KEY)
     clearStoredCart(sessionStorage)
+    lastOrder.current = null
+    setBillSwitch(false)
     setCartRestored(false)
     setCart({})
     setOrder(null)
@@ -387,5 +400,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     dismissError,
     ageQuestion,
     answerAge,
+    billSwitch,
+    dismissBillSwitch,
   }
 }

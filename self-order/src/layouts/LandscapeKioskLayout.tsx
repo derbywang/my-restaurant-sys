@@ -1,5 +1,6 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
+import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
 import { useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
@@ -52,6 +53,8 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
     dismissError,
     ageQuestion,
     answerAge,
+    billSwitch,
+    dismissBillSwitch,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -114,6 +117,8 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
           {t('header.new_order')}
         </button>
       </header>
+
+      <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-10 mt-4" />
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-10 mt-4 p-4 text-base" />
 

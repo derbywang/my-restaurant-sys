@@ -24,6 +24,11 @@
     "yes": "Yes",
     "no": "No"
   },
+  "bill_switch": {
+    "title": "Your order has moved to another bill",
+    "message": "A bill has been issued for some of the guests. Anything you order from now on will be added to the bill that has not been issued yet.",
+    "staff": "If you have received your bill and want to order more, please ask a member of staff."
+  },
   "split": {
     "title": "The bill has been split.",
     "message": "This screen shows the order and the amount for this part of the bill. Anything you order from now on will be added to this part."

@@ -406,7 +406,7 @@
     "merge_bill": "合并账单",
     "select_secondary": "选择要并入 {{invoice}} 的账单",
     "merge_confirm": "合并账单",
-    "merge_success": "账单 {{invoice}} 合并成功",
+    "merge_success": "账单 {{other}} 已合并到 {{invoice}}",
     "merge_failed": "合并账单失败",
     "cancel_unmerges": "取消这张订单会解除合并：{{invoice}} 变回普通账单，只收它自己的金额。",
     "unmerge_bill": "解除合并",

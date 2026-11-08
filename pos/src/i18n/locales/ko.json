@@ -406,7 +406,7 @@
     "merge_bill": "전표 합치기",
     "select_secondary": "{{invoice}}에 합칠 전표를 선택하세요",
     "merge_confirm": "전표 합치기",
-    "merge_success": "전표 {{invoice}}을(를) 합쳤습니다",
+    "merge_success": "전표 {{other}}을(를) {{invoice}}에 합쳤습니다",
     "merge_failed": "전표 합치기에 실패했습니다",
     "cancel_unmerges": "이 주문을 취소하면 합산이 해제됩니다. {{invoice}} 은(는) 일반 전표로 돌아가며 해당 금액만 청구됩니다.",
     "unmerge_bill": "합산 해제",

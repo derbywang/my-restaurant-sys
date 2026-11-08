@@ -165,7 +165,7 @@ const BillMergeDialog = ({
     setError(null);
     try {
       await mergeBills(invoiceName, selected);
-      showToast.success(t('bill_merge.merge_success', { invoice: invoiceName }));
+      showToast.success(t('bill_merge.merge_success', { invoice: invoiceName, other: selected }));
       await onConfirm(selected);
       onOpenChange(false);
     } catch (err) {

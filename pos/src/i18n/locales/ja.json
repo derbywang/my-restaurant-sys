@@ -406,7 +406,7 @@
     "merge_bill": "会計合算",
     "select_secondary": "{{invoice}} に合算する伝票を選択",
     "merge_confirm": "会計合算を実行",
-    "merge_success": "伝票 {{invoice}} を合算しました",
+    "merge_success": "伝票 {{other}} を {{invoice}} に合算しました",
     "merge_failed": "会計合算に失敗しました",
     "cancel_unmerges": "この伝票を取り消すと会計合算が解除されます。{{invoice}} は通常の伝票に戻り、その金額だけが請求されます。",
     "unmerge_bill": "会計合算を解除",

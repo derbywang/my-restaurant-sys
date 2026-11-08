@@ -378,7 +378,7 @@
     "merge_bill": "Fusionner l'addition",
     "select_secondary": "Choisir une addition à fusionner dans {{invoice}}",
     "merge_confirm": "Fusionner les additions",
-    "merge_success": "Addition {{invoice}} fusionnée avec succès",
+    "merge_success": "Addition {{other}} fusionnée dans {{invoice}}",
     "merge_failed": "Échec de la fusion des additions",
     "cancel_unmerges": "Annuler cette commande dissocie l'addition : {{invoice}} redevient une addition ordinaire, seul son propre montant est facturé.",
     "unmerge_bill": "Dissocier les additions",

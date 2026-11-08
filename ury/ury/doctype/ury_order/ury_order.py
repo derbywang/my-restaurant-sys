@@ -3,6 +3,7 @@
 
 import json
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
@@ -2334,4 +2335,4 @@ def change_table_in_kot(invoice, new_table, branch):
         frappe.db.set_value("URY KOT", kot.name, "restaurant_table", new_table)
         production = frappe.db.get_value("URY KOT", kot.name, "production")
         kot_channel = "{}_{}_{}".format("kot_update", branch, production)
-        frappe.publish_realtime(kot_channel)
+        publish_to_branch(kot_channel, {}, branch)

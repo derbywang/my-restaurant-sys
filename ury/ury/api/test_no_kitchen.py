@@ -51,7 +51,18 @@ class NoKitchenForBeer:
 
 
 def alerts(publish):
-	return [c for c in publish.call_args_list if str(c.args[0]).startswith("kot_error_")]
+	"""One call per channel: the message goes to each account of the branch (`user=`), the same message each time."""
+	seen, first = set(), []
+	for c in publish.call_args_list:
+		if str(c.args[0]).startswith("kot_error_") and c.args[0] not in seen:
+			seen.add(c.args[0])
+			first.append(c)
+	return first
+
+
+def told(publish):
+	"""The accounts the kot_error messages were sent to."""
+	return {c.kwargs["user"] for c in publish.call_args_list if str(c.args[0]).startswith("kot_error_")}
 
 
 class TestCheckOfTheDishes(NoKitchenForBeer, URYFlowTestCase):
@@ -98,6 +109,7 @@ class TestOrderOfADishWithoutKitchen(NoKitchenForBeer, URYFlowTestCase):
 	def _order(self, user, items, table=TABLES[0]):
 		with patch("ury.ury.api.kitchen_check.frappe.publish_realtime") as publish:
 			name = place_order(user, items, table=table)
+		self.told = told(publish)
 		return name, alerts(publish)
 
 	def test_the_order_is_saved_the_register_is_told_and_the_message_names_the_dish(self):
@@ -111,6 +123,8 @@ class TestOrderOfADishWithoutKitchen(NoKitchenForBeer, URYFlowTestCase):
 		self.assertEqual((payload["kind"], payload["invoice"], payload["table"]), ("no_kitchen", name, TABLES[0]))
 		self.assertEqual(payload["items"], [ALCOHOL_ITEM])
 		self.assertTrue(sent[0].kwargs.get("after_commit"))
+		self.assertIn(CASHIER, self.told)  # each account of the branch is told, a Website User cashier included
+		self.assertNotIn("Guest", self.told)
 		self.assertIn(ALCOHOL_ITEM, " ".join(str(m) for m in frappe.local.message_log))
 
 	def test_only_the_dish_without_kitchen_is_reported_the_other_gets_its_ticket(self):
@@ -146,6 +160,7 @@ class TestSelfOrderOfADishWithoutKitchen(NoKitchenForBeer, SelfOrderingCase):
 			order = self.order_item(session, ALCOHOL_ITEM)
 		sent = alerts(publish)
 		self.assertEqual([c.args[0] for c in sent], [CHANNEL])
+		self.assertIn(CASHIER, told(publish))
 		self.assertEqual(sent[0].args[1]["invoice"], order["invoice"])
 		self.assertEqual(sent[0].args[1]["items"], [ALCOHOL_ITEM])
 

@@ -1,4 +1,5 @@
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from frappe import _
 
 import base64
@@ -184,7 +185,7 @@ def print_pos_page(doctype, name, print_format):
         "POS Invoice", name, ["restaurant_table", "branch", "name"]
     )
     print_channel = "{}_{}".format("print", branch)
-    frappe.publish_realtime(print_channel, {"data": data})
+    publish_to_branch(print_channel, {"data": data}, branch)
 
     invoice_printed = frappe.db.get_value("POS Invoice", name, "invoice_printed")
 

@@ -7,6 +7,7 @@ cancelling one of the two). See docs/design/jp-tax-design.md.
 """
 
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from frappe import _
 from frappe.utils import cint, flt, get_datetime
 
@@ -205,5 +206,5 @@ def unmerge_bills(invoice):
 
 	unmerge_pair(invoice, partner)
 	for name in (invoice, partner):
-		frappe.publish_realtime("pos_invoice_updated", {"name": name, "docstatus": 0, "unmerged": 1})
+		publish_to_branch("pos_invoice_updated", {"name": name, "docstatus": 0, "unmerged": 1}, frappe.db.get_value("POS Invoice", name, "branch"))
 	return {"status": "success", "invoices": [invoice, partner]}

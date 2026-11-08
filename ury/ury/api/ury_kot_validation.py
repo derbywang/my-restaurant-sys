@@ -1,4 +1,5 @@
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 import json
 
 from frappe import _
@@ -148,7 +149,7 @@ def create_kot_log(kotdoc, invoice):
     # since that channel is already consumed by the existing KDS mosaic app with an
     # incompatible payload shape; reusing it would break that feature.
     kot_error_channel = "kot_error_{}_{}".format(posInvoice.branch, kotdoc.production)
-    frappe.publish_realtime(
+    publish_to_branch(
         kot_error_channel,
         {
             "kot": kotdoc.name,
@@ -157,6 +158,7 @@ def create_kot_log(kotdoc, invoice):
             "branch": posInvoice.branch,
             "production": kotdoc.production,
         },
+        posInvoice.branch,
     )
 
 

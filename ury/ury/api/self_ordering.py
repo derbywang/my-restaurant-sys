@@ -29,6 +29,7 @@ import json
 import os
 
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 from frappe.utils.password import get_decrypted_password
@@ -1055,7 +1056,7 @@ def _announce_kot_failure(invoice):
     Sent after the order is committed, so the message never names an order that does not exist."""
     try:
         for unit in frappe.get_all("URY Production Unit", filters={"branch": invoice.branch}, pluck="name"):
-            frappe.publish_realtime(
+            publish_to_branch(
                 f"kot_error_{invoice.branch}_{unit}",
                 {
                     "kind": "self_order",
@@ -1064,6 +1065,7 @@ def _announce_kot_failure(invoice):
                     "branch": invoice.branch,
                     "production": unit,
                 },
+                invoice.branch,
                 after_commit=True,
             )
     except Exception as e:  # the announcement must not undo the order

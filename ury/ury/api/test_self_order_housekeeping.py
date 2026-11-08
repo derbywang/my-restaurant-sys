@@ -90,8 +90,10 @@ class TestKotFailure(SelfOrderingCase):
 
 	def test_the_register_is_told_on_the_channel_of_every_kitchen_of_the_branch(self):
 		order, publish = self._order_when_kot_fails()
-		channels = [call.args[0] for call in publish.call_args_list if str(call.args[0]).startswith("kot_error_")]
-		self.assertEqual(channels, [f"kot_error_{BRANCH}_{PRODUCTION_UNIT}"])
+		sent = [c for c in publish.call_args_list if str(c.args[0]).startswith("kot_error_")]
+		# once per account of the branch (user=), see branch_realtime.publish_to_branch
+		self.assertEqual(list(dict.fromkeys(c.args[0] for c in sent)), [f"kot_error_{BRANCH}_{PRODUCTION_UNIT}"])
+		self.assertIn("cashier@test.local", {c.kwargs["user"] for c in sent})
 		call = [c for c in publish.call_args_list if str(c.args[0]).startswith("kot_error_")][0]
 		payload = call.args[1]
 		self.assertEqual((payload["kind"], payload["invoice"], payload["table"]), ("self_order", order["invoice"], TABLE))

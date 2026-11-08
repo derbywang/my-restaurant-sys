@@ -7,6 +7,7 @@ the registers when an order has one.
 """
 
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from frappe import _
 
 # One sentence for the register (the notification), the staff member who took the order, and the menu warning, so
@@ -87,7 +88,7 @@ def announce_no_kitchen(branch, invoice, table, dishes):
         return
     try:
         for unit in frappe.get_all("URY Production Unit", filters={"branch": branch}, pluck="name"):
-            frappe.publish_realtime(
+            publish_to_branch(
                 f"kot_error_{branch}_{unit}",
                 {
                     "kind": "no_kitchen",
@@ -97,6 +98,7 @@ def announce_no_kitchen(branch, invoice, table, dishes):
                     "production": unit,
                     "items": [dish["item_name"] or dish["item_code"] for dish in dishes],
                 },
+                branch,
                 after_commit=True,
             )
     except Exception as e:  # telling the register must not undo the order

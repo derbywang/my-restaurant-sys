@@ -1,4 +1,5 @@
 import frappe
+from ury.ury.api.branch_realtime import publish_to_branch
 from datetime import datetime
 from frappe.utils import now_datetime, get_time, now, get_datetime
 from ury.ury.api.pos_permissions import can_reduce_sent_items
@@ -193,7 +194,7 @@ def order_type_update(doc, method):
 
 # reload restaurant order page if submitted invoice is open there
 def ro_reload_submit(doc, method):
-    frappe.publish_realtime("reload_ro", {"name": doc.name})
+    publish_to_branch("reload_ro", {"name": doc.name}, doc.branch)
 
 
 def validate_price_list(doc, method):
@@ -316,14 +317,15 @@ def sync_merged_invoice(doc):
             # a paid or cancelled bill is not saved again
             target.save(ignore_permissions=True)
 
-        frappe.publish_realtime(
+        publish_to_branch(
             "pos_invoice_updated",
             {
                 "name": target.name,
                 "docstatus": target.docstatus,
                 "paid_amount": target.paid_amount,
                 "invoice_printed": target.invoice_printed
-            }
+            },
+            target.branch,
         )
 
     except Exception:

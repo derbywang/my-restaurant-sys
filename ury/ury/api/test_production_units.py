@@ -90,6 +90,9 @@ class TestProductionUnitsForBranch(URYFlowTestCase):
 			units = get_production_units_for_branch()["production_units"]
 		profile_branch = frappe.db.get_value("POS Profile", POS_PROFILE, "branch")
 		expected = [f"kot_error_{profile_branch}_{unit}" for unit in units]
-		self.assertEqual([call.args[0] for call in publish.call_args_list if call.args[0].startswith("kot_error_")], expected)
+		sent = [call for call in publish.call_args_list if call.args[0].startswith("kot_error_")]
+		# the same channel once per account of the branch (user=), see branch_realtime.publish_to_branch
+		self.assertEqual(list(dict.fromkeys(call.args[0] for call in sent)), expected)
+		self.assertIn(CASHIER, {call.kwargs["user"] for call in sent})
 		self.assertEqual(publish.call_args.args[1]["kot"], kot.name)
 		self.assertEqual(publish.call_args.args[1]["invoice"], invoice)

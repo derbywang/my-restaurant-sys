@@ -97,6 +97,8 @@
     "not_recognized": "この端末は登録されていません。スタッフにお声がけください。",
     "misconfigured_title": "設定が完了していません",
     "misconfigured_message": "スタッフにお声がけください。（スタッフの方：下のコードを管理者に伝えてください）",
-    "not_recognized_title": "この端末は登録されていません"
+    "not_recognized_title": "この端末は登録されていません",
+    "not_set_title": "この端末は設定されていません",
+    "not_set_message": "スタッフにお声がけください。（スタッフの方：設定用のリンクでこの端末を設定し直してください）"
   }
 }

@@ -97,6 +97,8 @@
     "not_recognized": "This device is not registered. Please ask the staff.",
     "misconfigured_title": "This device is not set up yet",
     "misconfigured_message": "Please ask the staff. (Staff: tell the administrator the code below.)",
-    "not_recognized_title": "This device is not registered"
+    "not_recognized_title": "This device is not registered",
+    "not_set_title": "This device is not set up",
+    "not_set_message": "Please ask the staff. (Staff: set this device up again with the set-up link.)"
   }
 }

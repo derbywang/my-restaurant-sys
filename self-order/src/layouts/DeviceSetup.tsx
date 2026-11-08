@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { parseSetupFragment, saveDevice } from '../lib/device'
+import { parseSetupFragment, saveDevice, setupDoneUrl } from '../lib/device'
 import { t } from '../i18n'
 
 /**
@@ -18,7 +18,7 @@ function DeviceSetup() {
     saveDevice(device)
     window.history.replaceState(null, '', window.location.pathname)
     setDone(true)
-    const timer = window.setTimeout(() => window.location.replace('/order/'), 1500)
+    const timer = window.setTimeout(() => window.location.replace(setupDoneUrl()), 1500)
     return () => window.clearTimeout(timer)
   }, [])
 

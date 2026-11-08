@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DEVICE_ERROR_CODES, UNKNOWN_DEVICE_CODE, decide, isTableTablet, parseSetupFragment, pollDelay, screenFor } from './device'
+import { DEVICE_ERROR_CODES, NOT_SET_DEVICE_CODE, TABLET_MARK_PARAM, UNKNOWN_DEVICE_CODE, decide, entryFor, isTableTablet, parseSetupFragment, pollDelay, screenFor, setupDoneUrl } from './device'
+import { QR_TOKEN_PARAM } from './qr-link'
 
 describe('parseSetupFragment', () => {
   it('reads the device and the credential of the link', () => {
@@ -96,5 +97,54 @@ describe('a tablet that stays at a table', () => {
     expect(isTableTablet({ source: 'Kiosk' })).toBe(false)
     expect(isTableTablet({ source: 'QR Table' })).toBe(false)
     expect(isTableTablet(null)).toBe(false)
+  })
+})
+
+describe('entryFor: who opened the page', () => {
+  const none = { hasDevice: false, search: '', hasStoredSession: false }
+
+  it('a phone with the code of the table order page, as always', () => {
+    expect(entryFor({ ...none, search: `?${QR_TOKEN_PARAM}=abc` })).toBe('customer')
+  })
+
+  it('the code wins over the tablet mark', () => {
+    expect(entryFor({ ...none, search: `?${QR_TOKEN_PARAM}=abc&${TABLET_MARK_PARAM}=1` })).toBe('customer')
+  })
+
+  it('a tablet with its credential is a device', () => {
+    expect(entryFor({ ...none, hasDevice: true, search: `?${TABLET_MARK_PARAM}=1` })).toBe('device')
+    expect(entryFor({ ...none, hasDevice: true })).toBe('device')
+  })
+
+  it('a reload with a stored session goes on as a customer', () => {
+    expect(entryFor({ ...none, hasStoredSession: true, search: `?${TABLET_MARK_PARAM}=1` })).toBe('customer')
+  })
+
+  it('no code, no credential, with the tablet mark: the tablet is not set up', () => {
+    expect(entryFor({ ...none, search: `?${TABLET_MARK_PARAM}=1` })).toBe('tablet_not_set')
+  })
+
+  it('no code, no credential, no mark: a phone that lost its code (the old message)', () => {
+    expect(entryFor(none)).toBe('customer')
+    expect(entryFor({ ...none, search: '?foo=1' })).toBe('customer')
+  })
+
+  it('the mark means nothing with another value', () => {
+    expect(entryFor({ ...none, search: `?${TABLET_MARK_PARAM}=0` })).toBe('customer')
+  })
+
+  it('the link of a QR code of the server never carries the mark', () => {
+    expect(QR_TOKEN_PARAM).not.toBe(TABLET_MARK_PARAM)
+  })
+
+  it('the page after the set-up carries the mark', () => {
+    expect(setupDoneUrl()).toBe(`/order/?${TABLET_MARK_PARAM}=1`)
+  })
+})
+
+describe('the code of the not-set-up screen', () => {
+  it('is one of the codes the staff read out', () => {
+    expect(NOT_SET_DEVICE_CODE).toBe('E-DEVICE-NOT-SET')
+    expect(DEVICE_ERROR_CODES).toContain(NOT_SET_DEVICE_CODE)
   })
 })

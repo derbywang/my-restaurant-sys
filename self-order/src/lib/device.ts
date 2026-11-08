@@ -1,3 +1,5 @@
+import { tokenFromSearch } from './qr-link'
+
 // A table tablet: the credentials it keeps, the link that sets it up, and what it does while the table is closed.
 
 export const DEVICE_ID_KEY = 'ury_device_id'
@@ -19,8 +21,39 @@ export interface DeviceStatus {
 /** The tablet is not known to the server: its credential is wrong, it was issued again, or the device was stopped or deleted. */
 export const UNKNOWN_DEVICE_CODE = 'E-DEVICE-UNKNOWN'
 
+/** The tablet has no credential (the data of the site was cleared): it must be set up again with the link of the staff. */
+export const NOT_SET_DEVICE_CODE = 'E-DEVICE-NOT-SET'
+
+/**
+ * The mark of a tablet in its address (`/order/?tablet=1`, the page after the set-up, which the staff put on the home
+ * screen). Safari clears the storage but not the address. A phone never has it: the link of the QR code is made by the
+ * server with the code of the table only.
+ */
+export const TABLET_MARK_PARAM = 'tablet'
+
+export function setupDoneUrl(): string {
+  return `/order/?${TABLET_MARK_PARAM}=1`
+}
+
+/**
+ * Who opened the page: a tablet with its credential (`device`), a tablet whose credential is gone (`tablet_not_set`:
+ * only with the mark, no code and no session) or a phone (`customer`, also when it lost its code: it gets the message
+ * to scan the QR code again). The code of a table always wins: a guest is never shown the screen for the staff.
+ */
+export function entryFor(page: {
+  hasDevice: boolean
+  search: string
+  hasStoredSession: boolean
+}): 'device' | 'tablet_not_set' | 'customer' {
+  const params = new URLSearchParams(page.search)
+  if (tokenFromSearch(page.search)) return 'customer'
+  if (page.hasDevice) return 'device'
+  if (page.hasStoredSession) return 'customer'
+  return params.get(TABLET_MARK_PARAM) === '1' ? 'tablet_not_set' : 'customer'
+}
+
 /** The codes of `device_status` (set-up mistakes) and the one above: what the staff read out to the administrator. */
-export const DEVICE_ERROR_CODES = ['E-PROFILE-OFF', 'E-DEVICE-ORDERING-OFF', 'E-NO-TABLE', 'E-TABLE-BRANCH', UNKNOWN_DEVICE_CODE]
+export const DEVICE_ERROR_CODES = ['E-PROFILE-OFF', 'E-DEVICE-ORDERING-OFF', 'E-NO-TABLE', 'E-TABLE-BRANCH', UNKNOWN_DEVICE_CODE, NOT_SET_DEVICE_CODE]
 
 /** What a tablet shows when it cannot be ordered at: waiting (nobody has done anything wrong) or a mistake in the set-up. */
 export type DeviceWait =

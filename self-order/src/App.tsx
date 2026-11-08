@@ -1,6 +1,6 @@
 import { useDeviceBootstrap } from './hooks/useDeviceBootstrap'
 import DeviceSetup from './layouts/DeviceSetup'
-import { UNKNOWN_DEVICE_CODE } from './lib/device'
+import { NOT_SET_DEVICE_CODE, UNKNOWN_DEVICE_CODE, entryFor } from './lib/device'
 import WaitingScreen from './components/WaitingScreen'
 import MisconfiguredScreen from './components/MisconfiguredScreen'
 import MobileQRLayout from './layouts/MobileQRLayout'
@@ -8,6 +8,7 @@ import TabletLayout from './layouts/TabletLayout'
 import LandscapeKioskLayout from './layouts/LandscapeKioskLayout'
 import PortraitKioskLayout from './layouts/PortraitKioskLayout'
 import type { OrderingLayout } from './lib/api'
+import { getStoredContext } from './lib/api'
 import { t } from './i18n'
 
 const LAYOUTS: Record<OrderingLayout, typeof MobileQRLayout> = {
@@ -34,7 +35,13 @@ function App() {
 function Shell() {
   const { isDevice, screen } = useDeviceBootstrap()
 
-  if (!isDevice) return <MobileQRLayout />
+  const entry = entryFor({
+    hasDevice: isDevice,
+    search: window.location.search,
+    hasStoredSession: getStoredContext() !== null,
+  })
+  if (entry === 'tablet_not_set') return <MisconfiguredScreen code={NOT_SET_DEVICE_CODE} />
+  if (!isDevice || entry === 'customer') return <MobileQRLayout />
 
   if (screen.kind === 'starting') {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">{t('app.starting')}</div>

@@ -6,7 +6,7 @@ export { parseFrappeError, isPermissionError } from './frappe/errors';
 export type { User, PosProfileCombined } from './types';
 export { storage } from './storage';
 export { getCurrency, setCurrency } from './currency';
-export { formatCurrency, formatCompactCurrency, formatInvoiceTime, flt } from './format';
+export { formatCurrency, formatCompactCurrency, formatInvoiceTime, parseServerDatetime, elapsedMinutes, flt } from './format';
 export { loadQzPrinter, disconnectQzPrinter, printWithQz } from './print/qz';
 export {
   buildSocketUrl,

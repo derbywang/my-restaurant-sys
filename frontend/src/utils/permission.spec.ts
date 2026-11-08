@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { answerIsYes } from './permission';
+import { modulePermissionsFrom, NO_MODULE_PERMISSIONS } from './permission';
 
-describe('answerIsYes', () => {
-  it('is a yes only for has_permission === true, wrapped or not', () => {
-    expect(answerIsYes({ has_permission: true })).toBe(true);
-    expect(answerIsYes({ message: { has_permission: true } })).toBe(true);
+describe('modulePermissionsFrom', () => {
+  it('reads create and write, wrapped or not', () => {
+    expect(modulePermissionsFrom({ create: true, write: true })).toEqual({ create: true, write: true });
+    expect(modulePermissionsFrom({ message: { create: false, write: true } })).toEqual({ create: false, write: true });
   });
 
   it('is a no for everything else', () => {
-    expect(answerIsYes({ has_permission: false })).toBe(false);
-    expect(answerIsYes({ message: { has_permission: false } })).toBe(false);
-    expect(answerIsYes({ has_permission: 1 })).toBe(false);
-    expect(answerIsYes({ has_permission: 'yes' })).toBe(false);
-    expect(answerIsYes(null)).toBe(false);
-    expect(answerIsYes(undefined)).toBe(false);
-    expect(answerIsYes({})).toBe(false);
-    expect(answerIsYes(true)).toBe(false);
+    for (const bad of [{ create: 1, write: 'yes' }, null, undefined, {}, true, 'x']) {
+      expect(modulePermissionsFrom(bad)).toEqual(NO_MODULE_PERMISSIONS);
+    }
   });
 });

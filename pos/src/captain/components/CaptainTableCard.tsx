@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Lock, User, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { Badge } from '@ury/ui';
-import { formatCurrency } from '@ury/core';
+import { elapsedMinutes, formatCurrency } from '@ury/core';
 import { t } from '../../i18n';
 import type { Table } from '../../lib/table-api';
 import type { ActiveTableOrder } from '../lib/captain-table-api';
@@ -21,12 +21,9 @@ export interface CaptainTableCardProps {
   selfOrderSlot?: ReactNode;
 }
 
-const elapsedLabel = (isoTimestamp: string | null): string | null => {
-  if (!isoTimestamp) return null;
-  const started = new Date(isoTimestamp).getTime();
-  if (Number.isNaN(started)) return null;
-
-  const minutes = Math.max(0, Math.round((Date.now() - started) / 60000));
+const elapsedLabel = (timestamp: string | null): string | null => {
+  const minutes = elapsedMinutes(timestamp);
+  if (minutes === null) return null;
   if (minutes < 1) return t('captain.elapsed_just_now');
   if (minutes < 60) return t('captain.elapsed_minutes', { minutes });
   const hours = Math.floor(minutes / 60);

@@ -7,7 +7,7 @@ import { Switch } from '../../components/ui/switch';
 import { dashboardService } from '../../services/dashboard';
 import { call } from '@ury/core';
 import SideDrawer from '../../components/layout/SideDrawer';
-import { answerIsYes } from '../../utils/permission';
+import { modulePermissionsFrom } from '../../utils/permission';
 
 interface UserRecord {
   name: string;
@@ -72,15 +72,17 @@ export const UserPage: React.FC = () => {
   }, [activeBranchId]);
 
   useEffect(() => {
-    const ask = async (permType: string, set: (value: boolean) => void) => {
+    const ask = async () => {
       try {
-        set(answerIsYes(await call('frappe.client.has_permission', { doctype: 'User', perm_type: permType })));
+        const answer = modulePermissionsFrom(await call('ury.ury.api.dashboard.get_module_permissions', { doctype: 'User' }));
+        setCanCreateUser(answer.create);
+        setCanEditUser(answer.write);
       } catch {
-        set(false);
+        setCanCreateUser(false);
+        setCanEditUser(false);
       }
     };
-    ask('create', setCanCreateUser);
-    ask('write', setCanEditUser);
+    ask();
   }, []);
 
   const getDisplayRole = (user: UserRecord): string => {

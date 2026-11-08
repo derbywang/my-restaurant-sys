@@ -63,12 +63,50 @@ export function formatCompactCurrency(amount: number, currency?: string): string
   return numberFormat(true, typeof currency === 'string' ? currency : getCurrency()).format(finite(amount));
 }
 
+/**
+ * A date and time as the server sends it ("2026-11-07 20:24:24.397245", or with a T) as a local Date.
+ * Read by hand: Safari does not parse the space-separated form with `new Date(string)`. A bare time of day (the
+ * old Time field) has no date and gives null.
+ */
+export const parseServerDatetime = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1).map((part) => Number(part ?? 0));
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  const valid =
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    date.getHours() === hour &&
+    date.getMinutes() === minute;
+  return valid ? date : null;
+};
+
+/** Whole minutes since a server date and time (never negative: the tablet's clock may be a little behind). */
+export const elapsedMinutes = (value: string | null | undefined, now: number = Date.now()): number | null => {
+  const started = parseServerDatetime(value);
+  if (!started) return null;
+  return Math.max(0, Math.floor((now - started.getTime()) / 60000));
+};
+
 export const formatInvoiceTime = (timestamp: string | null) => {
     if (!timestamp) return 'No bill activity yet';
 
-    const parsedDate = new Date(timestamp);
+    const parsedDate = parseServerDatetime(timestamp) ?? new Date(timestamp);
     if (!Number.isNaN(parsedDate.getTime())) {
-      return parsedDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: 'numeric' });
+      const now = new Date();
+      const sameDay =
+        parsedDate.getFullYear() === now.getFullYear() &&
+        parsedDate.getMonth() === now.getMonth() &&
+        parsedDate.getDate() === now.getDate();
+      // a table that has been open since another day shows the day as well
+      return parsedDate.toLocaleString(
+        undefined,
+        sameDay
+          ? { hour: 'numeric', minute: 'numeric' }
+          : { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' },
+      );
     }
 
     const timeOnlyMatch = timestamp.match(/^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d+))?$/);

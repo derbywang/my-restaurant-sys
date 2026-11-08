@@ -1,6 +1,7 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
 import ErrorBanner from '../components/ErrorBanner'
+import SplitNotice from '../components/SplitNotice'
 import { formatCurrency } from '@ury/core'
 import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
@@ -87,6 +88,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
       </header>
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-4 mt-3 p-3 text-sm" />
+
+      <SplitNotice split={order?.split} className="mx-4 mt-4" />
 
       {order && order.items.length > 0 && (
         <section className="mx-4 mt-4 rounded-lg border p-3">

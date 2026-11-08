@@ -69,6 +69,8 @@ export interface CustomerOrder {
   /** What the bill will be for all of the order, with the tax. */
   grand_total: number
   billed: boolean
+  /** the bill of the table was split and another part of it is still there */
+  split?: boolean
 }
 
 /** What the cart comes to with the tax, from the server (`preview_customer_cart`). */

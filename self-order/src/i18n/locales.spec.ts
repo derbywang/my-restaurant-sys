@@ -54,3 +54,17 @@ describe('the notices that stop a guest from ordering', () => {
     expect((closed.table_closed as { message: string }).message).toContain('お会計中')
   })
 })
+
+describe('the notice for a bill that was split (会計分割)', () => {
+  it('ja says the bills are separate, and that what is ordered from here joins this bill', () => {
+    expect(ja.split.title).toBe('お会計が別々になりました。')
+    expect(ja.split.message).toBe(
+      'この画面には、こちらのお会計分のご注文と金額を表示しています。このあとご注文いただいた商品も、こちらのお会計に加わります。',
+    )
+  })
+
+  it('does not send the guest away: they can go on ordering', () => {
+    expect(ja.split.message).not.toContain('スタッフにお声がけください')
+    expect(en.split.message).not.toMatch(/ask (a member of )?staff/i)
+  })
+})

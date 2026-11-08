@@ -24,6 +24,10 @@
     "yes": "Yes",
     "no": "No"
   },
+  "split": {
+    "title": "The bill has been split.",
+    "message": "This screen shows the order and the amount for this part of the bill. Anything you order from now on will be added to this part."
+  },
   "closed": {
     "table_closed": {
       "title": "Ordering has ended",

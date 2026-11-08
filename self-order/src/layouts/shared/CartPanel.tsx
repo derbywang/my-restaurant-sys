@@ -2,6 +2,7 @@ import { formatCurrency } from '@ury/core'
 import type { CartPreview, CustomerOrder, MenuItem, OrderingContext } from '../../lib/api'
 import type { CartEntry } from '../../lib/cart'
 import CartNote from '../../components/CartNote'
+import SplitNotice from '../../components/SplitNotice'
 import CartTotals, { cartTotalText } from '../../components/CartTotals'
 import { t } from '../../i18n'
 import { mergeOrderLines } from '../../lib/order-lines'
@@ -53,6 +54,7 @@ function CartPanel({
   return (
     <aside className={className}>
       <div className="flex-1 overflow-y-auto">
+        <SplitNotice split={order?.split} className="mb-4" />
         {order && order.items.length > 0 && (
           <section className="mb-4 rounded-lg border p-3">
             <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.order_so_far')}</h2>

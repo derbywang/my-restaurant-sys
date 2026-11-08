@@ -1,6 +1,7 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ClosedNotice from '../components/ClosedNotice'
 import ErrorBanner from '../components/ErrorBanner'
+import SplitNotice from '../components/SplitNotice'
 import { useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '@ury/core'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
@@ -147,6 +148,8 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
       </header>
 
       <ErrorBanner text={error} onClose={dismissError} className="mx-6 mt-3 p-3 text-sm" />
+
+      <SplitNotice split={order?.split} className="mx-6 mt-4" />
 
       {order && order.items.length > 0 && (
         <section className="mx-6 mt-4 rounded-lg border p-4">

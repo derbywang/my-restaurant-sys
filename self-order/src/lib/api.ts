@@ -1,3 +1,4 @@
+import type { DeviceStatus } from './device'
 import { call } from '@ury/core'
 
 const M = 'ury.ury.api.self_ordering'
@@ -149,19 +150,11 @@ export async function bootstrapDevice(deviceId: string, deviceCredential: string
   return response.message
 }
 
-export async function assignDeviceTable(
-  deviceId: string,
-  deviceCredential: string,
-  staffPin: string,
-  table: string,
-): Promise<OrderingContext> {
-  const response = await call.post<FrappeResponse<OrderingContext>>(`${M}.assign_device_table`, {
+export async function getDeviceStatus(deviceId: string, deviceCredential: string): Promise<DeviceStatus> {
+  const response = await call.get<FrappeResponse<DeviceStatus>>(`${M}.device_status`, {
     device_id: deviceId,
     device_credential: deviceCredential,
-    staff_pin: staffPin,
-    table,
   })
-  storeContext(response.message)
   return response.message
 }
 

@@ -1,4 +1,8 @@
 import { useDeviceBootstrap } from './hooks/useDeviceBootstrap'
+import DeviceSetup from './layouts/DeviceSetup'
+import { UNKNOWN_DEVICE_CODE } from './lib/device'
+import WaitingScreen from './components/WaitingScreen'
+import MisconfiguredScreen from './components/MisconfiguredScreen'
 import MobileQRLayout from './layouts/MobileQRLayout'
 import TabletLayout from './layouts/TabletLayout'
 import LandscapeKioskLayout from './layouts/LandscapeKioskLayout'
@@ -23,28 +27,25 @@ const LAYOUTS: Record<OrderingLayout, typeof MobileQRLayout> = {
  * token/session bootstrap via useOrderingSession().
  */
 function App() {
-  const { isDevice, deviceContext, deviceLoading, deviceError } = useDeviceBootstrap()
+  if (window.location.pathname.replace(/\/+$/, '').endsWith('/setup')) return <DeviceSetup />
+  return <Shell />
+}
 
-  if (isDevice) {
-    if (deviceLoading) {
-      return (
-        <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-          {t('app.starting')}
-        </div>
-      )
-    }
-    if (deviceError || !deviceContext) {
-      return (
-        <div className="flex min-h-screen items-center justify-center p-6 text-center text-destructive">
-          {deviceError ?? t('app.device_failed')}
-        </div>
-      )
-    }
-    const Layout = LAYOUTS[deviceContext.layout] ?? MobileQRLayout
-    return <Layout initialContext={deviceContext} />
+function Shell() {
+  const { isDevice, screen } = useDeviceBootstrap()
+
+  if (!isDevice) return <MobileQRLayout />
+
+  if (screen.kind === 'starting') {
+    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">{t('app.starting')}</div>
   }
+  if (screen.kind === 'rejected') return <MisconfiguredScreen code={UNKNOWN_DEVICE_CODE} />
+  if (screen.kind === 'waiting') return <WaitingScreen reason={screen.reason} />
+  if (screen.kind === 'misconfigured') return <MisconfiguredScreen code={screen.code} />
 
-  return <MobileQRLayout />
+  const Layout = LAYOUTS[screen.context.layout] ?? MobileQRLayout
+  // a new session is a new page: another key, so nothing of the guests before is left in it
+  return <Layout key={screen.generation} initialContext={screen.context} />
 }
 
 export default App

@@ -12,7 +12,8 @@
     "in_cart": "In cart: {{count}}",
     "items": "{{count}} items",
     "place": "Place Order",
-    "placing": "Placing order…"
+    "placing": "Placing order…",
+    "empty_hint": "Tap a menu item to add it to your cart."
   },
   "price": {
     "incl_tax": " (tax incl.)"
@@ -67,11 +68,13 @@
     "pickup": "Order for Pickup",
     "order": "Order",
     "start_over": "Start Over",
-    "new_order": "New Order"
+    "new_order": "New Order",
+    "clear_cart": "Empty the cart"
   },
   "confirm": {
     "start_over": "Start over? Your current cart will be cleared.",
-    "new_order": "Start a new order? Current cart will be cleared."
+    "new_order": "Start a new order? Current cart will be cleared.",
+    "clear_cart": "Empty the cart? All the dishes you chose will be removed. (What was already ordered stays.)"
   },
   "idle": {
     "title": "Still there?",
@@ -83,5 +86,17 @@
     "request_created": "Payment request created ({{amount}} {{currency}}) — a staff member will assist with payment.",
     "request_bill": "Request Bill",
     "bill_requested": "Bill requested — staff notified"
+  },
+  "device": {
+    "waiting_title": "Please wait until we are ready for your order",
+    "waiting_table": "You can order as soon as the staff open your table.",
+    "waiting_store": "We are not open right now. Please wait until we open.",
+    "setup_working": "Setting up this device…",
+    "setup_done": "Set up. Starting soon.",
+    "setup_failed": "The set-up link is not right. Please ask the staff.",
+    "not_recognized": "This device is not registered. Please ask the staff.",
+    "misconfigured_title": "This device is not set up yet",
+    "misconfigured_message": "Please ask the staff. (Staff: tell the administrator the code below.)",
+    "not_recognized_title": "This device is not registered"
   }
 }

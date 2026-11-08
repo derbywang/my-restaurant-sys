@@ -77,7 +77,7 @@ function CartPanel({
         <section>
           <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('cart.title')}</h2>
           {cartItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Tap a menu item to add it to your cart.</p>
+            <p className="text-sm text-muted-foreground">{t('cart.empty_hint')}</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {cartItems.map((entry) => (

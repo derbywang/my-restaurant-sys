@@ -1,53 +1,71 @@
-import { useEffect, useState } from 'react'
-import { bootstrapDevice, type OrderingContext } from '../lib/api'
-import { t } from '../i18n'
+import { useEffect, useRef, useState } from 'react'
+import { bootstrapDevice, getDeviceStatus, type OrderingContext } from '../lib/api'
+import { decide, pollDelay, readDevice, screenFor, type DevicePhase, type DeviceStatus } from '../lib/device'
 
-// Storage keys for a provisioned kiosk/tablet device's credentials. These
-// are set once at provisioning time (out of band — see
-// `enroll_device` in the backend, a staff-only endpoint) and persisted
-// across sessions so the device can self-bootstrap on every load without a
-// QR scan.
-const DEVICE_ID_KEY = 'ury_device_id'
-const DEVICE_CREDENTIAL_KEY = 'ury_device_credential'
+export type DeviceScreen =
+  | { kind: 'starting' }
+  | { kind: 'waiting'; reason: 'table_closed' | 'store_closed' }
+  | { kind: 'misconfigured'; code: string }
+  | { kind: 'ordering'; context: OrderingContext; generation: number }
+  | { kind: 'rejected' }
+
+function isRefused(error: unknown): boolean {
+  const status = (error as { httpStatus?: number; status?: number })?.httpStatus ?? (error as { status?: number })?.status
+  return status === 401 || status === 403
+}
 
 /**
- * On mount, checks localStorage for a stored device_id/device_credential
- * pair. If present, bootstraps an ordering session via the device-credential
- * path (as opposed to a QR token). This is a separate concern from
- * `useOrderingSession` — it only answers "is this a provisioned device and,
- * if so, what's its ordering context." A later integration point decides
- * how to combine that with layout selection and the rest of the ordering
- * flow.
+ * A provisioned table tablet (its device and credential are kept by `DeviceSetup`): asks the server whether the table
+ * is open, and by itself starts a session when the staff open it, drops it when the table closes, and starts a new
+ * one when the table is opened again for the next guests. While the guests order it asks every little while too, which
+ * is also how the server knows the tablet is alive.
  */
 export function useDeviceBootstrap() {
-  const [isDevice, setIsDevice] = useState(false)
-  const [deviceContext, setDeviceContext] = useState<OrderingContext | null>(null)
-  const [deviceLoading, setDeviceLoading] = useState(true)
-  const [deviceError, setDeviceError] = useState<string | null>(null)
+  const [device] = useState(() => readDevice())
+  const [screen, setScreen] = useState<DeviceScreen>({ kind: 'starting' })
+  const phase = useRef<DevicePhase>({ kind: 'waiting' })
+  const generation = useRef(0)
 
   useEffect(() => {
-    async function init() {
-      const deviceId = localStorage.getItem(DEVICE_ID_KEY)
-      const deviceCredential = localStorage.getItem(DEVICE_CREDENTIAL_KEY)
+    if (!device) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
 
-      if (!deviceId || !deviceCredential) {
-        setIsDevice(false)
-        setDeviceLoading(false)
-        return
-      }
-
-      setIsDevice(true)
+    async function ask() {
+      let delay = pollDelay(phase.current.kind)
       try {
-        const context = await bootstrapDevice(deviceId, deviceCredential)
-        setDeviceContext(context)
-      } catch {
-        setDeviceError(t('app.device_failed'))
-      } finally {
-        setDeviceLoading(false)
+        const status: DeviceStatus = await getDeviceStatus(device!.deviceId, device!.credential)
+        if (cancelled) return
+        const action = decide(phase.current, status)
+        if (action === 'start' || action === 'restart') {
+          const context = await bootstrapDevice(device!.deviceId, device!.credential)
+          if (cancelled) return
+          phase.current = { kind: 'ordering', opening: status.opening }
+          generation.current += 1
+          setScreen({ kind: 'ordering', context, generation: generation.current })
+        } else if (action === 'wait') {
+          phase.current = { kind: 'waiting' }
+          setScreen(screenFor(status))
+        }
+      } catch (error) {
+        if (cancelled) return
+        if (isRefused(error)) {
+          setScreen({ kind: 'rejected' })
+          return
+        }
+        // the network or the server is away for a moment: a tablet that is ordering goes on, one that waits waits
+        if (phase.current.kind === 'waiting') setScreen((now) => (now.kind === 'starting' ? { kind: 'waiting', reason: 'table_closed' } : now))
+        delay = pollDelay('waiting')
       }
+      if (!cancelled) timer = setTimeout(ask, delay)
     }
-    init()
-  }, [])
 
-  return { isDevice, deviceContext, deviceLoading, deviceError }
+    ask()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [device])
+
+  return { isDevice: device !== null, screen }
 }

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useIdleReset } from '../hooks/useIdleReset'
 import { useOrderingSession } from '../hooks/useOrderingSession'
 import type { OrderingContext } from '../lib/api'
+import { isTableTablet } from '../lib/device'
 import CartPanel from './shared/CartPanel'
 import MenuGrid from './shared/MenuGrid'
 import { t } from '../i18n'
@@ -55,8 +56,11 @@ function TabletLayout({ initialContext }: LayoutProps) {
   const [showIdleWarning, setShowIdleWarning] = useState(false)
   const idleResetTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
+  // a tablet at a table: the guests talk it over, nothing is cleared by itself and the button only empties the cart
+  const atTable = isTableTablet(context)
+
   function handleReset() {
-    if (window.confirm(t('confirm.new_order'))) {
+    if (window.confirm(atTable ? t('confirm.clear_cart') : t('confirm.new_order'))) {
       resetSession()
     }
   }
@@ -66,7 +70,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
   // respond. Never fires mid-checkout — submitting/payingOnline gate both
   // the warning and the reset itself.
   useIdleReset(() => {
-    if (submitting || payingOnline) return
+    if (atTable || submitting || payingOnline) return
     setShowIdleWarning(true)
     idleResetTimerRef.current = setTimeout(() => {
       setShowIdleWarning(false)
@@ -109,7 +113,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
           onClick={handleReset}
           className="rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground"
         >
-          {t('header.new_order')}
+          {atTable ? t('header.clear_cart') : t('header.new_order')}
         </button>
       </header>
 

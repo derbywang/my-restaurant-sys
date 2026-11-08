@@ -105,3 +105,35 @@ class TestUpdateAnOrder(URYFlowTestCase):
 		with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
 			place_order(CAPTAIN, [(ALCOHOL_ITEM, 1)], table=TABLES[0])
 		self.assertEqual(frappe.db.count("POS Invoice"), count)
+
+
+class TestWhoTheOrderBelongsTo(URYFlowTestCase):
+	"""The cashier, owner and waiter of an order come from the session, never from what the client sends (these were
+	checked with mocks in test_ury_order, which stopped reaching the assertions)."""
+
+	def test_names_sent_by_the_client_are_ignored(self):
+		from ury.ury.doctype.ury_order.ury_order import sync_order
+		from ury.setup.test_site import CUSTOMER, ROOM, as_user
+
+		open_pos(CASHIER)
+		profile = frappe.get_doc("POS Profile", POS_PROFILE)
+		with as_user(CAPTAIN):
+			result = sync_order(
+				items=[{"item": FOOD_ITEM, "item_name": FOOD_ITEM, "rate": 0, "qty": 1}],
+				cashier="fake_cashier",
+				owner="fake_owner",
+				mode_of_payment=profile.payments[0].mode_of_payment,
+				customer=CUSTOMER,
+				no_of_pax=1,
+				last_invoice=None,
+				waiter="fake_waiter",
+				pos_profile=POS_PROFILE,
+				table=TABLES[0],
+				order_type="Dine In",
+				room=ROOM,
+			)
+		invoice = frappe.get_doc("POS Invoice", result["name"])
+		self.assertEqual(invoice.waiter, CAPTAIN)
+		self.assertEqual(invoice.owner, CAPTAIN)
+		self.assertNotEqual(invoice.cashier, "fake_cashier")
+		self.assertTrue(frappe.db.exists("User", invoice.cashier), invoice.cashier)

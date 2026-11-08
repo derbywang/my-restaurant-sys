@@ -102,17 +102,20 @@ class TestURYOrder(FrappeTestCase):
                     pass
                 
                 mock_has_permission.assert_called_once_with("POS Invoice", "write", doc=mock_invoice)
-                
-                # Verify fake cashier/waiter were ignored
-                self.assertEqual(mock_invoice.cashier, "authorized@example.com")
-                # Waiter should remain "existing_waiter" because it was an existing invoice and we don't overwrite
-                self.assertEqual(mock_invoice.waiter, "existing_waiter")
+                # That the cashier / waiter / owner sent by the client are ignored is tested with the real flow:
+                # ury.ury.api.test_sync_order_update.TestWhoTheOrderBelongsTo (with no items sync_order returns
+                # before the names are set, so a mock test cannot reach them).
         except Exception as e:
             self.fail(f"Test failed with {e}")
 
     @patch("ury.ury.doctype.ury_order.ury_order.get_order_invoice")
     @patch("ury.ury.doctype.ury_order.ury_order.frappe.has_permission")
-    def test_sync_order_unauthorized(self, mock_has_permission, mock_get_order_invoice):
+    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_doc")
+    @patch("ury.ury.doctype.ury_order.ury_order.frappe.get_roles")
+    def test_sync_order_unauthorized(self, mock_get_roles, mock_get_doc, mock_has_permission, mock_get_order_invoice):
+        # sync_order reads the roles and the POS Profile before it checks the permission on the order
+        mock_get_roles.return_value = ["URY Captain"]
+        mock_get_doc.return_value = MagicMock(role_allowed_for_billing=_role_rows())
         mock_invoice = MagicMock()
         mock_invoice.name = "POS-INV-001"
         mock_get_order_invoice.return_value = mock_invoice

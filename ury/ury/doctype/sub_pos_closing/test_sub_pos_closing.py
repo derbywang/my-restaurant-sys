@@ -7,6 +7,15 @@ from unittest.mock import patch, MagicMock
 from ury.ury.doctype.sub_pos_closing.sub_pos_closing import get_pos_invoices
 
 class TestSubPOSClosingSEC09(FrappeTestCase):
+    """These tests mock the session, the roles and the branch; get_pos_invoices first checks the read permission on
+    POS Invoice (frappe.has_permission), which would look at the mocked session. The permission itself is not what
+    is tested here, so it is let through."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.has_permission", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.db.sql")
     @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.getBranch")

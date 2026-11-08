@@ -91,3 +91,14 @@ bench --site ury-test.localhost run-tests --app ury
 - **前后对比**：每个测试类开始前取一次快照，类的清理全部结束后再取一次：Role（`desk_access`、`disabled`、`home_page`、`is_custom`）、User（`user_type`、`enabled`、`language`）、用户的 Has Role、Custom DocPerm 和 DocPerm 的全部行（忽略名称和时间戳）。不一致就让这个类报错，并逐行列出差异（`changed the roles, accounts or permissions of the test site`）。它只检测，不自动恢复：按报错的清单手工还原，或用运行前的自动备份。登录时间（`last_login` 等）和 `modified` 不算差异。
 - 会改角色 / 权限 / 账号的测试，必须在 `addCleanup` / `addClassCleanup` 里还原（还原要自己提交）；测试本身见 `ury.setup.test_site_guard`。
 - 用真实 Socket.IO 连接的测试（`ury.ury.api.test_realtime_reach`）需要 web 服务器（8000）和 socketio（9000）在运行，否则跳过；它登录产生的会话和活动日志在测试结束时删除。
+
+## 整套回归怎么跑
+
+模块不能并发（点单、收款、交班的测试会重置交易数据）。把全部测试模块串行跑一遍：
+
+```bash
+cd apps/ury && find ury -name "test_*.py" | sed 's#/#.#g; s#\.py$##' | sort > /tmp/modules.txt
+for m in $(cat /tmp/modules.txt); do echo "== $m"; bench --site ury-test.localhost run-tests --module $m 2>&1 | grep -E "^(FAIL|ERROR):|^Ran |^OK|^FAILED|changed the roles"; done
+```
+
+（`test_site`、`test_guard` 是辅助模块，没有测试，显示 `Ran 0 tests` 正常。）任何 FAIL / ERROR 都值得看：2026-11-08 起整套应该全绿，唯一已知的例外是 `test_pos_closing` 偶发失败（见 `ui-todo.md`）。

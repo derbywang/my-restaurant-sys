@@ -58,6 +58,13 @@ class TestGetRestaurantMenuPhase1(unittest.TestCase):
 
 
 class TestMergeBillsSEC07(unittest.TestCase):
+    """merge_bills first requires the billing permission (a cashier's); these tests are about the permission on the
+    two bills, so that first gate is let through (it is tested in ury.ury.api.test_pos_permissions)."""
+
+    def setUp(self):
+        patcher = patch("ury.ury.api.pos_permissions.require_billing_permission")
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("ury.ury_pos.api.frappe.get_doc")
     @patch("ury.ury_pos.api.frappe.has_permission")
@@ -568,6 +575,8 @@ class TestSubmitChecklistSEC10(FrappeTestCase):
         self, mock_validate_branch, mock_get_branch, mock_session, mock_now, mock_new_doc, mock_get_all
     ):
         """Test that submit_checklist returns status='Complete' when all mandatory items are checked."""
+        # submit_checklist first asks whether the POS Profile has any checklist item at all (none on the test site)
+        self.enterContext(patch("ury.ury_pos.api.frappe.db.exists", return_value=True))
         # Setup mocks
         mock_session.user = "test_user@example.com"
         mock_get_branch.return_value = "Branch A"
@@ -623,6 +632,8 @@ class TestSubmitChecklistSEC10(FrappeTestCase):
         self, mock_validate_branch, mock_get_branch, mock_session, mock_now, mock_new_doc, mock_get_all
     ):
         """Test that submit_checklist returns status='In Progress' when at least one mandatory item is unchecked."""
+        # submit_checklist first asks whether the POS Profile has any checklist item at all (none on the test site)
+        self.enterContext(patch("ury.ury_pos.api.frappe.db.exists", return_value=True))
         # Setup mocks
         mock_session.user = "test_user@example.com"
         mock_get_branch.return_value = "Branch A"

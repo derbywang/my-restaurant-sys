@@ -17,7 +17,7 @@ import json
 from datetime import date
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from ury.setup.test_site import COMPANY, URYTestCase
 
 from ury.ury_pos.api import (
     get_checklist,
@@ -27,7 +27,7 @@ from ury.ury_pos.api import (
 from ury.ury.api.ury_kot_validation import get_kot_errors
 from ury.ury.doctype.sub_pos_closing.sub_pos_closing import get_pos_invoices
 
-TEST_COMPANY = "URY"
+TEST_COMPANY = COMPANY  # the company of the test site (it used to be "URY", the name on one dev site)
 TEST_MODE_OF_PAYMENT = "Cash"
 TEST_BRANCH = "_Test E2E P0P1 Branch"
 TEST_ROOM = "_Test E2E P0P1 Room"
@@ -37,7 +37,7 @@ TEST_USER_EMAIL = "e2e_p0_p1_cashier@example.com"
 CHECKLIST_ITEM_LABEL = "Cash Drawer Verified"
 
 
-class TestP0P1EndToEndFlow(FrappeTestCase):
+class TestP0P1EndToEndFlow(URYTestCase):
     """Regression coverage for the opening checklist -> POS opening ->
     closing -> KOT visibility flow, run as a single continuous sequence
     against real inserted records (Branch, POS Profile, User, POS Opening
@@ -249,6 +249,10 @@ class TestP0P1EndToEndFlow(FrappeTestCase):
 
         if frappe.db.exists("Branch", TEST_BRANCH):
             frappe.delete_doc("Branch", TEST_BRANCH, ignore_permissions=True, force=1)
+
+        # the cashier account too: saving a user commits, so it would stay on the site
+        if frappe.db.exists("User", TEST_USER_EMAIL):
+            frappe.delete_doc("User", TEST_USER_EMAIL, ignore_permissions=True, force=1)
 
         frappe.db.commit()
 

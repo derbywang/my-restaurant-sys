@@ -156,6 +156,27 @@ class TestCancelling(SplitMixin, SelfOrderingCase):
 		self.assert_free()
 
 
+class TestTheRemainingPartAfterTheOriginalIsCancelled(SplitMixin, SelfOrderingCase):
+	"""The bill that was split off must stay usable when the bill it was split from is cancelled: dishes can be added
+	to it and it can be paid. (ERPNext refuses to save a bill that still links to a cancelled bill.)"""
+
+	def test_the_remaining_part_can_be_paid(self):
+		self.make_split()
+		with as_user(CASHIER):
+			cancel_order(self.source, "test")
+		doc = pay_order(self.sibling, CASHIER)
+		self.assertEqual(doc.docstatus, 1)
+
+	def test_why_it_had_to_be_changed_a_link_to_the_cancelled_bill_makes_payment_fail(self):
+		self.make_split()
+		with as_user(CASHIER):
+			cancel_order(self.source, "test")
+		frappe.db.set_value("POS Invoice", self.sibling, "custom_split_from", self.source, update_modified=False)
+		with self.assertRaises(Exception) as caught:
+			pay_order(self.sibling, CASHIER)
+		self.assertIn("cancelled", str(caught.exception).lower())
+
+
 class TestMoving(SplitMixin, SelfOrderingCase):
 	def test_moving_one_part_keeps_the_old_table(self):
 		self.make_split()

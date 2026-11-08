@@ -689,6 +689,17 @@ def _order_state(docstatus, invoice_printed):
     return "billed" if invoice_printed else "open"
 
 
+def _is_split(invoice_name, split_group):
+    """The bill of the table was split and another part of it is still there (a part that was cancelled does not count)."""
+    if not split_group:
+        return False
+    return bool(
+        frappe.db.exists(
+            "POS Invoice", {"custom_split_group": split_group, "docstatus": ["<", 2], "name": ["!=", invoice_name]}
+        )
+    )
+
+
 def _sanitize_invoice_for_customer(invoice):
     return {
         "state": _order_state(invoice.docstatus, invoice.invoice_printed),
@@ -714,13 +725,15 @@ def _sanitize_invoice_for_customer(invoice):
         # what the bill will be: all of the order, with the tax
         "grand_total": invoice.rounded_total or invoice.grand_total,
         "billed": bool(invoice.invoice_printed),
+        # the bill of the table was split (会計分割): what is shown is this part of it
+        "split": _is_split(invoice.name, invoice.get("custom_split_group")),
     }
 
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_order(session):
     session = _resolve_session(session, require_open=False)
-    empty = {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False}
+    empty = {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False, "split": False}
     # A session that has not ordered yet is shown the order its dishes would go on (the open order of the
     # table that is not printed, the same rule as when it orders and as the total of the cart): the guests
     # of one table share an order. The printed order of the last guests is never one.
@@ -1137,7 +1150,7 @@ def request_bill(session):
 @frappe.whitelist(allow_guest=True)
 def get_order_status(session):
     session = _resolve_session(session, require_open=False)
-    result = {"session_status": session.status, "invoice": session.invoice, "order_state": "none"}
+    result = {"session_status": session.status, "invoice": session.invoice, "order_state": "none", "split": False}
     if session.table:
         profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
         state = _open_table_state(session.table, profile)
@@ -1155,6 +1168,8 @@ def get_order_status(session):
             )
         if invoice_fields:
             result["order_state"] = _order_state(invoice_fields.docstatus, invoice_fields.invoice_printed)
+        group = frappe.db.get_value("POS Invoice", session.invoice, "custom_split_group")
+        result["split"] = _is_split(session.invoice, group)
         result["billed"] = bool(invoice_fields and invoice_fields.invoice_printed)
         result["submitted"] = bool(invoice_fields and invoice_fields.docstatus == 1)
         result["open_requests"] = open_requests

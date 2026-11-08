@@ -1854,3 +1854,105 @@ class TestTheMenuOfTheGuests(SelfOrderingCase):
 		profile = frappe.get_doc("URY Self Ordering Profile", PROFILE)
 		for order_type in ("Dine In", "Take Away"):
 			self.assertEqual(_customer_menu(profile, order_type)["name"], active, order_type)
+
+
+class TestAfterABillIsSplitWhileTheGuestsAreOrdering(SelfOrderingCase):
+	"""拆单 while the table is open: the guests keep ordering on their own order (the original); the order that was
+	split off keeps its dishes and its amount, has no session, and the page tells the guests that the bill is
+	now in parts."""
+
+	def setUp(self):
+		super().setUp()
+		from ury.ury.doctype.ury_order.ury_order import split_bill
+
+		self.staff_open()
+		self.session = self.scan()
+		self.source = add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 1}, {"item": ALCOHOL_ITEM, "qty": 1, "comment": ""}], 1)["invoice"]
+		self.row = frappe.get_all("POS Invoice Item", filters={"parent": self.source, "item_code": ALCOHOL_ITEM}, pluck="name")[0]
+		self.split = lambda: self._split(split_bill)
+
+	def _split(self, split_bill):
+		with as_user(CASHIER):
+			self.sibling = split_bill(self.source, [{"name": self.row, "qty": 1}])["new_invoice"]
+		frappe.db.commit()
+		self.sibling_items = items_of(self.sibling)
+		self.sibling_total = frappe.db.get_value("POS Invoice", self.sibling, "grand_total")
+
+	def test_the_status_says_split_only_after_the_split(self):
+		self.assertFalse(get_order_status(self.session).get("split"))
+		self.split()
+		self.assertTrue(get_order_status(self.session)["split"])
+
+	def test_when_the_part_that_was_split_off_is_cancelled_it_is_not_split_any_more(self):
+		self.split()
+		with as_user(CASHIER):
+			cancel_order(self.sibling, "test")
+		self.assertFalse(get_order_status(self.session)["split"])
+		self.assertFalse(get_customer_order(self.session)["split"])
+
+	def test_the_order_the_page_shows_says_split_too(self):
+		# the page reads the order, not the status
+		self.assertFalse(get_customer_order(self.session).get("split"))
+		self.split()
+		self.assertTrue(get_customer_order(self.session)["split"])
+
+	def test_a_table_that_was_never_split_does_not_say_split(self):
+		other = self.scan(OTHER_TABLE) if self.staff_open(OTHER_TABLE) else None
+		self.order(other)
+		self.assertFalse(get_order_status(other).get("split"))
+
+	def test_what_the_guests_add_goes_to_the_original_and_the_new_order_is_untouched(self):
+		self.split()
+		order = add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 1}])
+		self.assertEqual(order["invoice"], self.source)
+		self.assertEqual(items_of(self.sibling), self.sibling_items)
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "grand_total"), self.sibling_total)
+
+	def test_the_guests_see_only_the_part_that_stayed(self):
+		self.split()
+		seen = get_customer_order(self.session)
+		self.assertEqual([row["item_code"] for row in seen["items"]], [FOOD_ITEM])
+
+	def test_the_table_stays_open(self):
+		self.split()
+		self.assertTrue(table_row()["self_order_open"])
+		self.order(self.session)
+		self.assertTrue(table_row()["self_order_open"])
+
+	def test_the_kitchen_gets_only_the_new_dish(self):
+		self.split()
+		before = set(frappe.get_all("URY KOT", filters={"invoice": self.source}, pluck="name"))
+		self.order(self.session)
+		new = [k for k in frappe.get_all("URY KOT", filters={"invoice": self.source}, pluck="name") if k not in before]
+		self.assertEqual(len(new), 1)
+		rows = frappe.get_all("URY KOT Items", filters={"parent": new[0]}, fields=["item", "quantity"])
+		self.assertEqual([(r.item, int(r.quantity)) for r in rows], [(FOOD_ITEM, 1)])
+
+	def test_the_new_order_has_no_session(self):
+		self.split()
+		self.assertFalse(frappe.db.get_value("POS Invoice", self.sibling, "custom_ordering_session"))
+
+	def test_when_the_original_is_printed_and_paid_first_the_session_is_over_and_the_other_order_stays(self):
+		# printing a bill frees the table and closes it for the phones (also while the other part of the bill is
+		# not printed yet): the guests' session ends with "paid", the part that was split off stays a draft
+		self.split()
+		pay_order(self.source, CASHIER)
+		self.assertFalse(table_row()["self_order_open"])
+		self.assertEqual(get_order_status(self.session)["order_state"], "paid")
+		self.refused("Table closed", self.order, self.session)
+		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "docstatus"), 0)
+
+
+class TestSplittingABillThatIsPrinted(SelfOrderingCase):
+	def test_the_table_is_closed_and_the_guests_cannot_order(self):
+		from ury.ury.doctype.ury_order.ury_order import split_bill
+
+		self.staff_open()
+		session = self.scan()
+		source = add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}, {"item": ALCOHOL_ITEM, "qty": 1}], 1)["invoice"]
+		print_bill(source, CASHIER)
+		row = frappe.get_all("POS Invoice Item", filters={"parent": source, "item_code": ALCOHOL_ITEM}, pluck="name")[0]
+		with as_user(CASHIER):
+			split_bill(source, [{"name": row, "qty": 1}])
+		self.assertFalse(table_row()["self_order_open"])
+		self.refused("Table closed", self.order, session)

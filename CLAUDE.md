@@ -10,6 +10,7 @@
 - 类型检查：`cd pos && yarn typecheck`（即 `tsc -p tsconfig.app.json --noEmit`，`yarn build` 会先跑它）；`frontend/` 和 `self-order/` 用 `npx tsc -p tsconfig.app.json --noEmit`，`packages/core` 和 `packages/ui` 用 `yarn typecheck`。不要用不带 `-p tsconfig.app.json` 的 `tsc --noEmit`：根 tsconfig 的 `files` 是空的，什么都不检查。
 - 提交前逐条确认命令的结果：`git reset` / `git add` 之后用 `git status` 或 `git diff --cached --stat` 确认暂存的内容正好是要提交的文件，确认无误再 `git commit`；不要把命令串在一起、不看结果就提交。已经 push 的提交不要 force push。
 - 每个阶段单独提交；不要修改 ury/public/ 下的构建产物；改完前端后执行 yarn build。
+- **判断“构建产物和源码是否一致”，用内容核对，不要只看文件修改时间。** 在产物里搜源码里这次新加的字符串（界面文字、错误代码，例如 `grep -rl "E-DEVICE-UNKNOWN" ury/public/order`），或看构建记录（`yarn build` 的输出）。原因：开发容器的 shell 时区是 UTC，`ls` / `find` 显示的时间比日本时间早 9 小时（2026-11-08 我把 UTC 的 11/7 20:14 当成日本日期，其实是日本时间 11/8 05:14）；同一分钟内的时间也分不出先后。注意只被测试用到的常量会被打包去掉，搜不到不一定是没构建，先看源码里它是不是运行时用到的。
 
 ## 对 AGENTS.MD 的更正（以本节为准）
 - 版本：ury/__init__.py 中是 3.0.0-beta.1（AGENTS.MD 中写的 0.2.1 已过时）

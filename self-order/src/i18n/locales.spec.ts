@@ -38,3 +38,19 @@ describe('translations', () => {
     expect(keysOf(ja).filter((k) => !k.split('.').reduce((o: any, p) => o?.[p], ja))).toEqual([])
   })
 })
+
+describe('the notices that stop a guest from ordering', () => {
+  const closed = ja.closed as Record<string, { title: string; message: string } | string>
+
+  it('every one tells the guest to ask the staff, and none says it is an error', () => {
+    for (const kind of ['table_closed', 'store_closed', 'order_closed', 'session_expired']) {
+      const { title, message } = closed[kind] as { title: string; message: string }
+      expect(message, kind).toContain('スタッフにお声がけください')
+      expect(`${title}${message}`, kind).not.toMatch(/エラー|失敗|error/i)
+    }
+  })
+
+  it('the closed table says it can be the bill (a guest whose tables were merged for paying)', () => {
+    expect((closed.table_closed as { message: string }).message).toContain('お会計中')
+  })
+})

@@ -27,7 +27,7 @@
   "closed": {
     "table_closed": {
       "title": "Ordering has ended",
-      "message": "Ordering at this table has ended. Please ask a member of staff."
+      "message": "Ordering from this page is closed (for example, the bill is being prepared). For anything more, please ask a member of staff."
     },
     "store_closed": {
       "title": "We cannot take orders now",

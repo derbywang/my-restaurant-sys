@@ -92,6 +92,12 @@ class TestSimulatedPaymentTerminalProvider(unittest.TestCase):
         self.assertEqual(result["status"], "Approved")
         self.assertTrue(result["transaction_id"])
 
+    def test_the_terminal_is_marked_as_heard_from(self):
+        # `last_seen` could not be read in a list (Frappe drops a field with `_seen` in its name): `last_reported_at`
+        provider = get_payment_terminal_provider()
+        provider.start_transaction("POS-INV-SIM-4", 100, "INR")
+        self.assertIsNotNone(frappe.db.get_value("URY Payment Terminal", {"provider": "Simulated"}, "last_reported_at"))
+
     def test_get_transaction_status_reflects_approval(self):
         provider = get_payment_terminal_provider()
         started = provider.start_transaction("POS-INV-SIM-2", 100, "INR")

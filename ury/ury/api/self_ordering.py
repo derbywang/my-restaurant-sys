@@ -31,6 +31,7 @@ import os
 import frappe
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
+from frappe.utils.password import get_decrypted_password
 
 from ury.ury_pos.api import resolve_restaurant_menu
 from ury.ury.doctype.ury_order.ury_order import (
@@ -166,7 +167,13 @@ def _ensure_admin_branch_mapping(branch):
 # ---------------------------------------------------------------------------
 
 def _get_profile_secret(profile_name):
-    secret = frappe.db.get_value("URY Self Ordering Profile", profile_name, "qr_signing_secret")
+    """The secret the QR codes are signed with: a Password field (encrypted; the table of the profile only keeps
+    dots). A site where the patch encrypt_qr_signing_secret has not run yet still has it as plain text in the
+    table: that value is used until the patch moves it (a migrate does)."""
+    secret = get_decrypted_password("URY Self Ordering Profile", profile_name, "qr_signing_secret", raise_exception=False)
+    if not secret:
+        plain = frappe.db.get_value("URY Self Ordering Profile", profile_name, "qr_signing_secret")
+        secret = plain if plain and set(plain) != {"*"} else None
     if not secret:
         frappe.throw(_("Self ordering is not configured for this restaurant"), frappe.ValidationError)
     return secret
@@ -255,7 +262,8 @@ def enroll_device(device):
     return {"device_id": doc.device_id, "credential": raw_credential}
 
 
-def _resolve_device(device_id, credential):
+def _find_device(device_id, credential):
+    """The device with this id and credential (enabled), or a refusal; it counts as the device being alive."""
     credential_hash = _hash_credential(credential)
     device_name = frappe.db.get_value(
         "URY Ordering Device",
@@ -264,18 +272,49 @@ def _resolve_device(device_id, credential):
     )
     if not device_name:
         frappe.throw(_("Device not recognized"), frappe.PermissionError)
+    _report_alive(device_name)
+    return frappe.get_doc("URY Ordering Device", device_name)
 
-    device = frappe.get_doc("URY Ordering Device", device_name)
+
+LAST_REPORT_EVERY_SECONDS = 15
+
+
+def _report_alive(device_name):
+    """The device was heard from: `last_reported_at`, at most every LAST_REPORT_EVERY_SECONDS (a tablet that waits asks every few
+    seconds). Committed here: the server rolls a GET back at its end unless the code commits, and the tablet asks with GET."""
+    with _elevated():
+        last = frappe.db.get_value("URY Ordering Device", device_name, "last_reported_at")
+        now = now_datetime()
+        if last and (now - get_datetime(last)).total_seconds() < LAST_REPORT_EVERY_SECONDS:
+            return
+        frappe.db.set_value("URY Ordering Device", device_name, "last_reported_at", now, update_modified=False)
+        frappe.db.commit()
+
+
+def _device_configuration_error(device, profile):
+    """A mistake in the set-up of a tablet, as a code for the staff, or None (the tablet shows it: it must not look
+    like waiting for the table)."""
+    if not profile.enabled:
+        return "E-PROFILE-OFF"
+    if not profile.enable_kiosk_ordering:
+        return "E-DEVICE-ORDERING-OFF"
+    if device.device_type == "Table Tablet":
+        table = device.fixed_table if device.table_mode == "Fixed" else None
+        if not table or not frappe.db.exists("URY Table", table):
+            return "E-NO-TABLE"
+        if frappe.db.get_value("URY Table", table, "branch") != profile.branch:
+            return "E-TABLE-BRANCH"
+    return None
+
+
+def _resolve_device(device_id, credential):
+    device = _find_device(device_id, credential)
     profile = frappe.get_doc("URY Self Ordering Profile", device.ordering_profile)
     if not profile.enabled or not profile.enable_kiosk_ordering:
         frappe.throw(_("Kiosk ordering is currently unavailable"), frappe.ValidationError)
 
     table = device.fixed_table if device.table_mode == "Fixed" else None
     source = "Table Tablet" if device.device_type == "Table Tablet" else "Kiosk"
-
-    with _elevated():
-        frappe.db.set_value("URY Ordering Device", device.name, "last_seen", now_datetime())
-
     return profile, table, source, device.name, device.layout
 
 
@@ -378,6 +417,9 @@ def _keep_alive(session):
     session.db_set(
         {"last_activity": now, "expires_at": add_to_date(now, minutes=timeout)}, update_modified=False
     )
+    # The page asks the order and the status again and again with GET, and the server rolls a GET back at its end
+    # unless the code commits: without this a guest who is only looking never keeps the session alive.
+    frappe.db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +428,7 @@ def _keep_alive(session):
 
 def _ordering_context_response(raw_session_token, source, profile, table, layout):
     """Shared response shape for every bootstrap-style entry point
-    (get_ordering_context, assign_device_table) — never raw branch/table
+    (get_ordering_context) — never raw branch/table
     names the client didn't already have a right to see."""
     return {
         "session": raw_session_token,
@@ -439,46 +481,47 @@ def get_ordering_context(token=None, device_id=None, device_credential=None):
 
 
 @frappe.whitelist(allow_guest=True)
-def assign_device_table(device_id, device_credential, staff_pin, table):
-    """Bind a shared/portable tablet (`table_mode = "Selectable"`) to a
-    table for the duration of a session. Used by `PortableTabletAssignment`
-    when staff hand the tablet to a table — the tablet has no fixed table
-    of its own, so a staff member authorizes the binding with a shared PIN
-    rather than a full desk login on a customer-facing device.
+def device_status(device_id, device_credential):
+    """What a table tablet asks while it waits (and every little while when it is ordering): may the guests order
+    now? `{"state": "open" | "table_closed" | "store_closed" | "not_configured", "opening": ...}`. `opening` is an
+    opaque value that is another one each time the staff open the table, so a tablet knows its session belongs to the
+    guests before. A mistake in the set-up is `not_configured` with a `code` (E-PROFILE-OFF, E-DEVICE-ORDERING-OFF,
+    E-NO-TABLE, E-TABLE-BRANCH) for the staff: never the same as waiting. It says nothing else (no table, no branch),
+    makes no session, and counts as the tablet being alive."""
+    device = _find_device(device_id, device_credential)
+    profile = frappe.get_doc("URY Self Ordering Profile", device.ordering_profile)
+    code = _device_configuration_error(device, profile)
+    if code:
+        return {"state": "not_configured", "opening": None, "code": code}
+    if not branch_is_open(profile.branch):
+        return {"state": "store_closed", "opening": None}
+    table = device.fixed_table if device.table_mode == "Fixed" else None
+    if not table:
+        return {"state": "open", "opening": "no-table"}
+    state = _open_table_state(table, profile)
+    if not state:
+        return {"state": "table_closed", "opening": None}
+    return {"state": "open", "opening": hashlib.sha256(str(state.self_order_opening).encode()).hexdigest()[:16]}
 
-    MVP note: `staff_pin` is one shared PIN per ordering profile (see
-    `URY Self Ordering Profile.staff_pin`), not per-staff-member. A natural
-    next iteration would link PINs to individual `Employee` records for
-    per-staff attribution/audit — out of scope for this pass.
-    """
-    profile, existing_table, source, device_name, layout = _resolve_device(device_id, device_credential)
 
-    table_mode = frappe.db.get_value("URY Ordering Device", device_name, "table_mode")
-    if table_mode != "Selectable":
-        frappe.throw(_("This device is not configured for table selection"), frappe.ValidationError)
+@frappe.whitelist()
+def issue_device_setup(device):
+    """Staff-only: the link that sets up a table tablet, made with the shop's local address: the device and the
+    credential (new: the old one stops working) are in the fragment, which a browser never sends to the server."""
+    from ury.ury.api.qr_print import qr_svg
 
-    configured_pin = frappe.db.get_value("URY Self Ordering Profile", profile.name, "staff_pin")
-    # Shared-secret equality check, not a password hash — acceptable for
-    # this MVP (see class/module docstring conventions elsewhere in this
-    # file for the same "don't over-engineer" bar). hmac.compare_digest
-    # avoids trivial short-circuit timing leaks at negligible cost.
-    if not configured_pin or not hmac.compare_digest(str(configured_pin), str(staff_pin or "")):
-        frappe.throw(_("Incorrect staff PIN"), frappe.PermissionError)
-
-    if not frappe.db.exists("URY Table", table):
-        frappe.throw(_("Invalid table"), frappe.ValidationError)
-    table_branch = frappe.db.get_value("URY Table", table, "branch")
-    if table_branch != profile.branch:
-        frappe.throw(_("Invalid table"), frappe.ValidationError)
-
-    _require_open_store(profile)
-    state = _require_open_table(profile, table)
-
-    raw_session_token, session = _open_session(
-        profile, source, table, device_name, table_opening=state.self_order_opening
-    )
-
-    return _ordering_context_response(raw_session_token, source, profile, table, layout)
+    doc = frappe.get_doc("URY Ordering Device", device)
+    if not frappe.has_permission("URY Ordering Device", "write", doc):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    local_url = (frappe.db.get_value("URY Self Ordering Profile", doc.ordering_profile, "local_url") or "").strip().rstrip("/")
+    if not local_url:
+        frappe.throw(
+            _("The local address of the shop's network is not set (Self Ordering Profile, Local URL)"),
+            frappe.ValidationError,
+        )
+    issued = enroll_device(device)
+    link = f"{local_url}/order/setup#device={issued['device_id']}&credential={issued['credential']}"
+    return {"device_id": issued["device_id"], "credential": issued["credential"], "link": link, "svg": qr_svg(link)}
 
 
 # ---------------------------------------------------------------------------

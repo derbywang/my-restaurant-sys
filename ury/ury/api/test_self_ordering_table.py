@@ -595,7 +595,7 @@ class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 	# what the guests' interface may do; a new function that the guests can call must be added here on purpose
 	GUEST_FUNCTIONS = {
 		"get_ordering_context",
-		"assign_device_table",
+		"device_status",
 		"get_customer_menu",
 		"get_customer_product",
 		"get_customer_order",
@@ -814,6 +814,57 @@ class TestOverHttp(SelfOrderingCase):
 		self.assertEqual(body["message"]["invoice"], invoice)
 		self.assertEqual(body["message"]["state"], "open")
 		self.assertEqual(body["message"]["grand_total"], 1100, body["message"])
+
+
+class TestOverHttpWhatAGetWrites(SelfOrderingCase):
+	"""The server rolls a GET back at its end unless the code commits. The page asks the status and the order again and
+	again with GET: a guest who is only looking must still keep the session alive (it ends after the idle minutes of
+	the profile), which has to be committed by the code. Skipped when no server answers for the test site."""
+
+	BASE = "http://127.0.0.1:8000/api/method/ury.ury.api.self_ordering."
+
+	def setUp(self):
+		super().setUp()
+		self.host = f"{frappe.local.site}:8000"
+
+	def get(self, name, **params):
+		import json as _json
+		from urllib import error, parse, request as urlrequest
+
+		req = urlrequest.Request(self.BASE + name + "?" + parse.urlencode(params), method="GET", headers={"Host": self.host})
+		try:
+			with urlrequest.urlopen(req, timeout=20) as response:
+				return response.status, _json.loads(response.read())
+		except error.HTTPError as e:
+			return e.code, _json.loads(e.read() or b"{}")
+		except OSError:
+			self.skipTest("no server answers on port 8000")
+
+	def expires_at(self):
+		frappe.db.rollback()  # see what the server committed
+		return frappe.db.get_value("URY Ordering Session", {"ordering_profile": PROFILE}, "expires_at")
+
+	def test_asking_the_order_again_and_again_keeps_the_session_alive(self):
+		self.staff_open()
+		frappe.db.commit()
+		with as_user("Administrator"):
+			token = generate_qr_token(PROFILE, TABLE)
+		status, body = self.get("get_ordering_context", token=token)
+		self.assertEqual(status, 200, body)
+		session = body["message"]["session"]
+		# the session was last active a while ago and ends in 5 minutes
+		frappe.db.set_value(
+			"URY Ordering Session",
+			{"ordering_profile": PROFILE},
+			{"last_activity": add_to_date(now_datetime(), minutes=-10), "expires_at": add_to_date(now_datetime(), minutes=5)},
+			update_modified=False,
+		)
+		frappe.db.commit()
+		for name in ("get_customer_order", "get_order_status"):
+			status, body = self.get(name, session=session)
+			self.assertEqual(status, 200, body)
+		# the profile's idle minutes (default 30) from now, not the 5 minutes that were left
+		self.assertGreater(self.expires_at(), add_to_date(now_datetime(), minutes=20))
 
 
 class TestTheKitchenSeesWhoServesTheGuests(SelfOrderingCase):

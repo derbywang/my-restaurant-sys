@@ -17,6 +17,7 @@
   "default_customer",
   "enabled",
   "public_url",
+  "local_url",
   "default_language",
   "ordering_modes_section",
   "enable_qr_table_ordering",
@@ -41,8 +42,7 @@
   "session_section",
   "session_idle_timeout_minutes",
   "table_open_minutes",
-  "qr_signing_secret",
-  "staff_pin"
+  "qr_signing_secret"
  ],
  "fields": [
   {
@@ -103,6 +103,13 @@
    "options": "URL"
   },
   {
+   "fieldname": "local_url",
+   "fieldtype": "Data",
+   "label": "Local URL",
+   "description": "The address the tablets in the shop reach the server on, e.g. http://ury.lan (a fixed name or address on the shop's network, not the internet). The set-up link of a table tablet is written with it.",
+   "options": "URL"
+  },
+  {
    "default": "ja",
    "description": "The language of what the guests read in the shop, e.g. the QR code stickers. It does not follow the system language.",
    "fieldname": "default_language",
@@ -135,7 +142,7 @@
    "default": "0",
    "fieldname": "enable_kiosk_ordering",
    "fieldtype": "Check",
-   "label": "Enable Kiosk Ordering"
+   "label": "Enable Device Ordering (table tablets and kiosks)"
   },
   {
    "default": "1",
@@ -229,22 +236,13 @@
   },
   {
    "fieldname": "qr_signing_secret",
-   "fieldtype": "Data",
-   "hidden": 1,
+   "fieldtype": "Password",
    "label": "QR Signing Secret",
    "no_copy": 1,
    "print_hide": 1,
-   "read_only": 1,
-   "report_hide": 1
-  },
-  {
-   "description": "Shared 4-6 digit PIN staff use to authorize a portable/shared tablet's table assignment (assign_device_table). One PIN per profile for this MVP, not per-staff-member.",
-   "fieldname": "staff_pin",
-   "fieldtype": "Data",
-   "label": "Staff PIN",
-   "no_copy": 1,
-   "print_hide": 1,
-   "report_hide": 1
+   "report_hide": 1,
+   "permlevel": 1,
+   "description": "The secret the QR codes of the tables are signed with. Whoever knows it can make the code of any table: keep it in the password manager, give the same value to the rehearsal and the real site, never write it in a file that is committed. A new value makes every printed code useless."
   },
   {
    "fieldname": "age_check_section",
@@ -261,7 +259,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-07 14:00:00.000000",
+ "modified": "2026-11-08 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",
@@ -325,6 +323,12 @@
    "role": "URY Admin",
    "select": 1,
    "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
    "write": 1
   }
  ],

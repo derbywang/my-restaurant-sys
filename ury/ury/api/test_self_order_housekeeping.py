@@ -52,17 +52,25 @@ class TestDefaultCustomer(SelfOrderingCase):
 
 
 class TestSecret(SelfOrderingCase):
+	def _secret(self):
+		from frappe.utils.password import get_decrypted_password
+
+		return get_decrypted_password("URY Self Ordering Profile", PROFILE, "qr_signing_secret", raise_exception=False)
+
 	def test_a_profile_saved_without_a_secret_gets_one(self):
+		frappe.db.delete("__Auth", {"doctype": "URY Self Ordering Profile", "name": PROFILE, "fieldname": "qr_signing_secret"})
+		frappe.db.sql("update `tabURY Self Ordering Profile` set qr_signing_secret = NULL where name = %s", PROFILE)
+		self.assertIsNone(self._secret())
 		doc = frappe.get_doc("URY Self Ordering Profile", PROFILE)
-		doc.qr_signing_secret = None
 		doc.save(ignore_permissions=True)
-		self.assertGreaterEqual(len(doc.qr_signing_secret), 32)
+		self.assertGreaterEqual(len(self._secret() or ""), 32)
 
 	def test_a_secret_that_is_there_is_not_changed(self):
+		secret = self._secret()
+		self.assertTrue(secret)
 		doc = frappe.get_doc("URY Self Ordering Profile", PROFILE)
-		secret = doc.qr_signing_secret
 		doc.save(ignore_permissions=True)
-		self.assertEqual(doc.qr_signing_secret, secret)
+		self.assertEqual(self._secret(), secret)
 
 
 class TestKotFailure(SelfOrderingCase):

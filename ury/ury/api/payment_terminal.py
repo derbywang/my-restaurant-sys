@@ -119,7 +119,7 @@ class _SimulatedPaymentTerminalProvider(PaymentTerminalProvider):
 				terminal_name,
 				{
 					"last_transaction_id": txn.transaction_id,
-					"last_seen": frappe.utils.now_datetime(),
+					"last_reported_at": frappe.utils.now_datetime(),
 				},
 			)
 

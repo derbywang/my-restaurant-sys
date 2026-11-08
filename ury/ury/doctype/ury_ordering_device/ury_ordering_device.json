@@ -24,7 +24,7 @@
   "enabled",
   "credential_hash",
   "column_break_auth_status",
-  "last_seen"
+  "last_reported_at"
  ],
  "fields": [
   {
@@ -74,7 +74,7 @@
    "fieldname": "device_type",
    "fieldtype": "Select",
    "label": "Device Type",
-   "options": "\nKiosk\nTable Tablet\nPortable Tablet",
+   "options": "\nKiosk\nTable Tablet",
    "reqd": 1
   },
   {
@@ -93,7 +93,7 @@
    "fieldname": "table_mode",
    "fieldtype": "Select",
    "label": "Table Mode",
-   "options": "\nNone\nFixed\nSelectable"
+   "options": "\nNone\nFixed"
   },
   {
    "depends_on": "eval:doc.table_mode==\"Fixed\"",
@@ -125,15 +125,15 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "last_seen",
+   "fieldname": "last_reported_at",
    "fieldtype": "Datetime",
-   "label": "Last Seen",
+   "label": "Last Reported",
    "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-19 00:00:00.000000",
+ "modified": "2026-11-08 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Ordering Device",

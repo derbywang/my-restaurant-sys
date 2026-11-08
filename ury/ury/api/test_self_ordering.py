@@ -20,7 +20,6 @@ from ury.ury.api.self_ordering import (
     _verify_qr_token,
     _sign,
     add_customer_items,
-    assign_device_table,
     get_customer_order,
     request_bill,
     create_payment_request,
@@ -767,115 +766,6 @@ class TestSharePaymentLink(unittest.TestCase):
 
         with self.assertRaises(frappe.ValidationError):
             share_payment_link("session-token", "")
-
-
-class TestAssignDeviceTable(unittest.TestCase):
-    """assign_device_table(): staff-PIN-authorized table binding for a
-    shared/portable tablet (table_mode="Selectable"). Reuses _resolve_device
-    and _open_session rather than reimplementing device/session handling."""
-
-    def _profile(self, name="Profile A", branch="Branch A"):
-        profile = MagicMock()
-        profile.name = name
-        profile.branch = branch
-        profile.restaurant = "Restaurant A"
-        profile.enable_product_detail_page = 1
-        profile.show_item_images = 1
-        profile.show_item_descriptions = 1
-        profile.enable_item_notes = 1
-        profile.enable_request_bill = 1
-        profile.enable_customer_payment = 0
-        profile.enable_payment_link = 0
-        profile.enable_pay_at_counter = 1
-        profile.allow_add_to_running_table = 1
-        return profile
-
-    @patch(f"{MOD}._require_open_table")
-    @patch(f"{MOD}._require_open_store")
-    @patch(f"{MOD}._open_session")
-    @patch(f"{MOD}.frappe.db.exists")
-    @patch(f"{MOD}.frappe.db.get_value")
-    @patch(f"{MOD}._resolve_device")
-    def test_assign_device_table_valid_pin_opens_session(
-        self, mock_resolve_device, mock_db_get_value, mock_db_exists, mock_open_session,
-        mock_require_store, mock_require_table,
-    ):
-        # (the opening hours and the opened table are covered by test_self_ordering_table.py)
-        mock_require_table.return_value = MagicMock(self_order_opening="OPENING-1")
-        profile = self._profile()
-        mock_resolve_device.return_value = (profile, None, "Kiosk", "DEVICE-1", "Tablet")
-
-        def get_value_side_effect(doctype, name=None, fieldname=None):
-            if doctype == "URY Ordering Device":
-                return "Selectable"
-            if doctype == "URY Self Ordering Profile":
-                return "1234"
-            if doctype == "URY Table":
-                return "Branch A"
-            return None
-
-        mock_db_get_value.side_effect = get_value_side_effect
-        mock_db_exists.return_value = True
-        mock_open_session.return_value = ("raw-session-token", MagicMock())
-
-        result = assign_device_table("DEVICE-1", "cred", "1234", "Table 7")
-
-        self.assertEqual(result["session"], "raw-session-token")
-        self.assertEqual(result["table"], "Table 7")
-        mock_open_session.assert_called_once_with(profile, "Kiosk", "Table 7", "DEVICE-1", table_opening="OPENING-1")
-
-    @patch(f"{MOD}.frappe.db.get_value")
-    @patch(f"{MOD}._resolve_device")
-    def test_assign_device_table_wrong_pin_rejected(self, mock_resolve_device, mock_db_get_value):
-        profile = self._profile()
-        mock_resolve_device.return_value = (profile, None, "Kiosk", "DEVICE-1", "Tablet")
-
-        def get_value_side_effect(doctype, name=None, fieldname=None):
-            if doctype == "URY Ordering Device":
-                return "Selectable"
-            if doctype == "URY Self Ordering Profile":
-                return "1234"
-            return None
-
-        mock_db_get_value.side_effect = get_value_side_effect
-
-        with self.assertRaises(frappe.PermissionError):
-            assign_device_table("DEVICE-1", "cred", "0000", "Table 7")
-
-    @patch(f"{MOD}.frappe.db.get_value")
-    @patch(f"{MOD}._resolve_device")
-    def test_assign_device_table_rejects_non_selectable_device(self, mock_resolve_device, mock_db_get_value):
-        profile = self._profile()
-        # A Fixed device already has its own table from _resolve_device --
-        # assign_device_table must still reject it, since it has no reason
-        # to be re-assigned via staff PIN.
-        mock_resolve_device.return_value = (profile, "Table 3", "Table Tablet", "DEVICE-1", "Tablet")
-        mock_db_get_value.return_value = "Fixed"
-
-        with self.assertRaises(frappe.ValidationError):
-            assign_device_table("DEVICE-1", "cred", "1234", "Table 7")
-
-    @patch(f"{MOD}.frappe.db.exists")
-    @patch(f"{MOD}.frappe.db.get_value")
-    @patch(f"{MOD}._resolve_device")
-    def test_assign_device_table_rejects_unknown_table(
-        self, mock_resolve_device, mock_db_get_value, mock_db_exists,
-    ):
-        profile = self._profile()
-        mock_resolve_device.return_value = (profile, None, "Kiosk", "DEVICE-1", "Tablet")
-
-        def get_value_side_effect(doctype, name=None, fieldname=None):
-            if doctype == "URY Ordering Device":
-                return "Selectable"
-            if doctype == "URY Self Ordering Profile":
-                return "1234"
-            return None
-
-        mock_db_get_value.side_effect = get_value_side_effect
-        mock_db_exists.return_value = False
-
-        with self.assertRaises(frappe.ValidationError):
-            assign_device_table("DEVICE-1", "cred", "1234", "Unknown Table")
 
 
 class TestQRPickup(unittest.TestCase):

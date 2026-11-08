@@ -430,6 +430,53 @@ def release_merge_cluster_tables(table_or_tables):
 
     frappe.db.commit()
 
+def unprinted_split_parts_on_table(invoice_name):
+    """The other parts of a split bill (会計分割) that are on the same table as this bill and are not printed yet.
+
+    The table is not free while one of them is: its guests are still there and have not been given a bill. Empty
+    for a bill that was not split, for a part that moved to another table, and for the bill this one was merged
+    with (a merged pair is printed and paid together)."""
+    row = frappe.db.get_value(
+        "POS Invoice",
+        invoice_name,
+        ["custom_split_group", "restaurant_table", "custom_merged_tables", "custom_merged_pos_invoice"],
+        as_dict=True,
+    )
+    if not row or not row.custom_split_group or not row.restaurant_table:
+        return []
+    cluster = _get_table_group(row.restaurant_table, row.custom_merged_tables)
+    parts = frappe.get_all(
+        "POS Invoice",
+        filters={
+            "custom_split_group": row.custom_split_group,
+            "docstatus": 0,
+            "invoice_printed": 0,
+            "name": ["not in", [invoice_name, row.custom_merged_pos_invoice or ""]],
+            "restaurant_table": ["in", cluster],
+        },
+        fields=["name", "custom_merged_pos_invoice"],
+        order_by="creation asc",
+    )
+    # a part whose merged partner is printed is printed with it (the pair is billed together)
+    return [
+        part.name
+        for part in parts
+        if not (
+            part.custom_merged_pos_invoice
+            and frappe.db.get_value("POS Invoice", part.custom_merged_pos_invoice, "invoice_printed")
+        )
+    ]
+
+
+def release_table_of_invoice(invoice_name, table):
+    """Free the table (and close self ordering on it) unless another part of the same split bill is still unprinted
+    on it. A bill that was not split frees it, as always. Returns True when the table was freed."""
+    if not table or unprinted_split_parts_on_table(invoice_name):
+        return False
+    release_merge_cluster_tables(table)
+    return True
+
+
 @frappe.whitelist()
 def release_tables_after_print(invoice):
 
@@ -1889,11 +1936,13 @@ def table_transfer(table, newTable, invoice):
         new_table.name,
         {"occupied": 1, "latest_invoice_time": table_seated_at(pos_invoice)},
     )
-    frappe.db.set_value(
-        "URY Table",
-        current_table.name,
-        {"occupied": 0, "latest_invoice_time": None, **self_order_close_fields()},
-    )
+    # another part of the split bill that is not printed yet stays at the old table: it is still taken
+    if not unprinted_split_parts_on_table(pos_invoice.name):
+        frappe.db.set_value(
+            "URY Table",
+            current_table.name,
+            {"occupied": 0, "latest_invoice_time": None, **self_order_close_fields()},
+        )
 
     pos_invoice.restaurant_table = new_table.name
     pos_invoice.custom_restaurant_room = new_table.restaurant_room
@@ -2068,9 +2117,20 @@ def cancel_order(invoice_id, reason):
     # which becomes an ordinary bill for its own amount again.
     unmerge_bill(pos_invoice)
 
-    # Release the full merge cluster, not only the primary table and CSV partners.
+    # The parts that were split off this bill must not point at a cancelled bill (ERPNext refuses to save a bill that
+    # links to a cancelled one, so they could take no more dishes): they take over the place of the bill in the group.
+    frappe.db.set_value(
+        "POS Invoice",
+        {"custom_split_from": pos_invoice.name, "docstatus": 0},
+        "custom_split_from",
+        pos_invoice.get("custom_split_from") or None,
+        update_modified=False,
+    )
+
+    # Release the full merge cluster, not only the primary table and CSV partners (not while another part of the
+    # split bill is still unprinted on the table: its guests are still there).
     if pos_invoice.restaurant_table:
-        release_merge_cluster_tables(pos_invoice.restaurant_table)
+        release_table_of_invoice(pos_invoice.name, pos_invoice.restaurant_table)
 
     try:
         cancel_kot(invoice_id)

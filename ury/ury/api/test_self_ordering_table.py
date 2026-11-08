@@ -1932,14 +1932,13 @@ class TestAfterABillIsSplitWhileTheGuestsAreOrdering(SelfOrderingCase):
 		self.split()
 		self.assertFalse(frappe.db.get_value("POS Invoice", self.sibling, "custom_ordering_session"))
 
-	def test_when_the_original_is_printed_and_paid_first_the_session_is_over_and_the_other_order_stays(self):
-		# printing a bill frees the table and closes it for the phones (also while the other part of the bill is
-		# not printed yet): the guests' session ends with "paid", the part that was split off stays a draft
+	def test_when_the_original_is_printed_and_paid_first_the_table_stays_and_the_session_follows(self):
+		# the other part is not printed yet: its guests are still there (test_split_table_release.py has the rest)
 		self.split()
 		pay_order(self.source, CASHIER)
-		self.assertFalse(table_row()["self_order_open"])
-		self.assertEqual(get_order_status(self.session)["order_state"], "paid")
-		self.refused("Table closed", self.order, self.session)
+		self.assertTrue(table_row()["self_order_open"])
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 1)
+		self.assertEqual(self.order(self.session)["invoice"], self.sibling)
 		self.assertEqual(frappe.db.get_value("POS Invoice", self.sibling, "docstatus"), 0)
 
 

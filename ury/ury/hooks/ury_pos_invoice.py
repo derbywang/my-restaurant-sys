@@ -7,6 +7,7 @@ from ury.ury.doctype.ury_order.ury_order import (
     _get_table_group,
     _has_open_pos_invoices_for_cluster,
     release_merge_cluster_tables,
+    release_table_of_invoice,
 )
 
 
@@ -160,7 +161,7 @@ def validate_invoice_print(doc, method):
 
 def table_status_delete(doc, method):
     if doc.restaurant_table:
-        release_merge_cluster_tables(doc.restaurant_table)
+        release_table_of_invoice(doc.name, doc.restaurant_table)
 
 
 def pos_invoice_naming(doc, method):

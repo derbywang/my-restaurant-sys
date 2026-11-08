@@ -397,9 +397,36 @@ def _resolve_session(session_token, require_open=True):
                         frappe.PermissionError,
                     )
 
+        _follow_the_open_part(session)
         _keep_alive(session)
 
     return session
+
+
+def _follow_the_open_part(session):
+    """A split bill (会計分割): when the order of this session can take no more dishes (its bill is printed, paid or
+    cancelled) and another part of the same split bill is still open on the table, the session goes on with that part
+    (phones and tablets alike). With no open part left the session ends as before."""
+    if not session.invoice or not session.table:
+        return
+    row = frappe.db.get_value(
+        "POS Invoice", session.invoice, ["docstatus", "invoice_printed", "custom_split_group"], as_dict=True
+    )
+    if not row or not row.custom_split_group:
+        return
+    if row.docstatus == 0 and not row.invoice_printed:
+        return  # it still takes dishes
+    parts = [
+        order
+        for order in _draft_orders_of_tables(_get_table_group(session.table), invoice_printed=0)
+        if order.custom_split_group == row.custom_split_group
+    ]
+    if not parts:
+        return
+    # the part that was not split off first, then the earliest: the same rule as for a session without an order
+    parts.sort(key=lambda order: (bool(order.custom_split_from), order.creation))
+    session.db_set("invoice", parts[0].name, update_modified=False)
+    session.invoice = parts[0].name
 
 
 # A page asks for the menu, the order and the total at the same moment, all with the same session. The session is
@@ -1369,7 +1396,7 @@ def _draft_orders_of_tables(tables, **filters):
         filters={"docstatus": 0, **filters},
         or_filters=[["restaurant_table", "in", tables]]
         + [["custom_merged_tables", "like", f"%{name}%"] for name in tables],
-        fields=["name", "restaurant_table", "custom_merged_tables", "custom_split_from", "creation"],
+        fields=["name", "restaurant_table", "custom_merged_tables", "custom_split_from", "custom_split_group", "creation"],
         order_by="creation asc",
     )
 

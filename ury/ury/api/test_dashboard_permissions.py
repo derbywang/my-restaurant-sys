@@ -25,6 +25,7 @@ from ury.ury.report_api.utils import require_manager
 
 ADMIN = "dash-admin@test.local"
 SYSTEM_MANAGER = "dash-sm@test.local"
+OTHER_APP_USER = "other-app-user@test.local"
 SENSITIVE = "dash-sensitive@test.local"
 
 # the dashboard page of the POS: every function it calls
@@ -288,6 +289,25 @@ class TestAdminAppData(DashboardCase):
 		self.assertIn(CASHIER, names)
 		captain = next(row for row in records if row["name"] == CAPTAIN)
 		self.assertIn("URY Captain", [r["role"] for r in captain["roles"]])
+
+	def test_the_staff_page_lists_accounts_with_a_ury_role_only(self):
+		make_user(OTHER_APP_USER, "Sales User")
+		self.addCleanup(lambda: frappe.delete_doc("User", OTHER_APP_USER, force=True, ignore_permissions=True))
+		for user in (MANAGER, ADMIN):
+			with self.subTest(user=user), as_user(user):
+				names = {row["name"] for row in dashboard.get_module_records("User", "all")}
+			self.assertTrue({CAPTAIN, CASHIER, MANAGER} <= names)
+			self.assertNotIn("Administrator", names)
+			self.assertNotIn("Guest", names)
+			self.assertNotIn(OTHER_APP_USER, names)
+
+	def test_administrator_does_not_see_himself_and_guest_on_the_staff_page(self):
+		# Administrator holds every URY role, so the role test alone would list him
+		with as_user("Administrator"):
+			names = {row["name"] for row in dashboard.get_module_records("User", "all")}
+		self.assertNotIn("Administrator", names)
+		self.assertNotIn("Guest", names)
+		self.assertIn(CASHIER, names)
 
 	def test_user_records_carry_no_secret(self):
 		make_user(SENSITIVE, "URY Cashier")

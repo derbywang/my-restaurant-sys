@@ -109,6 +109,15 @@ def get_module_records(doctype, branch=None):
 
     fields = [f for f in MODULE_RECORD_FIELDS[doctype] if f == "name" or meta.has_field(f)]
     # get_list: the permissions of the user still apply
+    if doctype == "User":
+        # the staff page lists the staff: accounts that hold a URY role. Not Administrator and Guest (Administrator
+        # holds every URY role; editing their roles or names there would only damage them: Frappe also refuses to
+        # disable them), and not accounts of other apps. The test is the role, not user_type: the captain and the
+        # cashier have no Desk, so they are Website Users.
+        staff = frappe.get_all(
+            "Has Role", filters={"parenttype": "User", "role": ("like", "URY %")}, pluck="parent", distinct=True
+        )
+        filters["name"] = ("in", [name for name in staff if name not in frappe.STANDARD_USERS] or [""])
     records = frappe.get_list(doctype, filters=filters, fields=fields, limit_page_length=0)
     if doctype == "User":
         for r in records:

@@ -186,9 +186,10 @@ def create_setup_user(email, name, password=None, role="URY Cashier"):
         "first_name": name,
         "enabled": 1,
         "send_welcome_email": 0,
-        "user_type": "System User",
         "roles": [{"role": role}]
     })
+    # no user_type: Frappe decides from the roles. The captain and the cashier have no Desk (Website User, they
+    # work in /pos); the manager has it (System User).
     user.insert(ignore_permissions=True)
     if password:
         from frappe.utils.password import update_password

@@ -93,6 +93,7 @@
   - **清掉之后**，再给 `frontend/` 的 `build` 脚本加 typecheck（`pos/` 已经是 `yarn typecheck && vite build`）。
 
 ## 部署与上线前待办
+- **「発行（設定用 QR）」弹窗里的两句英文没翻译（2026-11-08 实机验证发现）**：确认提示（"This makes a new credential: the tablet that has the old one stops working until it is set up again with the new link. Go on?"）和弹窗里的 "Shown once. Open it on the tablet, or scan the code with the tablet's camera."，界面其他部分是日语。补进 `ury/translations/ja.csv`（和其他 Desk 文字一起），先写测试固定"翻译存在"。
 - **店长重置本分店店员密码（以后的需求；2026-11-08 记）**：Desk 里 Manager 不再有 `User` 的写 / 新建权限（见上面的安全条目），营业中收银员忘了密码，开店时先由 URY Admin 或 System Manager 在 Desk 处理。如果要让店长能做，做一个受限的接口（只能重置本分店 Cashier / Captain 的密码，不能碰有 System Manager 或 URY Admin 角色的账号，写操作日志），不要靠放开 `User` 的写权限。
 - ~~**安全：服务员 / 收银员能在 Desk 里给自己加 System Manager**~~ **已修（2026-11-08）**（测试时发现）：`ury/role_permissions.py` 给 URY Captain 和 URY Cashier 的 `User` 写了权限级别 1 的**写**权限（第 38、78 行）。`roles`、`user_type`、`api_key` 在 Frappe 里正是级别 1 的字段，而用户总能保存自己的 User 文档，所以服务员 / 收银员可以在 `/app/user/<自己>` 或 `/api/resource/User/<自己>` 把 System Manager 加到自己身上。测试站点上的 `captain@test.local` 已因此（测试失败时）真的拿到了 System Manager。开发站点的 Custom DocPerm 同样是这个配置。另外怀疑：URY Manager / URY Admin 在 User 上有级别 0 的写权限，`new_password` 是级别 0 的字段，可能能重置别的账号（包括 System Manager）的密码；待用测试确认。修法：`ury/user_security.py` 的两个钩子（非 System Manager 碰不了 System Manager 的账号、给不了 System Manager / URY Admin）；Captain / Cashier 在 User 级别 1 只读；Manager 去掉 User、Role、Role Profile、Module Profile 的写和新建；URY Admin 的 Role、Role Profile、Module Profile 只读；补丁 `restrict_user_role_permissions`（测试站点和开发站点已 migrate）；测试 `test_user_security`（13 条，全部用专门建的账号、无论成败都清理）。开发站点用真实 HTTP 请求确认过：服务员加角色被丢弃，店长重置 System Manager 的密码得到 403。
 - **专用厨房角色 `URY Kitchen`（开店前做，排在取消单计时之后；2026-11-07 决定）**：现在没有专门的厨房角色，厨房屏幕要读写 `URY KOT`，只能借用 Captain（权限最小的现有选择）；这意味着厨房那台设备也能打开 `/pos/order` 点单，账号还可能出现在服务员列表里。开店后再换角色要重新建账号、改设备登录，所以开店前一次做好。步骤：① 先只读列出厨房屏幕（`mosaic`）调用的所有接口和各自需要的权限（已知：`ury_kot_display` 里的列表 / 上菜 / 确认接口、`URY Production Unit` 列表、`URY KOT` 计数、`frappe.auth.get_logged_user`、`User.full_name`）；② 给出最小权限方案（只够厨房屏幕使用，不能点单、收款、取消），**确认后**再先写测试、再改；③ 加进 `role.json`、`ury_kot.json`、`role_permissions.py` 和已有站点的补丁；④ 向导和 `/ury` 配置页的角色下拉加上这个角色，`create_setup_user` 的白名单同步；⑤ 评估创建账号时能否顺便把语言设为 `ja`（现在向导不设语言，新账号用站点的系统语言）。估计 0.5 天。
@@ -105,9 +106,10 @@
     2. `URY KOT` 有没有 Custom DocPerm（应为 0）；`ury_kot.json` 的权限与库里一致（尤其 Captain、Cashier、Manager 没有 `cancel`）；
     3. 关键角色权限：Captain 对 `POS Invoice` 无 `cancel`，Cashier / Manager / Admin 有（用 `frappe.permissions.has_permission` 或直接读 Custom DocPerm）；
     4. 缺厨房的菜（复用 `menu_items_without_kitchen`）；
-    5. 新列是否存在（`URY Table.self_order_open` 等，9.3 里已列）、未执行的补丁是否为 0；
-    6. 开发 / 正式差异项：`common_site_config` 的 `webserver_host`、`socketio_port`；Self Ordering Profile 的 `public_url`、默认顾客；URY User 的语言是否为日语；`Error Log` 里有没有未处理的 `KOT Error` / `URY Setup Error`；
-    7. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
+    5. 店员账号不应有 `Self Ordering Manager` 角色（它能给平板发行和删除设备，除非有意分配）；有桌上平板设备时 Profile 的「设备点餐」开关必须是 1；`qr_signing_secret` 字段是权限级别 1；
+    6. 新列是否存在（`URY Table.self_order_open` 等，9.3 里已列）、未执行的补丁是否为 0；
+    7. 开发 / 正式差异项：`common_site_config` 的 `webserver_host`、`socketio_port`；Self Ordering Profile 的 `public_url`、默认顾客；URY User 的语言是否为日语；`Error Log` 里有没有未处理的 `KOT Error` / `URY Setup Error`；
+    8. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
   - **`ury.install.after_install` 的 `try/except`**：现在出错只 `print("Error during installation")` 然后 `pass`，安装照样算成功，权限写到一半、后面的日本税制 / 货币 / 语言设置没做都不会报错。建议至少把**完整的错误（traceback）写进 Error Log**（标题 `URY Setup Error`，和 `add_roles_to_administrator` 一致），并把失败的步骤记下；更好的做法是**每一步单独 `try/except`**，一步失败不影响后面的步骤，最后汇总打印并 `raise` 让安装明确失败（或让 `deploy_check` 能发现缺了哪一步）。注意：已有站点已装好，不会重新跑，改动只影响新站点。
   - **工作量**：检查命令约 0.5 天（逻辑简单，要写测试：每项都有一条通过和一条不合格的用例，用测试站点的事务内改动构造）；`after_install` 分步和写 Error Log 约 0.25 天（要在一个临时站点上实际装一次验证，可用 `ury-wizard.localhost` 以外的新临时站点）。
   - **建议时机**：开店前做检查命令（必须在店内正式服务器搭建之前完成，见 `launch-plan.md`），三友寿司正式服务器部署时就能用上，并把 9.3 里能自动检查的几项改成"运行该命令，结果必须为空"；`after_install` 的改动同时做，卖给其他店之前必须有。开店前只修 bug 的窗口从 12/4 起，所以最好在 11 月内完成。

@@ -46,3 +46,9 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
 - **厨房单（KOT）与桌子占用**：改了 `ury_kot_generate.py`（取消 KOT / 加菜 KOT）或 `sync_order` 里桌子占用的条件（只有堂食订单或外带桌 `is_take_away=1` 才占桌）后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_cancel_kot`、`--module ury.ury.api.test_kot_compare`（加菜 / 减菜时发给厨房的差额，含同一道菜在两行）、`--module ury.ury.api.test_take_away_table`、`--module ury.ury.api.test_sync_order_update`，以及 `test_merged_bill`（取消合算单会生成取消 KOT）。POS 的订单标签页和桌号规则（`pos/src/lib/order-tabs.ts`、`pos-store.ts`）改了之后运行 `cd pos && yarn test`。
 - **拆单（会計分割）**：改了 `split_bill` 后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_split_bill`。
 - **取消单 / 减菜的厨房单**（`ury_kot_generate.py` 的 `process_items_for_cancel_kot` / `kitchen_ledger`，`cancel_kot`）：取消单只取消厨房实际收到过的、发给当初收到的生产单位，拆单组共用一本账。改了之后运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_cancel_kot_ledger` 和 `--module ury.ury.api.test_cancel_kot`，再加 `test_kot_compare`、`test_sync_order_update`、`test_split_bill`、`test_merged_bill`。
+
+## 开发规则：GET 请求里写数据库
+- **Frappe 在 GET 请求结束时会回滚数据库写入**（`frappe/app.py` 的 `sync_database`：只有 POST 等"不安全方法"或设了 `frappe.local.flags.commit` 才提交）。所以**前端用 GET 调用的接口，如果会写库（包括经由 `_keep_alive`、`_find_device` 这类辅助函数），必须在写完后显式 `frappe.db.commit()`**（`_open_session` 就是这样），否则写入会被悄悄丢掉，而且在进程内调用函数的测试看不出来。
+- **这类写入的测试必须走真实 HTTP**（对运行中的服务器，参照 `test_ordering_device.py` 的 `TestOverHttp` 和 `test_self_ordering_table.py` 的 `TestOverHttpWhatAGetWrites`）：GET 之后 `frappe.db.rollback()` 再读，确认值被保存。2026-11 因此发现了两处：平板的 `last_seen` 和顾客页的会话续期。
+- 改变状态的接口前端一律用 `call.post`（会自动提交）。
+- **字段名不要含 `_seen`、`_assign`、`_liked_by`、`_user_tags`、`_comments`**：Frappe 的 `set_optional_columns`（`frappe/model/db_query.py`）用**子串**匹配，表里没有这一列时，这样的字段会在 `get_list` / `get_all` / Desk 列表和报表里被悄悄丢掉（`last_seen` 因此在设备列表里一直是空的）。说明和复现见 `docs/frappe-optional-columns.md`；`test_field_names` 会检查；升级 Frappe 时按那份文档核对是否已修复。

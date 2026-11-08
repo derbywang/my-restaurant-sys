@@ -109,7 +109,8 @@
     5. 店员账号不应有 `Self Ordering Manager` 角色（它能给平板发行和删除设备，除非有意分配）；有桌上平板设备时 Profile 的「设备点餐」开关必须是 1；`qr_signing_secret` 字段是权限级别 1；
     6. 新列是否存在（`URY Table.self_order_open` 等，9.3 里已列）、未执行的补丁是否为 0；
     7. 开发 / 正式差异项：`common_site_config` 的 `webserver_host`、`socketio_port`；Self Ordering Profile 的 `public_url`、默认顾客；URY User 的语言是否为日语；`Error Log` 里有没有未处理的 `KOT Error` / `URY Setup Error`；
-    8. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
+    8. **每个有 URY 角色的店员账号必须在某个 Branch 的 user 表里**（已做：`ury/ury/api/deploy_check.py` 的 `staff_in_a_branch`，`bench --site <站点> execute ury.ury.api.deploy_check.run`；否则收不到 KOT 出错提醒和厨房屏幕更新，且不会报错）；
+    9. 不能自动检查的（nginx 转发 `/socket.io`、公网访问被拦截、QZ Tray 实机）仍留在 9.4 的人工清单。
   - **`ury.install.after_install` 的 `try/except`**：现在出错只 `print("Error during installation")` 然后 `pass`，安装照样算成功，权限写到一半、后面的日本税制 / 货币 / 语言设置没做都不会报错。建议至少把**完整的错误（traceback）写进 Error Log**（标题 `URY Setup Error`，和 `add_roles_to_administrator` 一致），并把失败的步骤记下；更好的做法是**每一步单独 `try/except`**，一步失败不影响后面的步骤，最后汇总打印并 `raise` 让安装明确失败（或让 `deploy_check` 能发现缺了哪一步）。注意：已有站点已装好，不会重新跑，改动只影响新站点。
   - **工作量**：检查命令约 0.5 天（逻辑简单，要写测试：每项都有一条通过和一条不合格的用例，用测试站点的事务内改动构造）；`after_install` 分步和写 Error Log 约 0.25 天（要在一个临时站点上实际装一次验证，可用 `ury-wizard.localhost` 以外的新临时站点）。
   - **建议时机**：开店前做检查命令（必须在店内正式服务器搭建之前完成，见 `launch-plan.md`），三友寿司正式服务器部署时就能用上，并把 9.3 里能自动检查的几项改成"运行该命令，结果必须为空"；`after_install` 的改动同时做，卖给其他店之前必须有。开店前只修 bug 的窗口从 12/4 起，所以最好在 11 月内完成。
@@ -119,3 +120,4 @@
 - **socket 认证回调地址（正式环境）**：Socket.IO 服务器认证时会回调 web 服务器，地址取自 `webserver_host`/`webserver_port`，没有配置时取浏览器请求头的 `Origin`（站点域名），容器内可能解析不了。开发容器已设置 `webserver_host = 127.0.0.1`（`bench set-config -g webserver_host 127.0.0.1`，否则 `Unauthorized: getaddrinfo ENOTFOUND ury.localhost`）。正式环境（frappe_docker 生产配置）要确认这个回调地址可用，部署后验证 `/pos` 和厨房屏幕的 socket 能连上且认证通过：控制台出现 `Socket connected: true`，没有 `Unauthorized`。
 - **代码与 migrate 的先后（小票模板等写进数据库的内容）**：小票格式 `URY JP Receipt` 等内容由 `bench migrate`（`after_migrate`）写进站点数据库，代码更新和 migrate 之间有时间差，就会出现新代码配旧模板（或反过来），旧模板直接打印缺失字段会把 `{{ no such element ... }}` 印在小票上。部署时要保证两者一致：先停止接单或进入维护模式（`bench set-config maintenance_mode 1`），更新代码、执行 `bench migrate`，再恢复；frappe_docker 里让新容器启动前先跑 `migrate`（一次性任务）再切换流量，滚动更新时不要让旧容器和新数据库长时间并存。部署后在 POS 里印一张测试小票确认。代码侧已做兜底（`ReceiptData` 缺失字段按空打印），但新旧模板排版不同，仍要避免长时间不一致。
 - **清理调试输出**：`/pos` 控制台有调试输出 “limitedProfile Object”（`console.log`）。正式版前要清理掉多余的 `console.log`（`pos/`、`frontend/`、`mosaic/`、`self-order/` 各查一遍）。
+- **`URY Kitchen` 角色（待做）要按"不进 Desk"设计**（2026-11-08 决定）：`desk_access = 0`、`home_page` 指向厨房屏幕（`/mosaic/...`），账号因此是 Website User；它只需要 URY KOT 等厨房用到的 DocType 权限，不要给 Desk 权限，也不要依赖 Frappe 自动给 System User 的 "Desk User" 角色。**注意实时推送**：Website User 收不到发往全站（`all` 房间）的推送，厨房屏幕的 `kot_update_*` 要先解决（见 `report-permissions.md` 的"实时推送与 Website User"），否则这个角色上线后厨房屏幕不更新。

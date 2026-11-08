@@ -43,6 +43,17 @@
 - 要改的地方（如果做）：`fixtures/role.json`（两个角色的 `desk_access`）、`business_setup.py` 创建账号时写死的 `"user_type": "System User"`、一个补丁（改角色、`home_page`，并把只有这两个角色的现有账号重新保存）、数据包里的账号格式；经理和管理员仍保留 Desk。
 - 动作菜单里的"Export""Make Merge Log"是 Frappe / ERPNext 列表菜单不看权限就显示的项，服务器端都会拒绝；不进 Desk 就看不到，因此决定做 desk_access 时不再需要隐藏它们的脚本。
 
+## 实时推送与 Website User（2026-11-08 实测，测试站点）
+- Frappe 的 Socket.IO 服务（`apps/frappe/realtime/handlers/frappe_handlers.js`）：每个连接都加入 `user:<自己>` 和 `website` 房间；**只有 System User 才加入 `all` 房间**。`publish_realtime` 不指定 room / user / doctype 时发往 `all`。
+- ury 里所有 `publish_realtime`（`kot_error_*`、`no_kitchen`、自助点餐失败、`kot_update_*`、`pos_invoice_updated`、`reload_ro`、`print_<分店>`）都没有指定 room 或 user，因此都发往 `all`。
+- 真实连接实测（Website User 的 cashier 与 System User 的 manager 同时连 9000 端口，服务端走真实的 Python 发布 → Redis → socketio）：manager 收到全部事件；**cashier 一个 URY 事件也没收到**，只收到发给自己（`user=`）和 `website` 房间的事件。
+- 结论：收银端的 KOT 出错提醒（`KotAlertListener`）和厨房屏幕的更新（`kot_update_*`，厨房账号如果也是 Website User）在 desk_access 去掉后会失效。桌子状态没有实时推送（POS 不靠推送更新桌子），不受影响。
+- **修法（已做）**：`ury/ury/api/branch_realtime.py` 的 `publish_to_branch(event, message, branch, after_commit=False)`：对分店 Branch 的 user 表里每个启用的账号（去重）分别 `publish_realtime(..., user=账号)`（每个用户都在自己的 `user:<名字>` 房间里）。事件名和内容不变，前端和厨房屏幕不用改。ury 里所有发往 `all` 的推送（`kot_error_*`、`no_kitchen`、自助点餐失败、`kot_update_*`、换桌、`pos_invoice_updated`、`reload_ro`、`print_<分店>`）都换成了它；没有分店时只发给当前用户，不会发给所有人。`ury_configure_progress`（向导）原本就是 `user=`。
+- **规则**：新增推送一律用 `publish_to_branch`（或自己写 `user=` / `room=`）；测试 `test_realtime_reach.TestNothingIsBroadcast` 用语法树检查，ury 里不允许出现不带 `user=` / `room=` 的 `frappe.publish_realtime`。
+- **前提**：账号必须在某个 Branch 的 user 表里，否则收不到（它也用不了那家分店的 POS）。`deploy_check` 的 `staff_in_a_branch` 检查这一点。以后的厨房屏幕账号（`URY Kitchen`）也要加进 Branch 的 user 表。
+- **测试**：`test_realtime_reach` 用真实连接（node 客户端以各账号登录，真实的服务器 → Redis → socketio）：Website User 的收银员收得到 `no_kitchen`、自助点餐失败；在表里的店长收得到；不在分店的账号一个也收不到；Website User 的厨房账号收得到真实下单产生的 `kot_update_*`。服务器没开时自动跳过；测试结束删除它产生的登录会话、活动日志，并还原 last_login。
+
+
 ## 部署检查（`deploy_check` 里要加的一项）
 - **只有 URY Manager、URY Admin、System Manager 对 URY Report Settings 有 `read`**（查 DocPerm 和 Custom DocPerm，出现其他角色就列出来）。
 - **URY Captain、URY Cashier 在任何 DocType 上都没有 `export`**（有效权限：Custom DocPerm 有就看 Custom，没有看标准 DocPerm；和守门测试同一个算法，出现就列出 DocType）。

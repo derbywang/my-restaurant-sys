@@ -140,8 +140,16 @@ class TestSigning(QzCase):
 		for user in (CASHIER, MANAGER, CAPTAIN, "Administrator"):
 			self.assertTrue(self.sign(user), user)
 
+	@staticmethod
+	def _remove_user(user):
+		# saving a user commits: the rollback of the class does not remove it
+		if frappe.db.exists("User", user):
+			frappe.delete_doc("User", user, force=True, ignore_permissions=True)
+		frappe.db.commit()
+
 	def test_a_user_who_may_not_print_a_bill_may_not(self):
 		user = "noprint@test.local"
+		self.addCleanup(self._remove_user, user)
 		if not frappe.db.exists("User", user):
 			frappe.get_doc(
 				{"doctype": "User", "email": user, "first_name": "No Print", "send_welcome_email": 0, "roles": []}

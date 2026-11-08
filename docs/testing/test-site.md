@@ -82,3 +82,12 @@ bench --site ury-test.localhost run-tests --app ury
 
 - 运行测试会触发 `before_tests`，**每次都会删除测试站点的全部 Item Price**；`URYTestCase` 的 `setUpClass` 会重新生成。测试全部运行完之后菜单价格可能是空的，再执行一次 `setup_test_site` 即可恢复（幂等）。
 - 其余的初始化数据不会被测试破坏：全部套件运行之后再对比数据快照，只有 Item Price 不同；重新初始化后 Default Menu 的价格恢复，只有 ERPNext 创建商品时自动生成的 Standard Selling 价格不会恢复（URY 不使用它）。
+
+## 防止测试改动站点的角色、账号和权限（`ury/setup/test_guard.py`）
+
+保存 User / Role、改权限都可能提交，类末尾的回滚不一定能撤销。2026-11 有三次测试悄悄改了测试站点的真实角色和账号，所以 `URYTestCase` 内置了两道防护：
+
+- **自动备份**：一次测试运行里第一个测试类开始时，如果最近 30 分钟内没有备份（按文件修改时间判断；Frappe 自带的判断把日本时间当成 UTC，会一直认为没有）就备份一次（只备份数据库和配置，不含文件）。自动备份记在 `sites/<站点>/private/backups/auto-test-backups.json`，**只保留最近 10 份**，更早的自动删除；手动备份（`bench backup`）不在清单里，永远不删。
+- **前后对比**：每个测试类开始前取一次快照，类的清理全部结束后再取一次：Role（`desk_access`、`disabled`、`home_page`、`is_custom`）、User（`user_type`、`enabled`、`language`）、用户的 Has Role、Custom DocPerm 和 DocPerm 的全部行（忽略名称和时间戳）。不一致就让这个类报错，并逐行列出差异（`changed the roles, accounts or permissions of the test site`）。它只检测，不自动恢复：按报错的清单手工还原，或用运行前的自动备份。登录时间（`last_login` 等）和 `modified` 不算差异。
+- 会改角色 / 权限 / 账号的测试，必须在 `addCleanup` / `addClassCleanup` 里还原（还原要自己提交）；测试本身见 `ury.setup.test_site_guard`。
+- 用真实 Socket.IO 连接的测试（`ury.ury.api.test_realtime_reach`）需要 web 服务器（8000）和 socketio（9000）在运行，否则跳过；它登录产生的会话和活动日志在测试结束时删除。

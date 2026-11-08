@@ -577,6 +577,12 @@ class URYTestCase(FrappeTestCase):
         require_test_site()
         super().setUpClass()
         ensure_prices()
+        # a backup before the run, and the roles / accounts / permissions must be the same when the class is done
+        # (registered first, so it runs last: after the clean-ups of the class itself). See test_guard.py.
+        from ury.setup.test_guard import access_snapshot, check_unchanged, ensure_recent_backup
+
+        ensure_recent_backup()
+        cls.addClassCleanup(check_unchanged, cls.__name__, access_snapshot())
 
 
 class URYFlowTestCase(URYTestCase):

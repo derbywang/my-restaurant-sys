@@ -1549,6 +1549,19 @@ def submit_checklist(pos_profile, checklist_type, items, pos_opening_entry=None)
     }
 
 
+def _close_self_ordering_of_bills(*invoices):
+    from ury.ury.doctype.ury_order.ury_order import _get_table_group, self_order_close_fields
+
+    fields = self_order_close_fields()
+    if not fields:
+        return
+    for invoice in invoices:
+        if not invoice.restaurant_table:
+            continue
+        for table in _get_table_group(invoice.restaurant_table, invoice.custom_merged_tables):
+            frappe.db.set_value("URY Table", table, fields, update_modified=False)
+
+
 @frappe.whitelist()
 
 def merge_bills(primary_invoice, secondary_invoice):
@@ -1653,6 +1666,9 @@ def merge_bills(primary_invoice, secondary_invoice):
 
         update_merge_details(secondary_doc.name,primary_doc,)
 
+        # The guests are going to pay together: the tables of both bills stop taking orders from the phones
+        # (a guest who wants more asks the staff, who add it in the POS). Tables put together are not touched.
+        _close_self_ordering_of_bills(primary_doc, secondary_doc)
 
         frappe.db.commit()
 

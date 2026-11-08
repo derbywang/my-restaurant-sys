@@ -499,6 +499,13 @@
 | 11 | **员工能分辨顾客订单** | 订单页、桌卡片上带「セルフ」标记（来自 `custom_order_source`）；POS 的订单列表接口返回该字段（自助机未付款列表本来就需要它，3.10） | 订单列表里有来源 | 3 |
 | 12 | **Administrator 提升权限留下的痕迹**：自助点餐的保存、`modified_by` 是 Administrator | 不处理（审计上分得出来：有 `custom_ordering_session`） | — | 不做 |
 
+**第 5 项、第 6 项、第 7 项、第 9 项的决定（2026-11-08）**
+
+- 第 5 项：**转台**早已关闭旧桌（测试 `test_when_the_order_moves_to_another_table`）。**会計合算（`merge_bills`）现在也会关闭涉及的所有桌的自助点餐**（`_close_self_ordering_of_bills`，含各桌的合桌组）：合算后顾客想加菜就找服务员，由服务员在 POS 上加；顾客页显示「ご注文の受付は終了しました：お会計中などのため…スタッフにお声がけください」，不是错误。**合桌（几张桌当一桌坐）不关**，顾客还在用餐。没有桌的外带单合算不受影响。测试：`test_self_ordering_table.py::TestWhenBillsAreMerged`。
+- 第 6 项：**不修，只加测试固定。** 开店时自助点餐只有桌上平板和桌上二维码（都是堂食），店内和外带价格相同。**已知限制：`_customer_menu` 用 `cashier=False` 调 `resolve_restaurant_menu`，该函数在这种情况下只看 `active_menu`，URY Restaurant 的 `order_type_wise_menu`（按订单类型选菜单）对自助点餐不生效。以后如果自助点餐要支持外带，或要按订单类型给不同菜单，必须先修这一处**（菜单查询 `get_customer_menu` 和下单校验 `_clean_items` 都经过 `_customer_menu`，修一处两边一致）。测试：`TestTheMenuOfTheGuests`。
+- 第 7 项：不做。账单打印时桌台关闭、打印后加菜被拒、`expected_total` 都已有测试；账单没打印、合算后顾客加菜的缝隙由第 5 项闭合。
+- 第 9 项：只补测试（`TestWhenTheStaffAndTheGuestSaveTogether`）：顾客加菜后，服务员用旧的 `last_modified_time` 保存被拒且不丢菜；重新加载后保存成功，顾客的菜还在。
+
 **员工打开订单的规则（2026-11 门店决定；取代以前的“服务员只能打开自己的单”，上表第 2 项的“顾客订单对全员可见”是它的特例）**
 
 - 订单没有“所有者”要保护：同一分店的每位服务员都能打开该分店任何一桌的未结订单，加菜、写备注；服务员 A 点的单，服务员 B 能接手。

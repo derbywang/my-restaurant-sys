@@ -42,9 +42,11 @@ from ury.ury.api.self_ordering import (
 	get_order_status,
 	get_ordering_context,
 	open_table_for_ordering,
+	_customer_menu,
 	preview_customer_cart,
 )
 from ury.ury.doctype.ury_order.ury_order import cancel_order, table_transfer
+from ury.ury_pos.api import merge_bills
 
 PROFILE = "SELF-ORDER-TEST"
 TABLE = TABLES[0]
@@ -1736,3 +1738,119 @@ class TestTheAgeGroupOfExistingProfiles(SelfOrderingCase):
 		age_check_item_groups.execute()
 		age_check_item_groups.execute()
 		self.assertEqual(self._rows(), [ALCOHOL_GROUP])
+
+
+class TestWhenBillsAreMerged(SelfOrderingCase):
+	"""会計合算 (`merge_bills`): the guests are going to pay together, so the tables of both bills stop taking
+	orders from the phones (a guest who wants more asks the staff, who add it in the POS). Putting tables together
+	(合桌) does not: the guests still sit there."""
+
+	def setUp(self):
+		super().setUp()
+		self.staff_open(TABLE)
+		self.staff_open(OTHER_TABLE)
+		self.first_session, self.second_session = self.scan(TABLE), self.scan(OTHER_TABLE)
+		self.first = self.order(self.first_session)["invoice"]
+		self.second = self.order(self.second_session)["invoice"]
+
+	def merge(self):
+		with as_user(CASHIER):
+			result = merge_bills(self.first, self.second)
+		self.assertEqual(result["status"], "success", result)
+
+	def test_both_tables_are_closed(self):
+		self.merge()
+		self.assertFalse(table_row(TABLE)["self_order_open"])
+		self.assertFalse(table_row(OTHER_TABLE)["self_order_open"])
+
+	def test_the_guests_of_both_tables_cannot_order_any_more(self):
+		self.merge()
+		self.refused("Table closed", self.order, self.first_session)
+		self.refused("Table closed", self.order, self.second_session)
+		self.assertEqual(frappe.db.count("POS Invoice Item", {"parent": self.first}), 1)
+		self.assertEqual(frappe.db.count("POS Invoice Item", {"parent": self.second}), 1)
+
+	def test_the_guests_can_still_see_their_order(self):
+		self.merge()
+		self.assertEqual(len(get_customer_order(self.first_session)["items"]), 1)
+		self.assertTrue(get_order_status(self.first_session)["invoice"])
+
+	def test_the_status_says_the_table_is_closed(self):
+		self.merge()
+		self.assertFalse(get_order_status(self.first_session)["table_open"])
+
+	def test_a_table_that_was_not_merged_stays_open(self):
+		self.staff_open(TABLES[2])
+		self.merge()
+		self.assertTrue(table_row(TABLES[2])["self_order_open"])
+
+	def test_the_staff_can_still_add_dishes_in_the_pos(self):
+		self.merge()
+		place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=TABLE, invoice=self.first)
+		self.assertEqual(frappe.db.count("POS Invoice Item", {"parent": self.first}), 2)
+
+	def test_the_table_can_be_opened_again_for_the_next_guests_after_it_is_free(self):
+		self.merge()
+		self.staff_close(TABLE)
+		self.assertFalse(table_row(TABLE)["self_order_open"])
+
+	def test_a_failed_merge_closes_nothing(self):
+		with as_user(CASHIER):
+			result = merge_bills(self.first, self.first)
+		self.assertEqual(result["status"], "error")
+		self.assertTrue(table_row(TABLE)["self_order_open"])
+		self.assertTrue(table_row(OTHER_TABLE)["self_order_open"])
+
+	def test_bills_without_a_table_can_still_be_merged(self):
+		a = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")
+		b = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")
+		with as_user(CASHIER):
+			self.assertEqual(merge_bills(a, b)["status"], "success")
+		self.assertTrue(table_row(TABLE)["self_order_open"])
+
+
+class TestWhenTheStaffAndTheGuestSaveTogether(SelfOrderingCase):
+	"""The guest added a dish after the waiter opened the order: the waiter's save is refused ('Order has been
+	modified'), the POS reloads, and the guest's dish is still there."""
+
+	def setUp(self):
+		super().setUp()
+		self.staff_open()
+		self.session = self.scan()
+		self.invoice = self.order(self.session)["invoice"]
+
+	def rows(self):
+		return frappe.get_all("POS Invoice Item", filters={"parent": self.invoice}, pluck="item_code", order_by="idx")
+
+	def test_a_save_with_the_time_before_the_guests_dish_is_refused_and_loses_nothing(self):
+		seen = frappe.db.get_value("POS Invoice", self.invoice, "modified")
+		frappe.db.set_value("POS Invoice", self.invoice, "modified", add_to_date(seen, seconds=-5), update_modified=False)
+		seen = frappe.db.get_value("POS Invoice", self.invoice, "modified")  # what the waiter's screen shows
+		self.order(self.session)  # the guest adds a dish: the order changes
+		self.assertNotEqual(frappe.db.get_value("POS Invoice", self.invoice, "modified"), seen)
+		with self.assertRaises(frappe.ValidationError):
+			place_order(CAPTAIN, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=TABLE, invoice=self.invoice, last_modified_time=seen)
+		self.assertEqual(self.rows(), [FOOD_ITEM, FOOD_ITEM])
+
+	def test_after_the_reload_the_waiters_save_goes_through_with_the_guests_dish(self):
+		self.order(self.session)
+		modified = frappe.db.get_value("POS Invoice", self.invoice, "modified")  # what a reload shows
+		place_order(CAPTAIN, [(FOOD_ITEM, 2), (ALCOHOL_ITEM, 1)], table=TABLE, invoice=self.invoice, last_modified_time=modified)
+		quantity = dict(frappe.db.sql(
+			"select item_code, sum(qty) from `tabPOS Invoice Item` where parent=%s group by item_code", self.invoice
+		))
+		self.assertEqual({k: float(v) for k, v in quantity.items()}, {FOOD_ITEM: 2.0, ALCOHOL_ITEM: 1.0})
+
+
+class TestTheMenuOfTheGuests(SelfOrderingCase):
+	"""The guests are shown the active menu of the restaurant, for a table (Dine In) and for a pickup (Take Away)
+	alike: `_customer_menu` asks `resolve_restaurant_menu` with `cashier=False`, which never looks at
+	「按订单类型选菜单」 (`order_type_wise_menu`). The shop has it off. If self ordering ever offers pickup or a
+	menu of its own per order type, this has to be fixed first (docs/design/self-order-design.md, 5.1 item 6)."""
+
+	def test_with_the_switch_off_the_active_menu_is_used(self):
+		frappe.db.set_value("URY Restaurant", RESTAURANT, "order_type_wise_menu", 0)
+		active = frappe.db.get_value("URY Restaurant", RESTAURANT, "active_menu")
+		profile = frappe.get_doc("URY Self Ordering Profile", PROFILE)
+		for order_type in ("Dine In", "Take Away"):
+			self.assertEqual(_customer_menu(profile, order_type)["name"], active, order_type)

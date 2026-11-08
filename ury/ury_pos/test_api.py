@@ -159,7 +159,10 @@ class TestMergeBillsSEC07(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["name"], "INV-01")
         mock_commit.assert_called_once()
-        self.assertEqual(mock_set_value.call_count, 2)
+        # the two references between the bills; the tables of the bills are closed for self ordering besides
+        references = [c for c in mock_set_value.call_args_list if c.args[0] == "POS Invoice"]
+        self.assertEqual(len(references), 2)
+        self.assertTrue(all(c.args[0] in ("POS Invoice", "URY Table") for c in mock_set_value.call_args_list))
         mock_primary.save.assert_called_once_with(ignore_version=True)
         mock_secondary.save.assert_called_once_with(ignore_version=True)
 

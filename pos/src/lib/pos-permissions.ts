@@ -6,6 +6,8 @@ export interface PosPermissions {
   take_orders: boolean;
   print_bill: boolean;
   settle_payment: boolean;
+  /** The dashboard with the day's sales (whoever may settle a bill: cashier, manager; not a waiter). */
+  view_dashboard: boolean;
   cancel_order: boolean;
   apply_discount: boolean;
   merge_bills: boolean;
@@ -21,6 +23,7 @@ export const NO_PERMISSIONS: PosPermissions = {
   take_orders: false,
   print_bill: false,
   settle_payment: false,
+  view_dashboard: false,
   cancel_order: false,
   apply_discount: false,
   merge_bills: false,
@@ -53,6 +56,11 @@ export function isWaiterOnly(permissions: PosPermissions | null): boolean {
       !permissions.open_shift &&
       !permissions.close_shift
   );
+}
+
+/** The dashboard page (sales figures): only when the server says so. Not yet known (null) is a no. */
+export function canViewDashboard(permissions: PosPermissions | null): boolean {
+  return Boolean(permissions?.view_dashboard);
 }
 
 /** The menu of the register offers the waiter screen to everyone who takes orders there (a cashier, a manager). */

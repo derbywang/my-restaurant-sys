@@ -107,6 +107,7 @@
     "not_closed_title": "上一班次尚未交班",
     "not_closed_message": "请先完成上一班次的交班后再继续",
     "reload_page": "重新加载页面",
+    "permissions_unavailable": "无法加载权限，请刷新页面。",
     "switch_to_desk": "切换到后台",
     "opening": {
       "title": "开班",

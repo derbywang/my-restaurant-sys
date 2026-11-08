@@ -5,6 +5,7 @@ import Orders from './pages/Orders';
 import POS from './pages/POS';
 import Table from './pages/Table';
 import Dashboard from './pages/Dashboard';
+import DashboardGuard from './components/DashboardGuard';
 import Settings from './pages/Settings';
 import AuthGuard from './components/AuthGuard';
 import POSOpeningProvider from './components/POSOpeningProvider';
@@ -44,7 +45,7 @@ function App() {
               <Routes>
                 <Route element={<AppLayout />}>
                   <Route index element={<HomeRedirect />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/dashboard" element={<DashboardGuard><Dashboard /></DashboardGuard>} />
                   <Route path="/pos" element={<POS />} />
                   <Route path="/tables" element={<Table />} />
                   <Route path="/orders" element={<Orders />} />

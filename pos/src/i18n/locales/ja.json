@@ -107,6 +107,7 @@
     "not_closed_title": "前回のレジが締められていません",
     "not_closed_message": "続けるには前回のレジ締めを行ってください",
     "reload_page": "ページを再読み込み",
+    "permissions_unavailable": "権限を読み込めませんでした。ページを再読み込みしてください。",
     "switch_to_desk": "管理画面へ切替",
     "opening": {
       "title": "レジ開け",

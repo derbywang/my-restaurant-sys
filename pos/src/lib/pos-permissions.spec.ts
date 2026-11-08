@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_PERMISSIONS,
   canShowDiscount,
+  canViewDashboard,
   friendlyError,
   isWaiterOnly,
   showsWaiterScreenLink,
@@ -13,6 +14,7 @@ const CASHIER = {
   take_orders: true,
   print_bill: true,
   settle_payment: true,
+  view_dashboard: true,
   cancel_order: true,
   apply_discount: true,
   merge_bills: true,
@@ -100,5 +102,21 @@ describe('the waiter screen', () => {
   it('is offered in the menu to those who work at the register too, not to the waiter who is there already', () => {
     expect(showsWaiterScreenLink(cashier)).toBe(true);
     expect(showsWaiterScreenLink(waiter)).toBe(false);
+  });
+});
+
+describe('the dashboard page', () => {
+  it('is shown only when the server says the user may see the sales', () => {
+    expect(canViewDashboard({ ...NO_PERMISSIONS, view_dashboard: true })).toBe(true);
+    expect(canViewDashboard({ ...NO_PERMISSIONS, take_orders: true, print_bill: true })).toBe(false); // a waiter
+    expect(canViewDashboard(NO_PERMISSIONS)).toBe(false);
+  });
+
+  it('is not shown while the permissions are not known', () => {
+    expect(canViewDashboard(null)).toBe(false);
+  });
+
+  it('is a no when the answer lacks the key (an old server)', () => {
+    expect(normalizePermissions({ take_orders: true, settle_payment: true }).view_dashboard).toBe(false);
   });
 });

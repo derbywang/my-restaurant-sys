@@ -107,6 +107,7 @@
     "not_closed_title": "이전 POS가 마감되지 않았습니다",
     "not_closed_message": "계속하려면 이전 POS를 마감해 주세요",
     "reload_page": "페이지 새로고침",
+    "permissions_unavailable": "권한을 불러오지 못했습니다. 페이지를 새로고침하세요.",
     "switch_to_desk": "관리 화면으로 전환",
     "opening": {
       "title": "POS 개점",

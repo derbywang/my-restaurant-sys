@@ -7,6 +7,7 @@ import { Switch } from '../../components/ui/switch';
 import { dashboardService } from '../../services/dashboard';
 import { call } from '@ury/core';
 import SideDrawer from '../../components/layout/SideDrawer';
+import { answerIsYes } from '../../utils/permission';
 
 interface UserRecord {
   name: string;
@@ -26,6 +27,9 @@ export const UserPage: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
+  // what the server allows this user to do with User records; hidden until the answer is a yes
+  const [canCreateUser, setCanCreateUser] = useState<boolean>(false);
+  const [canEditUser, setCanEditUser] = useState<boolean>(false);
 
   const [newUser, setNewUser] = useState({
     first_name: '',
@@ -66,6 +70,18 @@ export const UserPage: React.FC = () => {
     fetchUsers();
     fetchRoles();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const ask = async (permType: string, set: (value: boolean) => void) => {
+      try {
+        set(answerIsYes(await call('frappe.client.has_permission', { doctype: 'User', perm_type: permType })));
+      } catch {
+        set(false);
+      }
+    };
+    ask('create', setCanCreateUser);
+    ask('write', setCanEditUser);
+  }, []);
 
   const getDisplayRole = (user: UserRecord): string => {
     if (user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
@@ -209,16 +225,18 @@ export const UserPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Toolbar — no title, partition style */}
-      <div className="flex flex-col md:flex-row items-center justify-end gap-4 pb-3 border-b border-gray-200 -mx-6 px-6 -mt-6 pt-6">
-        <Button
-          onClick={openAddDrawer}
-          className="bg-primary hover:bg-primary/90 text-white font-semibold flex items-center space-x-1.5 shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add User</span>
-        </Button>
-      </div>
+      {/* Toolbar — no title, partition style. Adding users is for those who may create a User. */}
+      {canCreateUser && (
+        <div className="flex flex-col md:flex-row items-center justify-end gap-4 pb-3 border-b border-gray-200 -mx-6 px-6 -mt-6 pt-6">
+          <Button
+            onClick={openAddDrawer}
+            className="bg-primary hover:bg-primary/90 text-white font-semibold flex items-center space-x-1.5 shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add User</span>
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-16 flex items-center justify-center bg-white rounded-lg border border-gray-200">
@@ -231,15 +249,17 @@ export const UserPage: React.FC = () => {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-1">No Users Configured</h3>
           <p className="text-gray-500 mb-6 max-w-sm">
-            Add staff users and assign them roles for this branch.
+            {canCreateUser ? 'Add staff users and assign them roles for this branch.' : 'There are no users to show.'}
           </p>
-          <Button
-            onClick={openAddDrawer}
-            className="bg-primary hover:bg-primary/90 text-white font-semibold flex items-center space-x-1.5 shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add User</span>
-          </Button>
+          {canCreateUser && (
+            <Button
+              onClick={openAddDrawer}
+              className="bg-primary hover:bg-primary/90 text-white font-semibold flex items-center space-x-1.5 shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add User</span>
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -249,7 +269,7 @@ export const UserPage: React.FC = () => {
                 <th className="px-6 py-4">User</th>
                 <th className="px-6 py-4">User ID</th>
                 <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                {canEditUser && <th className="px-6 py-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -274,11 +294,13 @@ export const UserPage: React.FC = () => {
                       {getDisplayRole(user)}
                     </Badge>
                   </td>
+                  {canEditUser && (
                   <td className="px-6 py-4 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEditDrawer(user)} className="text-gray-500 hover:text-primary">
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                  </td>
+                      <Button variant="ghost" size="sm" onClick={() => openEditDrawer(user)} className="text-gray-500 hover:text-primary">
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

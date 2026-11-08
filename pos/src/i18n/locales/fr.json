@@ -106,6 +106,7 @@
     "not_closed_title": "PDV précédent non fermé",
     "not_closed_message": "Veuillez fermer l'entrée PDV précédente pour continuer.",
     "reload_page": "Recharger la page",
+    "permissions_unavailable": "Impossible de charger vos autorisations. Veuillez recharger la page.",
     "switch_to_desk": "Accéder au bureau",
     "opening": {
       "title": "Ouvrir la session PDV",

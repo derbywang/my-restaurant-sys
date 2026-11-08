@@ -107,6 +107,7 @@
     "not_closed_title": "Previous POS Not Closed",
     "not_closed_message": "Please close the previous POS Entry to continue.",
     "reload_page": "Reload Page",
+    "permissions_unavailable": "Could not load your permissions. Please reload the page.",
     "switch_to_desk": "Switch to Desk",
     "opening": {
       "title": "Open POS Session",

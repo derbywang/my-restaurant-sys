@@ -3,6 +3,7 @@ import { Check, Globe } from 'lucide-react';
 import { Button } from './button';
 import { showToast } from './toast';
 import { cn } from '../lib/cn';
+import { chooseLanguage } from '../lib/choose-language';
 
 export interface LanguageMenuProps {
   /** Languages to offer, as { code: display name }, in display order. */
@@ -48,18 +49,17 @@ export const LanguageMenu = ({
 
   const handleSelect = async (code: string) => {
     if (isSaving) return;
-    if (code === activeLanguage) {
-      setIsOpen(false);
-      return;
-    }
     setIsSaving(true);
-    try {
-      await onSelect(code);
-    } catch (error) {
-      console.error('Failed to change language:', error);
-      showToast.error(errorMessage);
-      setIsSaving(false);
-    }
+    const saved = await chooseLanguage({
+      code,
+      onSelect,
+      onFailure: (error) => {
+        console.error('Failed to change language:', error);
+        showToast.error(errorMessage);
+      },
+    });
+    // saved: the app reloads; otherwise stay and let the user try again
+    if (!saved) setIsSaving(false);
   };
 
   const options = (

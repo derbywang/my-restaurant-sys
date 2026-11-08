@@ -6,6 +6,7 @@ alive); the portable tablet and the staff PIN of the first design are gone. Run 
 """
 
 import frappe
+from frappe.utils import add_to_date, now_datetime
 
 from ury.setup.test_site import CAPTAIN, CASHIER, MANAGER, as_user, close_shift
 from ury.ury.api import self_ordering as so
@@ -42,6 +43,15 @@ class DeviceCase(SelfOrderingCase):
 	def _remove_device(self):
 		for name in frappe.get_all("URY Ordering Device", filters={"device_id": DEVICE_ID}, pluck="name"):
 			frappe.delete_doc("URY Ordering Device", name, force=True, ignore_permissions=True)
+		frappe.db.commit()
+
+	@staticmethod
+	def _remove_missing_credential_errors(since):
+		"""A question without the credential makes the server log an Error Log (a TypeError); the test asked for
+		it on purpose, so it removes what it caused (the server committed it, so this commits too)."""
+		frappe.db.delete(
+			"Error Log", {"method": ("like", "device_status() missing%"), "creation": (">=", since)}
+		)
 		frappe.db.commit()
 
 	def issue(self, user=MANAGER):
@@ -271,7 +281,8 @@ class TestOverHttp(DeviceCase):
 		frappe.db.commit()
 		status, _body = self.get("device_status", device_id=DEVICE_ID, device_credential="not-the-credential")
 		self.assertEqual(status, 403)
-		status, _body = self.get("device_status", device_id=DEVICE_ID)
+		self.addCleanup(self._remove_missing_credential_errors, add_to_date(now_datetime(), seconds=-1, as_datetime=True))
+		status, _body = self.get("device_status", device_id=DEVICE_ID)  # no credential: the server logs a TypeError
 		self.assertNotEqual(status, 200)
 		old = self.credential
 		self.credential = self.issue()["credential"]

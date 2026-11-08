@@ -224,6 +224,34 @@ class TestReportGate(DashboardCase):
 class TestAdminAppData(DashboardCase):
 	"""get_recent_transactions and get_module_records: managers only, nine DocTypes, the fields the pages show."""
 
+	def test_what_the_user_page_may_do(self):
+		# the page asks which buttons to show: create and write on the User DocType, for the logged-in user
+		for user, expected in ((SYSTEM_MANAGER, {"create": True, "write": True}), (MANAGER, {"create": False, "write": False})):
+			with as_user(user):
+				self.assertEqual(dashboard.get_module_permissions("User"), expected, user)
+		for user in (ADMIN, "Administrator"):
+			with as_user(user):
+				granted = frappe.permissions.get_role_permissions(frappe.get_meta("User"))
+				self.assertEqual(
+					dashboard.get_module_permissions("User"),
+					{"create": bool(granted.get("create")), "write": bool(granted.get("write"))},
+					user,
+				)
+
+	def test_a_user_shared_one_document_does_not_get_the_edit_button(self):
+		# Frappe shares every User with the user themselves, and has_permission("User", "write") is then true for all
+		self.assertTrue(frappe.get_all("DocShare", filters={"share_doctype": "User", "user": MANAGER, "write": 1}))
+		with as_user(MANAGER):
+			self.assertTrue(frappe.has_permission("User", "write"))  # the trap
+			self.assertFalse(dashboard.get_module_permissions("User")["write"])
+
+	def test_what_the_user_page_may_do_is_for_managers_and_the_nine_doctypes_only(self):
+		for user in (CAPTAIN, CASHIER):
+			with as_user(user), self.assertRaises(frappe.PermissionError):
+				dashboard.get_module_permissions("User")
+		with as_user(MANAGER), self.assertRaises(frappe.PermissionError):
+			dashboard.get_module_permissions("POS Invoice")
+
 	ALLOWED = {"Branch", "URY Room", "URY Table", "URY Production Unit", "URY Menu", "URY Menu Course", "Item Group", "Item", "User"}
 	USER_KEYS = {"name", "email", "first_name", "last_name", "full_name", "user_type", "enabled", "roles"}
 
@@ -304,7 +332,7 @@ class TestAdminAppData(DashboardCase):
 				and getattr(first.value.func, "id", None) == "require_manager",
 				f"dashboard.{node.name} must start with require_manager()",
 			)
-		self.assertEqual(count, 4)
+		self.assertEqual(count, 5)  # summary, charts, recent transactions, module records, module permissions
 
 
 STAFF_ROLES = ("URY Captain", "URY Cashier")

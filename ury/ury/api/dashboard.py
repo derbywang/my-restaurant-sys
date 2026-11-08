@@ -80,6 +80,20 @@ def get_recent_transactions(branch=None, limit=10):
     return []
 
 @frappe.whitelist()
+def get_module_permissions(doctype):
+    """What the logged-in user may do with a DocType the admin pages show: {"create": bool, "write": bool}.
+    The pages use it to show or hide their Add / Edit buttons (the server still checks on every save).
+    Same DocTypes as get_module_records. (Not frappe.has_permission: see below.)"""
+    require_manager()
+    if doctype not in MODULE_RECORD_FIELDS:
+        frappe.throw(_("This DocType cannot be read here."), frappe.PermissionError)
+    # the roles' permission on the DocType, not frappe.has_permission(): that one is also true for a user who is
+    # shared one document of the DocType, and everybody is shared their own User (they edit their own account)
+    granted = frappe.permissions.get_role_permissions(frappe.get_meta(doctype))
+    return {"create": bool(granted.get("create")), "write": bool(granted.get("write"))}
+
+
+@frappe.whitelist()
 def get_module_records(doctype, branch=None):
     require_manager()
     if doctype not in MODULE_RECORD_FIELDS:

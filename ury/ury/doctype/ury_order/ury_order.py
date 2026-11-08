@@ -170,6 +170,20 @@ def _append_merged_partner(table_name, partner):
         ",".join(sorted(set(partners))),
     )
 
+def table_seated_at(invoice):
+    """When the guests of this bill sat down: the creation of the first bill of their split group (a split makes
+    new bills for the same guests, the clock must not start again), else the creation of the bill itself. This is
+    the time the table shows (`URY Table.latest_invoice_time`)."""
+    group = invoice.get("custom_split_group")
+    if group:
+        first = frappe.db.sql(
+            "select min(creation) from `tabPOS Invoice` where custom_split_group = %s and docstatus < 2", group
+        )
+        if first and first[0][0]:
+            return first[0][0]
+    return invoice.creation
+
+
 def _sync_active_order_with_merge_cluster(table):
 
     members = _get_cluster_table_names(table)
@@ -226,7 +240,7 @@ def _sync_active_order_with_merge_cluster(table):
             table_name,
             {
                 "occupied": 1,
-                "latest_invoice_time": primary.creation,
+                "latest_invoice_time": table_seated_at(frappe.get_doc("POS Invoice", primary.name)),
             },
         )
 
@@ -1700,13 +1714,14 @@ def sync_order(
     # table status: a table is in use for a dine in order, or when it is a take away table; a take away
     # (delivery, phone) order that was sent with a table of the dining room leaves that table free
     if invoice.invoice_printed == 0 and _order_uses_table(invoice):
+        seated_at = table_seated_at(invoice)
         frappe.db.set_value(
-            "URY Table", invoice.restaurant_table, {"occupied": 1, "latest_invoice_time": invoice.creation}
+            "URY Table", invoice.restaurant_table, {"occupied": 1, "latest_invoice_time": seated_at}
         )
         if invoice.custom_merged_tables:
             for merged_table in invoice.custom_merged_tables.split(","):
                 frappe.db.set_value(
-                    "URY Table", merged_table.strip(), {"occupied": 1, "latest_invoice_time": invoice.creation}
+                    "URY Table", merged_table.strip(), {"occupied": 1, "latest_invoice_time": seated_at}
                 )
 
     return invoice.as_dict()
@@ -1871,7 +1886,7 @@ def table_transfer(table, newTable, invoice):
     frappe.db.set_value(
         "URY Table",
         new_table.name,
-        {"occupied": 1, "latest_invoice_time": pos_invoice.creation},
+        {"occupied": 1, "latest_invoice_time": table_seated_at(pos_invoice)},
     )
     frappe.db.set_value(
         "URY Table",

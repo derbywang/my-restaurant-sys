@@ -443,3 +443,23 @@ class TestReduceSentItems(URYFlowTestCase):
 				else:
 					with self.assertRaises(frappe.ValidationError):
 						validate_invoice(doc, None)
+
+
+class TestMakeMergeLogFromTheDesk(URYFlowTestCase):
+	"""The Desk's "Make Merge Log" action on the POS Invoice list: what the captain can do with it."""
+
+	def test_the_captain_gets_a_draft_but_cannot_save_it(self):
+		from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_merge_log
+		from ury.setup.test_site import open_pos
+
+		open_pos(CASHIER)
+		name = place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLES[0])
+
+		self.assertFalse(frappe.has_permission("POS Invoice Merge Log", "create", user=CAPTAIN))
+		self.assertTrue(frappe.has_permission("POS Invoice Merge Log", "create", user=CASHIER))
+		with as_user(CAPTAIN):
+			draft = make_merge_log([{"name": name}])  # only builds a document in memory (read permission on the bills)
+			self.assertEqual(draft["doctype"], "POS Invoice Merge Log")
+			with self.assertRaises(frappe.PermissionError):
+				frappe.get_doc(draft).insert()  # saving it needs "create"
+		self.assertFalse(frappe.db.exists("POS Invoice Merge Log", {"owner": CAPTAIN}))

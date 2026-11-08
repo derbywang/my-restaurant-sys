@@ -39,6 +39,7 @@ from ury.ury.doctype.ury_order.ury_order import (
     _get_table_group,
     _resolve_or_create_pos_invoice,
     price_items_for_invoice,
+    table_seated_at,
 )
 from ury.ury.api.order_totals import cart_document, prices_incl_tax, tax_of, totals_of
 from ury.ury.api.ury_kot_generate import kot_execute
@@ -1015,7 +1016,7 @@ def _add_customer_items(session, items, age_confirmed=0):
         if invoice.invoice_printed == 0 and invoice.restaurant_table:
             frappe.db.set_value(
                 "URY Table", invoice.restaurant_table,
-                {"occupied": 1, "latest_invoice_time": invoice.creation},
+                {"occupied": 1, "latest_invoice_time": table_seated_at(invoice)},
             )
 
         shown = len(frappe.local.message_log)

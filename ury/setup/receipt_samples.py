@@ -240,6 +240,35 @@ def _pdf(invoice, path):
 		f.write(pdf)
 
 
+def check_pdf(path):
+	"""Read a sample the way a person does and check that it adds up: for a receipt, cash handed over - change + what the
+	cashless methods took = the total. Returns (ok, text of the check); an unpaid bill (ご請求明細) has nothing to check."""
+	import re
+
+	from pypdf import PdfReader
+
+	lines = [line.strip() for line in PdfReader(path).pages[0].extract_text().splitlines() if line.strip()]
+	if "領収書" not in lines:
+		return True, "ご請求明細（支払前）: nothing to check"
+
+	def amount_after(label_test, start=0):
+		for i in range(start, len(lines) - 1):
+			if label_test(lines[i]) and re.fullmatch(r"-?¥[\d,]+", lines[i + 1]):
+				return i, int(lines[i + 1].replace("¥", "").replace(",", ""))
+		return None, 0
+
+	i_total, total = amount_after(lambda line: line.startswith("合計（税込"))
+	_i, cash = amount_after(lambda line: line.startswith("お預かり"), i_total or 0)
+	_i, change = amount_after(lambda line: line == "お釣り", i_total or 0)
+	cashless = 0
+	for i in range((i_total or 0) + 1, len(lines) - 1):
+		if lines[i] in ("クレジットカード", "PayPay", "楽天ペイ") and re.fullmatch(r"¥[\d,]+", lines[i + 1]):
+			cashless += int(lines[i + 1].replace("¥", "").replace(",", ""))
+	kept = (cash - change) + cashless
+	ok = total > 0 and kept == total
+	return ok, f"合計 {total:,} / 現金お預かり {cash:,} - お釣り {change:,} + カード等 {cashless:,} = {kept:,}"
+
+
 def make(out):
 	"""Make the samples in the folder `out`; prints one line for each (and the traceback if something fails: `bench execute`
 	would hide it)."""
@@ -328,6 +357,15 @@ def _make(out):
 	frappe.clear_document_cache("POS Profile", profile.name)
 	_pay(profile, cashier, order, [(cash, _up_to(1000))], discount=10)
 	done("割引_領収書（税率別の内訳）", order)
+
+	problems = []
+	for label, invoice, path in made:
+		ok, line = check_pdf(path)
+		print(f"CHECK {'OK ' if ok else 'BAD'} {label}: {line}")
+		if not ok:
+			problems.append(label)
+	if problems:
+		raise SystemExit("the receipts do not add up: " + ", ".join(problems))
 
 	labels = "\n".join(f"{i + 1:02d} {label}（{invoice}）" for i, (label, invoice, _path) in enumerate(made))
 	with open(os.path.join(out, "README.txt"), "w", encoding="utf-8") as f:

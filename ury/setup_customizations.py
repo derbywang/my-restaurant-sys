@@ -42,9 +42,8 @@ def get_custom_fields():
 				{
 					"fieldname": "order_type",
 					"fieldtype": "Select",
-					"default": "Dine In",
 					"label": "Order Type",
-					"options": "\nDine In\nTake Away\nDelivery\nPhone In\nAggregators",
+					"options": '\nDine In\nPhone In\nTake Away\nDelivery\nAggregators',
 					"insert_after": "order_info",
 					"translatable": 0
 				},
@@ -52,21 +51,21 @@ def get_custom_fields():
 					"fieldname": "waiter",
 					"fieldtype": "Data",
 					"label": "Waiter",
-					"read_only": 0,
+					"read_only": 1,
 					"insert_after": "order_type",
 					"translatable": 0
 				},
 				{
 					"fieldname": "column_break_rwbwf",
 					"fieldtype": "Column Break",
-					"insert_after": "waiter"
+					"insert_after": "invoice_printed"
 				},
 				{
 					"fieldname": "no_of_pax",
 					"fieldtype": "Data",
 					"label": "Pax",
 					"insert_after": "column_break_rwbwf",
-					"read_only": 0,
+					"read_only": 1,
 					"translatable": 0
 				},
 				{
@@ -74,45 +73,48 @@ def get_custom_fields():
 					"fieldtype": "Data",
 					"label": "Cashier",
 					"insert_after": "no_of_pax",
-					"read_only": 0,
+					"read_only": 1,
 					"translatable": 0
 				},
 				{
 					"fieldname": "invoice_printed",
 					"fieldtype": "Check",
 					"label": "Invoice Printed",
-					"insert_after": "cashier",
+					"insert_after": "waiter",
 					"read_only": 1,
 				},
 				{
 					"fieldname": "invoice_created",
 					"fieldtype": "Check",
 					"label": "Invoice Created",
-					"insert_after": "invoice_printed",
-					"read_only": 0,
+					"insert_after": "cashier",
+					"read_only": 1,
 					"hidden": 1,
 				},
 				{
 					"fieldname": "restaurant_info",
 					"fieldtype": "Section Break",
 					"label": "Restaurant Info",
-					"insert_after": "invoice_created",
+					"insert_after": "custom_aggregator_id",
 				},
 				{
 					"fieldname": "restaurant",
+					"fetch_from": "pos_profile.restaurant",
 					"fieldtype": "Link",
 					"insert_after": "restaurant_info",
 					"label": "Restaurant",
 					"options": "URY Restaurant",
-					"read_only": 0,
+					"read_only": 1,
 				},
 				{
 					"fieldname": "branch",
+					"fetch_from": "pos_profile.branch",
+					"fetch_if_empty": 1,
 					"fieldtype": "Link",
 					"insert_after": "restaurant",
 					"label": "Branch",
 					"options": "Branch",
-					"read_only": 0,
+					"read_only": 1,
 				},
 				{
 					"fieldname": "restaurant_table",
@@ -120,14 +122,13 @@ def get_custom_fields():
 					"insert_after": "branch",
 					"label": "Restaurant Table",
 					"options": "URY Table",
-					"read_only": 0,
+					"read_only": 1,
 				},
 				{
 					"fieldname": "custom_merged_tables",
 					"fieldtype": "Data",
 					"insert_after": "restaurant_table",
 					"label": "Merged Tables",
-					"read_only": 1,
 				},
 				{
 					"fieldname": "custom_split_from",
@@ -147,17 +148,17 @@ def get_custom_fields():
 				{
 					"fieldname": "column_break_gd1mq",
 					"fieldtype": "Column Break",
-					"insert_after": "restaurant_table",
+					"insert_after": "custom_restaurant_room",
 				},
 				{
 					"fieldname": "arrived_time",
-					"fieldtype": "Time",
+					"fieldtype": "Data",
 					"insert_after": "column_break_gd1mq",
 					"label": "Arrived Time"
 				},
 				{
 					"fieldname": "total_spend_time",
-					"fieldtype": "Time",
+					"fieldtype": "Data",
 					"insert_after": "arrived_time",
 					"label": "Total Spend Time"
 				},
@@ -214,14 +215,13 @@ def get_custom_fields():
 					"fieldname": "order_info",
 					"fieldtype": "Section Break",
 					"label": "Order Info",
-					"insert_after": "return_against",
+					"insert_after": "amended_from",
 				},
 				{
 					"fieldname": "order_type",
 					"fieldtype": "Select",
 					"default": "Dine In",
 					"options": "URY Restaurant",
-					"fetch_from": "customer.mobile_number",
 					"label": "Order Type",
 					"options": "\nDine In\nTake Away\nDelivery\nPhone In\nAggregators",
 					"insert_after": "order_info",
@@ -231,7 +231,7 @@ def get_custom_fields():
 					"fieldname": "waiter",
 					"fieldtype": "Data",
 					"label": "Waiter",
-					"read_only": 0,
+					"read_only": 1,
 					"insert_after": "order_type",
 					"translatable": 0
 				},
@@ -242,10 +242,10 @@ def get_custom_fields():
 				},
 				{
 					"fieldname": "no_of_pax",
-					"fieldtype": "Data",
+					"fieldtype": "Int",
 					"label": "Pax",
-					"insert_after": "column_break_rwbwf",
-					"read_only": 0,
+					"insert_after": "column_break_bc56k",
+					"read_only": 1,
 					"translatable": 0
 				},
 				{
@@ -253,14 +253,14 @@ def get_custom_fields():
 					"fieldtype": "Data",
 					"label": "Cashier",
 					"insert_after": "no_of_pax",
-					"read_only": 0,
+					"read_only": 1,
 					"translatable": 0
 				},
 				{
 					"fieldname": "restaurant_info",
 					"fieldtype": "Section Break",
 					"label": "Restaurant Info",
-					"insert_after": "invoice_created",
+					"insert_after": "cashier",
 				},
 				{
 					"fieldname": "restaurant",
@@ -293,13 +293,13 @@ def get_custom_fields():
 				},
 				{
 					"fieldname": "arrived_time",
-					"fieldtype": "Time",
-					"insert_after": "column_break_gd1mq",
+					"fieldtype": "Data",
+					"insert_after": "column_break_hnrk9",
 					"label": "Arrived Time"
 				},
 				{
 					"fieldname": "total_spend_time",
-					"fieldtype": "Time",
+					"fieldtype": "Data",
 					"insert_after": "arrived_time",
 					"label": "Total Spend Time"
 				}
@@ -348,7 +348,7 @@ def get_custom_fields():
 				"insert_after": "branch",
 			},
 			{
-				"depends_on": "eval:doc.qz_print != 1" , 
+				"depends_on": "eval:doc.qz_print != 1;" , 
 				"fieldname": "printer_settings",
 				"fieldtype": "Table",
 				"insert_after": "printer_info",
@@ -380,6 +380,7 @@ def get_custom_fields():
 			},
 			{
 				"fieldname": "restaurant",
+				"fetch_from": "pos_profile.restaurant",
 				"fieldtype": "Link",
 				"insert_after": "restaurant_info",
 				"label": "Restaurant",
@@ -393,6 +394,7 @@ def get_custom_fields():
 			},
 			{	
 				"fieldname": "branch",
+				"fetch_from": "pos_profile.branch",
 				"fieldtype": "Link",
 				"insert_after": "column_break_e3dky",
 				"label": "Branch",
@@ -427,9 +429,8 @@ def get_custom_fields():
 				"fieldname": "mobile_number",
 				"fieldtype": "Data",
 				"label": "Mobile Number",
-				"insert_after": "customer_name",
+				"insert_after": "customer_type",
 				"translatable": 0,
-				"reqd": 1
 			},
 		],
 
@@ -438,7 +439,7 @@ def get_custom_fields():
 				"fieldname": "comment",
 				"fieldtype": "Data",
 				"label": "Comment",
-				"insert_after": "description",
+				"insert_after": "qty",
 				"translatable": 0
 			}
 		],

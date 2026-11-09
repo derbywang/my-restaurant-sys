@@ -102,3 +102,34 @@ for m in $(cat /tmp/modules.txt); do echo "== $m"; bench --site ury-test.localho
 ```
 
 （`test_site`、`test_guard` 是辅助模块，没有测试，显示 `Ran 0 tests` 正常。）任何 FAIL / ERROR 都值得看：2026-11-08 起整套应该全绿，唯一已知的例外是 `test_pos_closing` 偶发失败（见 `ui-todo.md`）。
+
+## 新测试先在临时站点上跑（`scripts/trial_run.sh`）
+
+防护（上一节）只能事后发现测试改了测试站点；2026-11 已经发生五次。所以**新的、或改过的会写数据的测试，先在测试站点备份的临时副本上跑**，副本干净才上 `ury-test.localhost`。
+
+### 什么时候必须用
+- 新的测试文件；
+- 改过的测试文件，且内容会写数据（`set_value`、`insert`、`delete`、`commit`、权限、角色、安装、补丁）；
+- 测试 `ury/install.py`、`ury/role_permissions.py`、`ury/setup_customizations.py`、补丁、`ury/setup/` 下代码的模块。
+- 只读断言的测试可以直接在测试站点跑；拿不准就走临时站点。
+
+### 命令（在 bench 目录 `frappe-bench` 下）
+```bash
+DB_ROOT_PASSWORD=<MariaDB root 密码> apps/ury/scripts/trial_run.sh ury.setup.test_x ury.ury.api.test_y
+```
+一批模块一次传入，按顺序跑。退出码 0 且最后一行是 `RESULT: OK` 才可以在测试站点上跑这些模块；`NOT OK` 时修测试，不要碰测试站点。
+
+### 脚本做的事
+1. 取 `ury-test.localhost/private/backups/` 里最新的 `*-database.sql.gz`（没有就先 `bench backup`）。
+2. `bench new-site ury-trial-<时间>.localhost --source_sql <备份>`：只恢复数据库，不重装应用。
+3. 把测试站点 `site_config.json` 里的 `encryption_key`、`allow_tests`、`developer_mode`、`ury_test_site` 复制过去（不复制数据库账号），关调度器，清缓存。
+4. 取防护的快照（`ury.setup.trial_snapshot.save`：角色、账号、权限、配置表）。
+5. 逐个模块在临时站点上运行 `run-tests`（防护照样生效），每个模块列出 `Ran / OK / FAILED` 和用时。
+6. 全部跑完再取一次快照对比（`trial_snapshot.compare`）：防护只比每个类前后，这一步看整个过程的累计变化。`TRIAL CLEAN` 才算干净。
+7. `drop-site` 删除临时站点（名字不以 `ury-trial-` 开头的站点脚本不会删），并确认站点目录和归档都没有了。
+8. 打印建站、删站各用了多少秒。
+
+### 注意
+- 备份是测试站点**最新备份**的状态；测试站点之后改过的数据副本里没有，这对“检查有没有改动”没有影响。
+- 临时站点用的是同一个数据库服务器，名字不同的库；网络测试（8000 / 9000）也可以用，开发服务器按 Host 头区分站点。
+- 对比的内容和防护一样（见 `ury/setup/test_guard.py` 的 `CONFIG_DOCTYPES`）；新增了需要监控的表时在那里加。

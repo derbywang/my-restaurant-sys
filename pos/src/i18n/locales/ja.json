@@ -102,7 +102,8 @@
     "success": "会計が完了しました: {{amount}} をお預かり",
     "stamp_notice": "現金のお受取額が税抜 {{amount}} で5万円以上です。紙の領収書には収入印紙が必要です。",
     "tax_before_discount": "{{rate}}%対象 割引前（税抜）",
-    "tax_discount": "　割引 {{rate}}%対象"
+    "tax_discount": "　割引 {{rate}}%対象",
+    "cash": "現金"
   },
   "pos": {
     "not_opened_title": "レジが開いていません",

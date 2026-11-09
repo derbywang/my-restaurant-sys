@@ -102,7 +102,8 @@
     "success": "결제 완료: {{amount}} 수령",
     "stamp_notice": "받은 현금이 세금 제외 {{amount}}로 5만 엔 이상입니다. 종이 영수증에는 수입인지가 필요합니다.",
     "tax_before_discount": "{{rate}}% 대상 할인 전（세금 제외）",
-    "tax_discount": "　할인 {{rate}}% 대상"
+    "tax_discount": "　할인 {{rate}}% 대상",
+    "cash": "현금"
   },
   "pos": {
     "not_opened_title": "POS가 열려 있지 않습니다",

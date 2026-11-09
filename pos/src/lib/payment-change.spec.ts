@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPayments, defaultCashMode } from './payment-change';
+import { checkPayments, defaultCashMode, paymentModeLabel } from './payment-change';
 
 const types = { Cash: 'Cash', クレジットカード: 'Bank', PayPay: 'Bank' };
 
@@ -94,5 +94,25 @@ describe('defaultCashMode', () => {
   it('falls back to the mode called Cash when the types are not known (an old session)', () => {
     expect(defaultCashMode(['PayPay', 'Cash'], {})).toBe('Cash');
     expect(defaultCashMode(['PayPay', '現金'], {})).toBeUndefined();
+  });
+});
+
+describe('paymentModeLabel', () => {
+  it('shows the cash mode with the word of the interface, whatever it is called on the site ("Cash" on an English site)', () => {
+    expect(paymentModeLabel('Cash', types, '現金')).toBe('現金');
+    expect(paymentModeLabel('現金', { 現金: 'Cash' }, '現金')).toBe('現金');
+  });
+
+  it('shows every other mode by its own name', () => {
+    expect(paymentModeLabel('クレジットカード', types, '現金')).toBe('クレジットカード');
+    expect(paymentModeLabel('PayPay', types, '現金')).toBe('PayPay');
+  });
+
+  it('looks the type up by the id of the mode when that is not its name', () => {
+    expect(paymentModeLabel('Cash', { cash_id: 'Cash' }, '現金', 'cash_id')).toBe('現金');
+  });
+
+  it('without the types (an old session) shows the name as it is', () => {
+    expect(paymentModeLabel('Cash', {}, '現金')).toBe('Cash');
   });
 });

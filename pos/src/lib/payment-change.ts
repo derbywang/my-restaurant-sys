@@ -46,3 +46,17 @@ export function checkPayments(
     .reduce((sum, p) => sum + p.amount, 0);
   return { change, short: 0, error: change > cash + EPSILON ? 'change_not_cash' : null };
 }
+
+/**
+ * The name of a payment mode as the dialog shows it: the cash mode (type Cash) in the word of the interface (「現金」),
+ * whatever it is called on the site (ERPNext names it "Cash" on a site made in English); every other mode by its own name.
+ * Without the types (an old session) the name is shown as it is.
+ */
+export function paymentModeLabel(
+  name: string,
+  types: Record<string, string>,
+  cashLabel: string,
+  id: string = name
+): string {
+  return types[id] === 'Cash' ? cashLabel : name;
+}

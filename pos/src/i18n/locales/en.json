@@ -102,7 +102,8 @@
     "success": "Payment successful: {{amount}} received",
     "stamp_notice": "The cash received is {{amount}} without tax, which is 50,000 yen or more. A paper receipt needs a revenue stamp (収入印紙).",
     "tax_before_discount": "{{rate}}% base before discount (excl. tax)",
-    "tax_discount": "  Discount on {{rate}}% base"
+    "tax_discount": "  Discount on {{rate}}% base",
+    "cash": "Cash"
   },
   "pos": {
     "not_opened_title": "POS Not Opened",

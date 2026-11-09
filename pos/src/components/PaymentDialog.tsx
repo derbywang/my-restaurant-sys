@@ -8,7 +8,7 @@ import { canShowDiscount, friendlyError } from '../lib/pos-permissions';
 import { useRootStore } from '../store/root-store';
 import { t } from '../i18n';
 import { stampNotice } from '../lib/stamp-duty';
-import { checkPayments, type PaymentRow } from '../lib/payment-change';
+import { checkPayments, paymentModeLabel, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
 
 
@@ -245,7 +245,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 const id = typeof mode === 'string' ? mode : mode.id;
                 return (
                   <div key={id} className="flex items-center gap-3">
-                    <span className="w-24 font-medium">{typeof mode === 'string' ? mode : mode.name}</span>
+                    <span className="w-24 font-medium">{paymentModeLabel(typeof mode === 'string' ? mode : mode.name, paymentModeTypes, t('payment.cash'), id)}</span>
                     <Input
                       type="number"
                       min="0"

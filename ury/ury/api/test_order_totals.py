@@ -40,7 +40,7 @@ class TestPreviewOrderTotals(URYFlowTestCase):
 		self.assertEqual((totals["total"], totals["net_total"], totals["grand_total"], totals["rounded_total"]), (1500, 1500, 1650, 1650))
 		self.assertEqual(
 			[(t["account_head"], t["rate"], t["taxable_amount"], t["tax_amount"]) for t in totals["taxes"]],
-			[(f"CT 10% - {ABBR}", 10, 1500, 150)],
+			[(f"仮受消費税等（10％） - {ABBR}", 10, 1500, 150)],
 		)
 
 	def test_take_away_mixes_the_rates(self):

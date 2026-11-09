@@ -9,6 +9,7 @@ prices or existing documents.
 import frappe
 from frappe.utils.nestedset import get_ancestors_of
 
+from ury.setup.account_names import rename_legacy_accounts
 from ury.setup.names import existing_name, group_account, root_of
 
 TEMPLATE_TITLE = "消費税（日本）"
@@ -20,16 +21,16 @@ VALID_FROM = "2019-10-01"
 # Only the 10% row has a non-zero default rate; the reduced-rate rows are
 # switched on per item by the Item Tax Templates below.
 RATE_ROWS = (
-    {"account_name": "CT 10%", "rate": 10, "default_rate": 10, "description": "消費税 10%"},
-    {"account_name": "CT 8%", "rate": 8, "default_rate": 0, "description": "消費税 8%（軽減）"},
-    {"account_name": "CT 1%", "rate": 1, "default_rate": 0, "description": "消費税 1%（軽減・時限）"},
+    {"account_name": "仮受消費税等（10％）", "rate": 10, "default_rate": 10, "description": "消費税 10%"},
+    {"account_name": "仮受消費税等（軽減8％）", "rate": 8, "default_rate": 0, "description": "消費税 8%（軽減）"},
+    {"account_name": "仮受消費税等（軽減1％）", "rate": 1, "default_rate": 0, "description": "消費税 1%（軽減・時限）"},
 )
 
 # Every template lists all three accounts; the ones that do not apply are 0%.
 ITEM_TAX_TEMPLATES = {
-    "標準10%": {"CT 10%": 10, "CT 8%": 0, "CT 1%": 0},
-    "軽減8%": {"CT 10%": 0, "CT 8%": 8, "CT 1%": 0},
-    "軽減1%": {"CT 10%": 0, "CT 8%": 0, "CT 1%": 1},
+    "標準10%": {"仮受消費税等（10％）": 10, "仮受消費税等（軽減8％）": 0, "仮受消費税等（軽減1％）": 0},
+    "軽減8%": {"仮受消費税等（10％）": 0, "仮受消費税等（軽減8％）": 8, "仮受消費税等（軽減1％）": 0},
+    "軽減1%": {"仮受消費税等（10％）": 0, "仮受消費税等（軽減8％）": 0, "仮受消費税等（軽減1％）": 1},
 }
 
 # Tax is set only on these three parent groups; kitchen routing keeps using the
@@ -85,6 +86,8 @@ def apply_jp_tax_setup():
 
     item_templates = {}
     for company in companies:
+        # ERPNext (or an older URY) made the accounts as `CT 10%` ...: they get the names the 税理士 recommended
+        rename_legacy_accounts(company.name)
         accounts = {row["account_name"]: _ensure_tax_account(company, row) for row in RATE_ROWS}
         template = _ensure_sales_tax_template(company, accounts)
         result["templates"][company.name] = template

@@ -24,8 +24,8 @@ from ury.ury_pos.api import merge_bills
 
 CARD = "クレジットカード"
 PAYPAY = "PayPay"
-CARD_ACCOUNT = f"未収入金（カード会社） - {ABBR}"
-RAKUTEN_ACCOUNT = f"未収入金（楽天ペイ） - {ABBR}"
+CARD_ACCOUNT = f"売掛金（カード会社） - {ABBR}"
+RAKUTEN_ACCOUNT = f"売掛金（楽天ペイ） - {ABBR}"
 
 
 class CashlessTestCase(URYFlowTestCase):

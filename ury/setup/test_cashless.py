@@ -11,8 +11,8 @@ from ury.setup.cashless import (
 )
 from ury.setup.test_site import ABBR, COMPANY, POS_PROFILE, URYTestCase
 
-CARD_ACCOUNT = f"未収入金（カード会社） - {ABBR}"
-RAKUTEN_ACCOUNT = f"未収入金（楽天ペイ） - {ABBR}"
+CARD_ACCOUNT = f"売掛金（カード会社） - {ABBR}"
+RAKUTEN_ACCOUNT = f"売掛金（楽天ペイ） - {ABBR}"
 
 
 class RolledBackTestCase(URYTestCase):
@@ -92,7 +92,7 @@ class TestEnsurePaymentMode(RolledBackTestCase):
 	def test_a_custom_cashless_mode_in_japan_gets_its_own_account(self):
 		self.assertEqual(ensure_payment_mode("交通系IC", "cashless", COMPANY), "交通系IC")
 		account = self.account_of("交通系IC")
-		self.assertEqual(account, f"未収入金（交通系IC） - {ABBR}")
+		self.assertEqual(account, f"売掛金（交通系IC） - {ABBR}")
 		self.assertEqual(frappe.db.get_value("Account", account, ["account_type", "is_group", "parent_account"]), ("Bank", 0, f"Accounts Receivable - {ABBR}"))
 		self.assertEqual(frappe.db.get_value("Mode of Payment", "交通系IC", "type"), "Bank")
 

@@ -40,8 +40,12 @@ cleanup() {
     ury-trial-*)
       if [ -d "sites/$TRIAL" ]; then
         bench drop-site "$TRIAL" --force --no-backup --mariadb-root-password "$DB_ROOT_PASSWORD" >"$LOG/drop.log" 2>&1
-        rm -rf "sites/archived/sites/$TRIAL"* 2>/dev/null
-        rm -rf "archived/sites/$TRIAL"* 2>/dev/null
+        # the archived copy is removed too (it can show up a moment later: look again before giving up)
+        for _try in 1 2 3; do
+          rm -rf "sites/archived/sites/$TRIAL"* "archived/sites/$TRIAL"* "sites/$TRIAL" 2>/dev/null
+          ls -d "archived/sites/$TRIAL"* "sites/$TRIAL" >/dev/null 2>&1 || break
+          sleep 2
+        done
       fi;;
   esac
   echo "TIME drop trial site: $(( $(now) - t1 )) s"
@@ -61,9 +65,11 @@ for key in ("encryption_key", "allow_tests", "developer_mode", "ury_test_site"):
         b[key] = a[key]
 json.dump(b, open(path, "w"), indent=1)
 PY
-  # what bench migrate does after the models are synced (the after_migrate hook): the receipt template of the code is
-  # written to the site; without it a template change shows up as a difference of the site
-  bench --site "$TRIAL" execute ury.setup.jp_tax.refresh_receipt_format >"$LOG/refresh.log" 2>&1 || { echo "refresh_receipt_format failed"; rc=1; }
+  # rehearse bench migrate on the copy: new patches, DocType changes and the after_migrate hook (receipt template) run here,
+  # so the tests see a migrated site and a patch that fails shows up here and not on a real site
+  tm=$(now)
+  bench --site "$TRIAL" migrate >"$LOG/migrate.log" 2>&1 || { echo "migrate failed, see $LOG/migrate.log"; tail -8 "$LOG/migrate.log"; rc=1; }
+  echo "TIME migrate: $(( $(now) - tm )) s"
   bench --site "$TRIAL" scheduler disable >/dev/null 2>&1
   bench --site "$TRIAL" execute ury.setup.trial_snapshot.save --kwargs "{\"path\": \"$SNAP\"}" >"$LOG/save.log" 2>&1 || { echo "snapshot failed"; tail -5 "$LOG/save.log"; rc=1; }
   if [ $rc -eq 0 ]; then

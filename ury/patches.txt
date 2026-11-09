@@ -25,3 +25,4 @@ ury.patches.v3_0.rename_last_seen
 ury.patches.v3_0.revoke_staff_export
 ury.patches.v3_0.latest_invoice_time_datetime
 ury.patches.v3_0.staff_without_desk
+ury.patches.v3_0.rename_accounts_for_tax_advisor

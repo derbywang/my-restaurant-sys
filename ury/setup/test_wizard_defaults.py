@@ -227,7 +227,7 @@ class TestSubmitConfigureData(URYFlowTestCase):
 		profile = frappe.get_doc("POS Profile", self.NEW_BRANCH)
 		self.assertEqual([p.mode_of_payment for p in profile.payments], ["Cash", "クレジットカード", "回数券テスト"])
 		self.assertEqual([p.default for p in profile.payments], [1, 0, 0])
-		for mode, account in (("クレジットカード", f"未収入金（カード会社） - {ABBR}"), ("回数券テスト", f"未収入金（回数券テスト） - {ABBR}")):
+		for mode, account in (("クレジットカード", f"売掛金（カード会社） - {ABBR}"), ("回数券テスト", f"売掛金（回数券テスト） - {ABBR}")):
 			self.assertEqual(
 				frappe.db.get_value("Mode of Payment Account", {"parent": mode, "company": COMPANY}, "default_account"), account
 			)
@@ -236,7 +236,7 @@ class TestSubmitConfigureData(URYFlowTestCase):
 	def _remove_payment_test_data(self):
 		frappe.db.delete("Mode of Payment Account", {"parent": "回数券テスト"})
 		frappe.db.delete("Mode of Payment", {"name": "回数券テスト"})
-		frappe.db.delete("Account", {"name": f"未収入金（回数券テスト） - {ABBR}"})
+		frappe.db.delete("Account", {"name": f"売掛金（回数券テスト） - {ABBR}"})
 		frappe.db.commit()
 
 	def test_new_japan_branch_ignores_the_tax_rate_and_gets_the_defaults(self):

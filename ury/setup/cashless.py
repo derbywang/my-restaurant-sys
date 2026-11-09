@@ -2,8 +2,9 @@
 
 The terminal is not connected: the cashier takes the money on the terminal, then picks the payment
 method in the POS and confirms the amount. The bookkeeping follows the company that settles:
-- クレジットカード -> 未収入金（カード会社）
-- PayPay, 楽天ペイ (both on the 楽天ペイ terminal) -> 未収入金（楽天ペイ）
+- クレジットカード -> 売掛金（カード会社）
+- PayPay, 楽天ペイ (both on the 楽天ペイ terminal) -> 売掛金（楽天ペイ）
+(named 未収入金（…） until 2026-11-09: the 税理士 recommended 売掛金; sites with the old names are renamed)
 
 ERPNext only accepts a ledger account of type Bank, Cash or Receivable for a Mode of Payment, and
 a Receivable account needs a customer on every GL entry (the payment entry of a POS invoice has
@@ -14,14 +15,15 @@ are meant to be changed (Account > Rename); the Mode of Payment follows.
 import frappe
 from frappe import _
 
+from ury.setup.account_names import rename_legacy_accounts
 from ury.setup.jp_tax import japan_companies
 from ury.setup.names import candidates, cash_mode_name, group_account
 
 # preset mode -> the account it is settled on (Japan)
 CASHLESS_MODES = {
-	"クレジットカード": "未収入金（カード会社）",
-	"PayPay": "未収入金（楽天ペイ）",
-	"楽天ペイ": "未収入金（楽天ペイ）",
+	"クレジットカード": "売掛金（カード会社）",
+	"PayPay": "売掛金（楽天ペイ）",
+	"楽天ペイ": "売掛金（楽天ペイ）",
 }
 
 
@@ -35,6 +37,7 @@ def apply_cashless_payments():
 	result = {"companies": [], "created": []}
 	for company in japan_companies():
 		result["companies"].append(company.name)
+		rename_legacy_accounts(company.name)  # 未収入金（…） -> 売掛金（…）
 		for mode in CASHLESS_MODES:
 			result["created"] += _ensure(mode, "cashless", company.name)
 		_add_to_pos_profiles(company.name, list(CASHLESS_MODES))
@@ -80,7 +83,7 @@ def _account_title(name, kind, japan):
 	if kind == "cash":
 		return name
 	if japan:
-		return CASHLESS_MODES.get(name) or f"未収入金（{name}）"
+		return CASHLESS_MODES.get(name) or f"売掛金（{name}）"
 	return f"{name} Clearing"
 
 

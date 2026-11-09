@@ -256,7 +256,7 @@ class TestTaxesAddUpAfterClosing(URYFlowTestCase):
 		sales_invoice = frappe.get_doc("Sales Invoice", logs[0].consolidated_invoice)
 		self.assertEqual(sales_invoice.grand_total, 1485 + 1467)
 		self.assertEqual({r.account_head: r.tax_amount for r in sales_invoice.taxes if r.tax_amount},
-			{f"CT 10% - {ABBR}": 135 + 45, f"CT 8% - {ABBR}": 72})
+			{f"仮受消費税等（10％） - {ABBR}": 135 + 45, f"仮受消費税等（軽減8％） - {ABBR}": 72})
 
 	def _set_discount_on(self, value, enabled):
 		frappe.db.set_value("POS Profile", POS_PROFILE, {"apply_discount_on": value, "custom_enable_discount": enabled})

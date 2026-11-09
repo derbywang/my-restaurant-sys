@@ -66,7 +66,7 @@ class TestTaxCategoryForOrder(URYTestCase):
 class TestSetTaxCategory(URYTestCase):
 	def _with_items(self, order_type, tax_category=None):
 		doc = _invoice(order_type, tax_category=tax_category)
-		doc.append("items", {"item_code": FOOD_ITEM, "item_tax_template": STANDARD_10, "item_tax_rate": f'{{"CT 10% - {ABBR}": 10}}'})
+		doc.append("items", {"item_code": FOOD_ITEM, "item_tax_template": STANDARD_10, "item_tax_rate": f'{{"仮受消費税等（10％） - {ABBR}": 10}}'})
 		return doc
 
 	def test_changing_the_order_type_resets_the_category_and_the_item_templates(self):

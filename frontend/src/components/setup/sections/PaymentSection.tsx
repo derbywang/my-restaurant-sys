@@ -9,7 +9,7 @@ import type { PaymentKind } from '../../../context/ConfigureContext';
 const DEFAULTS = ['Cash', 'Card'];
 
 // Japan: cash plus the cashless methods the shop supports; each gets a settlement account
-// (未収入金) of its own when the setup runs.
+// (売掛金（…）) of its own when the setup runs.
 const japanDefaults = (cash: string): { name: string; kind: PaymentKind }[] => [
   { name: cash, kind: 'cash' },
   { name: 'クレジットカード', kind: 'cashless' },
@@ -119,7 +119,7 @@ export function PaymentSection() {
 
       <p className="text-xs text-muted-foreground">
         {isJapan
-          ? 'キャッシュレス（カード・QR決済など）は、精算会社ごとの「未収入金」勘定が自動で作成されます。勘定科目名は後から変更できます。'
+          ? 'キャッシュレス（カード・QR決済など）は、精算会社ごとの「売掛金（…）」勘定が自動で作成されます。勘定科目名は後から変更できます。'
           : 'Cashless methods get a clearing account of their own, created automatically.'}
       </p>
 

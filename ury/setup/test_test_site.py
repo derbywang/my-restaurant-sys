@@ -47,8 +47,8 @@ class TestTestSiteFlows(URYFlowTestCase):
 		self.assertEqual(sales_invoice.grand_total, 1650 + 2160)
 		# the tax of each rate is the sum of the POS invoices' (own account per rate)
 		taxes = {row.account_head: row.tax_amount for row in sales_invoice.taxes}
-		self.assertEqual(taxes[f"CT 10% - {ABBR}"], 150)
-		self.assertEqual(taxes[f"CT 8% - {ABBR}"], 160)
+		self.assertEqual(taxes[f"仮受消費税等（10％） - {ABBR}"], 150)
+		self.assertEqual(taxes[f"仮受消費税等（軽減8％） - {ABBR}"], 160)
 
 	def test_reset_transactions_empties_the_sales_documents(self):
 		open_pos(CASHIER)

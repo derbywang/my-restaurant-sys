@@ -289,7 +289,8 @@ def _check_against_recalculation(invoices):
 		agains = [frappe.get_doc(invoice.as_dict()) for invoice in invoices]
 		for again in agains:
 			again.calculate_taxes_and_totals()
-		if len(agains) == 2:
+		# the pair is rounded once when it is paid; before that each bill has its own saved tax (what the check compares)
+		if len(agains) == 2 and all(invoice.docstatus == 1 for invoice in invoices):
 			from ury.ury.api.merged_bill import apply_pair_tax
 
 			apply_pair_tax(*agains)

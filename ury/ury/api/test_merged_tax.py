@@ -156,6 +156,14 @@ class TestMergedTaxIsRoundedOnce(URYFlowTestCase):
 			self.assertIn("¥2,211", page)
 			self.assertNotIn("¥200", page)
 
+	def test_printing_the_unpaid_merged_bills_logs_no_difference(self):
+		"""The saved amounts of an unpaid merged pair are each bill's own (the pair is rounded once when it is paid):
+		the receipt's self-check must not call that a difference (it did: an Error Log for every print)."""
+		before = frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]})
+		for invoice in (self.first, self.second):
+			text(render(invoice))
+		self.assertEqual(frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]}), before)
+
 	def test_the_paid_receipt_shows_the_same_and_logs_no_difference(self):
 		self._pay(self.first, 2211)
 		before = frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]})

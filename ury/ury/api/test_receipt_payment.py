@@ -58,13 +58,18 @@ class TestReceiptPayment(URYFlowTestCase):
 
 	def test_cash_only_says_cash(self):
 		out = self._paid(1000, [("Cash", 1100)])
-		self.assertIn("お支払方法 | Cash", out)
+		self.assertIn("お支払方法 | 現金", out)
 		self.assertNotIn(CREDIT_NOTE, out)
 
 	def test_a_card_says_the_card_and_that_it_is_a_credit_transaction(self):
 		out = self._paid(1000, [("クレジットカード", 1100)])
 		self.assertIn("お支払方法 | クレジットカード", out)
 		self.assertIn(CREDIT_NOTE, out)
+
+	def test_the_cash_mode_is_always_called_genkin_whatever_its_name_on_the_site(self):
+		out = self._paid(1000, [("Cash", 1100)])
+		self.assertIn("お支払方法 | 現金", out)
+		self.assertNotIn("お支払方法 | Cash", out)
 
 	def test_a_wallet_is_shown_by_its_name_without_the_credit_note(self):
 		out = self._paid(1000, [("PayPay", 1100)])
@@ -73,7 +78,7 @@ class TestReceiptPayment(URYFlowTestCase):
 
 	def test_cash_and_card_list_both(self):
 		out = self._paid(1000, [("Cash", 500), ("クレジットカード", 600)])
-		self.assertIn("お支払方法 | Cash、クレジットカード", out)
+		self.assertIn("お支払方法 | 現金、クレジットカード", out)
 		self.assertIn(CREDIT_NOTE, out)
 
 	def test_before_the_payment_there_is_nothing_of_it(self):

@@ -152,9 +152,12 @@ def _payment_lines(invoices):
 		for payment in invoice.payments:
 			if flt(payment.amount) <= 0:
 				continue
-			if payment.mode_of_payment not in methods:
-				methods.append(payment.mode_of_payment)
-			if frappe.db.get_value("Mode of Payment", payment.mode_of_payment, "type") == "Cash":
+			is_cash = frappe.db.get_value("Mode of Payment", payment.mode_of_payment, "type") == "Cash"
+			# the receipt says 現金 for the cash mode, whatever its name on the site (ERPNext names it "Cash" on an English site)
+			label = "現金" if is_cash else payment.mode_of_payment
+			if label not in methods:
+				methods.append(label)
+			if is_cash:
 				cash += flt(payment.amount)
 			else:
 				cashless[payment.mode_of_payment] = cashless.get(payment.mode_of_payment, 0) + flt(payment.amount)

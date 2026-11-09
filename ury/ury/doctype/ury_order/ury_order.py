@@ -430,6 +430,21 @@ def release_merge_cluster_tables(table_or_tables):
 
     frappe.db.commit()
 
+def other_unprinted_orders_on_table(invoice):
+    """The open orders that are not printed and are not `invoice`, on its table or the tables put together with it: guests
+    who are at the table now. Empty when the table has nobody else (printed bills are guests at the register, not at the table)."""
+    table = invoice.get("restaurant_table")
+    if not table:
+        return []
+    cluster = _get_table_group(table, invoice.get("custom_merged_tables"))
+    return frappe.get_all(
+        "POS Invoice",
+        filters={"docstatus": 0, "invoice_printed": 0, "name": ["!=", invoice.name]},
+        or_filters=[["restaurant_table", "in", cluster]] + [["custom_merged_tables", "like", f"%{name}%"] for name in cluster],
+        pluck="name",
+    )
+
+
 def unprinted_split_parts_on_table(invoice_name):
     """The other parts of a split bill (会計分割) that are on the same table as this bill and are not printed yet.
 
@@ -2128,8 +2143,10 @@ def cancel_order(invoice_id, reason):
     )
 
     # Release the full merge cluster, not only the primary table and CSV partners (not while another part of the
-    # split bill is still unprinted on the table: its guests are still there).
-    if pos_invoice.restaurant_table:
+    # split bill is still unprinted on the table: its guests are still there). Nor while any other order that is not printed
+    # is on the table (the next guests, seated after this bill was printed): paying looks at that too, and the table must
+    # stay 使用中 with its self ordering open for them.
+    if pos_invoice.restaurant_table and not other_unprinted_orders_on_table(pos_invoice):
         release_table_of_invoice(pos_invoice.name, pos_invoice.restaurant_table)
 
     try:

@@ -448,8 +448,18 @@ def _check_realtime_config():
 	return found
 
 
+def _encrypted_values():
+	return frappe.db.sql("select count(*) from `__Auth` where encrypted = 1")[0][0]
+
+
 def _check_encryption_key():
-	return [] if frappe.conf.get("encryption_key") else [(FAIL, "encryption_key is not in site_config.json (encrypted fields cannot be read)")]
+	"""Frappe makes the key when the first password-type value is saved, so a new site has none yet: that is a warning
+	(it must be kept with the backups once it exists); a site with encrypted values and no key cannot read them."""
+	if frappe.conf.get("encryption_key"):
+		return []
+	if _encrypted_values():
+		return [(FAIL, "encryption_key is not in site_config.json (the encrypted fields cannot be read)")]
+	return [(WARN, "encryption_key is not in site_config.json yet (Frappe makes it when the first password-type value is saved; keep it with the backups)")]
 
 
 def _check_allow_tests():

@@ -333,7 +333,12 @@ class TestSiteAndPayment(Rollback, URYTestCase):
 			self.assertEqual(levels(deploy_check._check_encryption_key), [])
 		with mock.patch.dict(frappe.local.conf, {"socketio_port": None, "webserver_host": None, "encryption_key": None}):
 			self.assertEqual(len(levels(deploy_check._check_realtime_config)), 2)
-			self.assertTrue(mentions(levels(deploy_check._check_encryption_key), "encryption_key", deploy_check.FAIL))
+			with mock.patch.object(deploy_check, "_encrypted_values", return_value=3):
+				self.assertTrue(mentions(levels(deploy_check._check_encryption_key), "encryption_key", deploy_check.FAIL))
+			# a new site: nothing is encrypted yet, so the key does not exist yet either
+			with mock.patch.object(deploy_check, "_encrypted_values", return_value=0):
+				self.assertTrue(mentions(levels(deploy_check._check_encryption_key), "encryption_key", deploy_check.WARN))
+				self.assertFalse(mentions(levels(deploy_check._check_encryption_key), "encryption_key", deploy_check.FAIL))
 
 	def test_allow_tests(self):
 		with mock.patch.dict(frappe.local.conf, {"allow_tests": 1}):

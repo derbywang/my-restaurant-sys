@@ -26,7 +26,7 @@
 - 版本：ury/__init__.py 中是 3.0.0-beta.1（AGENTS.MD 中写的 0.2.1 已过时）
 - 许可证：LICENSE 是 AGPL v3（hooks.py 和 AGENTS.MD 中写的 MIT 不对）；修改后的代码同样适用 AGPL
 - yarn workspaces 成员还包括 self-order（自助点餐，React，路由 /order，目前还在开发中）
-- 开发环境**没有默认站点**（`common_site_config.json` 里没有 `default_site`），`bench serve` 按 Host 头区分站点：`ury.localhost`（开发）、`ury-test.localhost`（测试）、`ury-wizard.localhost`（向导验证，临时）。所有需要站点的 bench 命令（`migrate`、`execute`、`export-fixtures`、`run-tests`、`console` 等）都要带 `--site`；浏览器要用站点域名访问（`http://ury.localhost:8000`），`localhost` / `127.0.0.1` 找不到站点。
+- 开发环境**没有默认站点**（`common_site_config.json` 里没有 `default_site`），`bench serve` 按 Host 头区分站点：`ury.localhost`（开发）、`ury-test.localhost`（测试）。**现在只有这两个站点**：`ury-wizard.localhost` 是验证向导用的临时站点，已在 2026-11-02、11-03 按你的指示 `drop-site` 删除（站点目录被 Frappe 移到 `archived/sites/`，里面只有配置和日志）；以后要验证向导或 `after_install` 时临时新建一个，用完删除并确认这两个站点没有变化。所有需要站点的 bench 命令（`migrate`、`execute`、`export-fixtures`、`run-tests`、`console` 等）都要带 `--site`；浏览器要用站点域名访问（`http://ury.localhost:8000`），`localhost` / `127.0.0.1` 找不到站点。
 - 开发环境中实时推送（Socket.IO）可以用：`common_site_config.json` 里设了 `webserver_host = 127.0.0.1`（Socket.IO 认证回调 web 服务器用），`socketio_port = 9000`，pos / mosaic 在开发环境（`window.dev_server`）直接连 9000 端口，不经过 8000。厨房屏幕会自动更新；KOT 出错提醒（`KotAlertListener`）要在开发站点上实机看到弹出才算验证过（测试里的 `publish_realtime` 是替身，不算）。注意：这个提醒在三友寿司站点**修复前从来没弹出过**——生产单位名 `Kitchen - 三友寿司` 含空格，旧代码把名字用空格拼接再按空格拆开，订阅了错的频道（2026-11 实机发现；现在由 `pos/src/lib/kot-channels.ts` 和它的测试保证）。验证方法：在 bench console 用 `frappe.publish_realtime` 往 `kot_error_<分店>_<生产单位>` 手动发一条（旧格式载荷 `{kot, invoice, branch, production}`，或 `kind=no_kitchen`），看收银台 `/pos` 是否弹出；正式环境由 nginx 转发 /socket.io
 
 ## 操作规则（站点数据与单据）

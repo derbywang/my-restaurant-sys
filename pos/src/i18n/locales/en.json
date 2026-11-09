@@ -99,7 +99,8 @@
     "short_by": "Short by {{amount}}",
     "change_due": "Change due: {{amount}}",
     "change_not_cash": "The payment is {{amount}} more than the amount due. Change can only be given for cash.",
-    "success": "Payment successful: {{amount}} received"
+    "success": "Payment successful: {{amount}} received",
+    "stamp_notice": "The cash received is {{amount}} without tax, which is 50,000 yen or more. A paper receipt needs a revenue stamp (収入印紙)."
   },
   "pos": {
     "not_opened_title": "POS Not Opened",

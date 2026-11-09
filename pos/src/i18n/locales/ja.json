@@ -99,7 +99,8 @@
     "short_by": "{{amount}} 不足",
     "change_due": "お釣り: {{amount}}",
     "change_not_cash": "お支払いが請求額を {{amount}} 超えています。お釣りは現金でのみお渡しできます。",
-    "success": "会計が完了しました: {{amount}} をお預かり"
+    "success": "会計が完了しました: {{amount}} をお預かり",
+    "stamp_notice": "現金のお受取額が税抜 {{amount}} で5万円以上です。紙の領収書には収入印紙が必要です。"
   },
   "pos": {
     "not_opened_title": "レジが開いていません",

@@ -13,11 +13,24 @@ import re
 import frappe
 from frappe.utils import flt, get_datetime
 
+from ury.setup.cashless import CREDIT_CARD_MODES
 from ury.ury.api.merged_bill import table_label
 
 PRINT_FORMAT = "URY JP Receipt"
 REGISTRATION_NUMBER = re.compile(r"T\d{13}")
 ORDER_TYPES = {"Dine In": "店内", "Take Away": "お持ち帰り"}
+CREDIT_NOTE = "※クレジットカードによる信用取引の決済です"
+# 収入印紙: cash received of this much or more, counted without the consumption tax (the same rule is in
+# pos/src/lib/stamp-duty.ts, which tells the cashier before the payment is confirmed)
+STAMP_THRESHOLD = 50000
+
+
+def stamp_duty_needed(cash_paid, net_total, total):
+	"""Cash that stays with the shop (handed over minus change), without the tax by its share of the bill: 50,000 yen or
+	more needs a 収入印紙 on a paper receipt."""
+	if flt(cash_paid) <= 0 or flt(total) <= 0 or flt(net_total) <= 0:
+		return False
+	return int(flt(cash_paid) * flt(net_total) / flt(total)) >= STAMP_THRESHOLD
 
 
 def yen(amount):
@@ -105,7 +118,11 @@ def jp_receipt_data(doc):
 			if merged_tax
 			else sum(flt(i.rounded_total or i.grand_total) for i in invoices)
 		),
-		**(_payment_lines(invoices) if paid else {"cashless": [], "cash_received": "", "cash_label": ""}),
+		**(
+			_payment_lines(invoices)
+			if paid
+			else {"cashless": [], "cash_received": "", "cash_label": "", "methods": "", "credit_note": "", "stamp_box": ""}
+		),
 		"change": yen(change) if paid and change else "",
 	})
 
@@ -114,17 +131,27 @@ def _payment_lines(invoices):
 	"""How the bill was paid: one line per cashless method (its name and amount, the payments of
 	both invoices of a merged bill added up) and the cash handed over (the change is printed
 	separately). "お預かり" alone when everything was cash, "お預かり（現金）" next to cashless lines."""
-	cashless, cash = {}, 0
+	cashless, cash, methods = {}, 0, []
 	for invoice in invoices:
 		for payment in invoice.payments:
+			if flt(payment.amount) <= 0:
+				continue
+			if payment.mode_of_payment not in methods:
+				methods.append(payment.mode_of_payment)
 			if frappe.db.get_value("Mode of Payment", payment.mode_of_payment, "type") == "Cash":
 				cash += flt(payment.amount)
 			else:
 				cashless[payment.mode_of_payment] = cashless.get(payment.mode_of_payment, 0) + flt(payment.amount)
+	change = sum(flt(i.change_amount) for i in invoices)
+	net_total = sum(flt(i.net_total) for i in invoices)
+	total = sum(flt(i.rounded_total or i.grand_total) for i in invoices)
 	return {
 		"cashless": [{"mode": mode, "amount": yen(amount)} for mode, amount in cashless.items()],
 		"cash_received": yen(cash) if cash else "",
 		"cash_label": "お預かり（現金）" if cashless else "お預かり",
+		"methods": "、".join(methods),
+		"credit_note": CREDIT_NOTE if any(m in CREDIT_CARD_MODES for m in cashless) else "",
+		"stamp_box": "収入印紙 貼付欄" if stamp_duty_needed(cash - change, net_total, total) else "",
 	}
 
 

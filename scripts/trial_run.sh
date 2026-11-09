@@ -61,6 +61,9 @@ for key in ("encryption_key", "allow_tests", "developer_mode", "ury_test_site"):
         b[key] = a[key]
 json.dump(b, open(path, "w"), indent=1)
 PY
+  # what bench migrate does after the models are synced (the after_migrate hook): the receipt template of the code is
+  # written to the site; without it a template change shows up as a difference of the site
+  bench --site "$TRIAL" execute ury.setup.jp_tax.refresh_receipt_format >"$LOG/refresh.log" 2>&1 || { echo "refresh_receipt_format failed"; rc=1; }
   bench --site "$TRIAL" scheduler disable >/dev/null 2>&1
   bench --site "$TRIAL" execute ury.setup.trial_snapshot.save --kwargs "{\"path\": \"$SNAP\"}" >"$LOG/save.log" 2>&1 || { echo "snapshot failed"; tail -5 "$LOG/save.log"; rc=1; }
   if [ $rc -eq 0 ]; then

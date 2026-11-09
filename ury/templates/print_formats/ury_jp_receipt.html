@@ -54,6 +54,7 @@
 		{%- endfor %}
 		<tr class="total"><td>合計（税込）</td><td class="r">{{ r.total }}</td></tr>
 		{%- if r.paid %}
+		{%- if r.methods %}<tr><td>お支払方法</td><td class="r">{{ r.methods }}</td></tr>{% endif %}
 		{%- for pay in r.cashless %}
 		<tr><td>{{ pay.mode }}</td><td class="r">{{ pay.amount }}</td></tr>
 		{%- endfor %}
@@ -62,4 +63,6 @@
 		{%- endif %}
 	</table>
 	{%- if r.has_reduced %}<div class="small" style="margin-top: 4px">※は軽減税率対象</div>{% endif %}
+	{%- if r.credit_note %}<div class="small" style="margin-top: 4px">{{ r.credit_note }}</div>{% endif %}
+	{%- if r.stamp_box %}<div class="c small" style="margin-top: 8px; border: 1px solid #000; padding: 10px 0">{{ r.stamp_box }}</div>{% endif %}
 </div>

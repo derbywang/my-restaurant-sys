@@ -123,11 +123,12 @@ DB_ROOT_PASSWORD=<MariaDB root 密码> apps/ury/scripts/trial_run.sh ury.setup.t
 1. 取 `ury-test.localhost/private/backups/` 里最新的 `*-database.sql.gz`（没有就先 `bench backup`）。
 2. `bench new-site ury-trial-<时间>.localhost --source_sql <备份>`：只恢复数据库，不重装应用。
 3. 把测试站点 `site_config.json` 里的 `encryption_key`、`allow_tests`、`developer_mode`、`ury_test_site` 复制过去（不复制数据库账号），关调度器，清缓存。
-4. 取防护的快照（`ury.setup.trial_snapshot.save`：角色、账号、权限、配置表）。
-5. 逐个模块在临时站点上运行 `run-tests`（防护照样生效），每个模块列出 `Ran / OK / FAILED` 和用时。
-6. 全部跑完再取一次快照对比（`trial_snapshot.compare`）：防护只比每个类前后，这一步看整个过程的累计变化。`TRIAL CLEAN` 才算干净。
-7. `drop-site` 删除临时站点（名字不以 `ury-trial-` 开头的站点脚本不会删），并确认站点目录和归档都没有了。
-8. 打印建站、删站各用了多少秒。
+4. 执行 `refresh_receipt_format`（相当于 `bench migrate` 的 `after_migrate` 钩子，把代码里的小票模板写到站点；否则小票模板一改，整站对比就会报“小票格式不同”）。
+5. 取防护的快照（`ury.setup.trial_snapshot.save`：角色、账号、权限、配置表）。
+6. 逐个模块在临时站点上运行 `run-tests`（防护照样生效），每个模块列出 `Ran / OK / FAILED` 和用时。
+7. 全部跑完再取一次快照对比（`trial_snapshot.compare`）：防护只比每个类前后，这一步看整个过程的累计变化。`TRIAL CLEAN` 才算干净。
+8. `drop-site` 删除临时站点（名字不以 `ury-trial-` 开头的站点脚本不会删），并确认站点目录和归档都没有了。
+9. 打印建站、删站各用了多少秒。
 
 ### 注意
 - 备份是测试站点**最新备份**的状态；测试站点之后改过的数据副本里没有，这对“检查有没有改动”没有影响。

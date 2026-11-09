@@ -25,6 +25,10 @@ CASHLESS_MODES = {
 }
 
 
+# the Modes of Payment that are a credit card (the receipt then says it is a credit transaction)
+CREDIT_CARD_MODES = ("クレジットカード", "Credit Card")
+
+
 def apply_cashless_payments():
 	"""Idempotent. Japanese companies only: the accounts, the three Modes of Payment with their
 	accounts, and the modes in the POS Profiles (added after the existing ones)."""

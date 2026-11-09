@@ -7,6 +7,7 @@ import { defaultCashMode } from '../lib/payment-change';
 import { canShowDiscount, friendlyError } from '../lib/pos-permissions';
 import { useRootStore } from '../store/root-store';
 import { t } from '../i18n';
+import { stampNotice } from '../lib/stamp-duty';
 import { checkPayments, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
 
@@ -113,6 +114,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const paymentsTotal = payments.reduce((sum, p: any) => sum + p.amount, 0);
   // Money over the amount due is change, and change is only given in cash
   const check = checkPayments(payments as PaymentRow[], finalTotal, paymentModeTypes);
+  // cash of 50,000 yen or more without the tax: the paper receipt needs a 収入印紙 (the cashier is told before paying)
+  const stamp = stampNotice(payments as PaymentRow[], paymentModeTypes, finalTotal, totals?.net_total ?? finalTotal);
   const shortfall = check.short;
   const isShort = shortfall > 0.005;
   const changeNotCash = check.error === 'change_not_cash';
@@ -279,6 +282,11 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
             {check.change > 0 && !changeNotCash && (
               <p className="text-yellow-700 text-sm font-medium">
                 {t('payment.change_due', { amount: formatCurrency(check.change) })}
+              </p>
+            )}
+            {stamp.needed && (
+              <p role="status" data-testid="stamp-notice" className="rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                {t('payment.stamp_notice', { amount: formatCurrency(stamp.netCash) })}
               </p>
             )}
             {changeNotCash && (

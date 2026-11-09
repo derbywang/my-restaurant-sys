@@ -134,6 +134,8 @@ class TestMergingTables(SetupCase):
 	def _unmerge(self):
 		frappe.db.set_value("URY Table", {"name": ["in", list(TABLES)]}, "merged_with", None)
 		frappe.db.delete("Branch", {"name": OTHER_BRANCH})
+		# the rows of its user table belong to the branch: without this one row was left on every run (2026-11-09)
+		frappe.db.delete("URY User", {"parent": OTHER_BRANCH, "parenttype": "Branch"})
 		frappe.db.commit()
 
 	def merged_with(self):

@@ -233,14 +233,17 @@ class TestPublishToBranch(URYTestCase):
 		self.assertNotIn(OTHER_BRANCH_STAFF, users)
 
 	def test_a_duplicate_row_in_the_branch_table_sends_once(self):
-		# the other branch of the test site has the same account in many rows
-		other = frappe.db.get_value("URY User", {"user": OTHER_BRANCH_STAFF, "parenttype": "Branch"}, "parent")
-		if not other:
-			self.skipTest("no branch with duplicate rows on this site")
+		# a branch with the same account in two rows (made here, in the transaction of the test)
+		for _ in range(2):
+			frappe.get_doc(
+				{"doctype": "URY User", "parent": "dup-branch-test", "parenttype": "Branch", "parentfield": "user",
+				 "user": CASHIER}
+			).db_insert()
+		self.addCleanup(frappe.db.delete, "URY User", {"parent": "dup-branch-test"})
 		with mock.patch.object(frappe, "publish_realtime") as publish:
-			self.module.publish_to_branch("some_event", {}, other)
+			self.module.publish_to_branch("some_event", {}, "dup-branch-test")
 		users = [call.kwargs["user"] for call in publish.call_args_list]
-		self.assertEqual(len(users), len(set(users)))
+		self.assertEqual(users, [CASHIER])
 
 	def test_a_disabled_account_gets_nothing(self):
 		frappe.db.set_value("User", CASHIER, "enabled", 0)

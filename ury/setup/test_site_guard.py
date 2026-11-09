@@ -10,10 +10,102 @@ from unittest import mock
 import frappe
 
 from ury.setup import test_guard
-from ury.setup.test_site import URYTestCase
+from ury.setup.test_site import COMPANY, FOOD_ITEM, POS_PROFILE, URYTestCase
 
 PROBE_ROLE = "Guard Probe Role"
 PROBE_USER = "guard-probe@test.local"
+
+
+class TestConfigSnapshot(URYTestCase):
+	"""The shop's configuration (POS Profile, menu, kitchens, payment accounts, settings ...) is guarded like the roles:
+	a changed value, an added row or a removed row is reported with the table and the field."""
+
+	def _diff(self, change):
+		before = test_guard.access_snapshot()
+		change()
+		lines = test_guard.access_diff(before, test_guard.access_snapshot())
+		frappe.db.rollback()
+		return lines
+
+	def test_nothing_changed_nothing_reported(self):
+		self.assertEqual(self._diff(lambda: None), [])
+
+	def test_a_changed_value_of_a_pos_profile_is_named(self):
+		lines = self._diff(lambda: frappe.db.set_value("POS Profile", POS_PROFILE, "customer", "somebody else"))
+		self.assertTrue(any("POS Profile" in l and POS_PROFILE in l and "customer" in l for l in lines), lines)
+
+	def test_a_change_that_keeps_the_modified_time_is_found_too(self):
+		lines = self._diff(
+			lambda: frappe.db.set_value("POS Profile", POS_PROFILE, "customer", "somebody else", update_modified=False)
+		)
+		self.assertTrue(any("customer" in l for l in lines), lines)
+
+	def test_a_new_and_a_removed_row(self):
+		def change():
+			frappe.get_doc({"doctype": "Price List", "price_list_name": "guard-test-list", "currency": "JPY", "selling": 1}).insert()
+			frappe.db.delete("URY Menu Item", {"item": FOOD_ITEM})
+
+		lines = self._diff(change)
+		self.assertTrue(any("Price List" in l and "guard-test-list" in l and "added" in l for l in lines), lines)
+		self.assertTrue(any("URY Menu Item" in l and FOOD_ITEM in l and "removed" in l for l in lines), lines)
+
+	def test_a_child_row_written_again_with_a_new_name_is_not_a_change(self):
+		def rewrite():
+			row = frappe.db.get_value("URY Production Item Groups", {}, "name")
+			frappe.db.set_value("URY Production Item Groups", row, "name", "renamed-row-for-the-guard", update_modified=False)
+
+		self.assertEqual(self._diff(rewrite), [])
+
+	def test_a_child_row_that_is_added_is_a_change(self):
+		def add():
+			frappe.get_doc(
+				{"doctype": "URY User", "parent": "テスト店", "parenttype": "Branch", "parentfield": "user", "user": "x-guard@test.local"}
+			).db_insert()
+
+		self.assertTrue(any("URY User" in l and "x-guard@test.local" in l and "added" in l for l in self._diff(add)))
+
+	def test_what_every_order_changes_is_not_reported(self):
+		lines = self._diff(lambda: frappe.db.set_value("Company", COMPANY, "total_monthly_sales", 123456))
+		self.assertEqual(lines, [])
+
+	def test_the_time_stamp_of_a_setting_is_not_reported(self):
+		lines = self._diff(lambda: frappe.db.sql("update tabSingles set value = '2000-01-01' where doctype = 'System Settings' and field = 'modified'"))
+		self.assertEqual(lines, [])
+
+	def test_each_group_of_configuration_is_watched(self):
+		watched = set(test_guard.CONFIG_DOCTYPES) | set(test_guard.CONFIG_SINGLES)
+		for doctype in (
+			"POS Profile", "URY Self Ordering Profile", "URY Restaurant", "Branch", "Company", "Mode of Payment Account",
+			"URY Menu", "URY Menu Item", "URY Production Unit", "Print Format", "Scheduled Job Type",
+			"System Settings", "Global Defaults", "Selling Settings",
+		):
+			self.assertIn(doctype, watched, doctype)
+
+	def test_a_custom_field_is_watched(self):
+		lines = self._diff(lambda: frappe.db.set_value("Custom Field", "POS Invoice-restaurant_table", "read_only", 1 - (frappe.db.get_value("Custom Field", "POS Invoice-restaurant_table", "read_only") or 0)))
+		self.assertTrue(any("Custom Field" in l and "read_only" in l for l in lines), lines)
+
+	def test_a_single_setting_is_watched(self):
+		old = frappe.db.get_single_value("System Settings", "language")
+		lines = self._diff(lambda: frappe.db.set_single_value("System Settings", "language", "xx" if old != "xx" else "en"))
+		self.assertTrue(any("System Settings" in l and "language" in l for l in lines), lines)
+
+	def test_what_a_test_changes_all_the_time_is_not_reported(self):
+		# the table's own working state (taken, since when) is the tests' daily business
+		table = frappe.db.get_value("URY Table", {}, "name")
+		lines = self._diff(lambda: frappe.db.set_value("URY Table", table, {"occupied": 1, "self_order_open": 1}))
+		self.assertEqual(lines, [])
+
+	def test_the_check_names_the_table_and_points_to_the_backup(self):
+		before = test_guard.access_snapshot()
+		frappe.db.set_value("POS Profile", POS_PROFILE, "customer", "somebody else")
+		try:
+			with self.assertRaises(AssertionError) as caught:
+				test_guard.check_unchanged("SomeTests", before)
+		finally:
+			frappe.db.rollback()
+		self.assertIn("POS Profile", str(caught.exception))
+		self.assertIn("backup", str(caught.exception))
 
 
 class TestAccessSnapshot(URYTestCase):
@@ -91,7 +183,7 @@ class TestAClassThatLeaksFails(URYTestCase):
 		self.addCleanup(self._remove_probe)
 		result = unittest.TextTestRunner(stream=open(os.devnull, "w")).run(unittest.defaultTestLoader.loadTestsFromTestCase(Leaky))
 		messages = " ".join(text for _case, text in result.errors + result.failures)
-		self.assertIn("changed the roles, accounts or permissions", messages)
+		self.assertIn("changed the roles, accounts, permissions or configuration", messages)
 		self.assertIn(PROBE_ROLE, messages)
 
 	def _remove_probe(self):

@@ -2,6 +2,25 @@
 
 小的界面问题放在这里，集中处理。各项互相独立，做之前先和需求方确认。
 
+## 2026-11-09～11-10 完成的事项（税务、呼叫结账、桌子状态）和新增待办
+
+**已完成（细节见 `jp-tax-design.md`、`self-order-design.md` 3.8、`cashless-payment-design.md`、`staff-training-points.md`）：**
+- 税理士 11/9 的回答：合算后切舍一次（含草稿保存金额和找零，`merged_bill.apply_pair_tax` + `URYPOSInvoice` 的自动套用）；小票的支付方法、信用交易说明（不带「※」，「※」只表示轻减税率）、「収入印紙 貼付欄」（26 × 22 毫米）；整单折扣按税率显示；会計分割对话框提示；科目改名和补丁（`rename_accounts_for_tax_advisor`、`rewrite_tax_account_names_in_bills`）；小票样本脚本 `scripts/receipt_samples.sh`（自动核对"お預かり − お釣り = 合計"）；
+- 呼叫结账（`service_requests.py`、`lib/service-requests.ts`、提示条、桌卡、喇叭按钮）、自助点餐下单后的 `table_updated`；
+- 桌子状态统一（`lib/table-bills.ts`）和取消账单不释放有人的桌子（`other_unprinted_orders_on_table`）；
+- 收款画面把现金显示为「現金」（`paymentModeLabel`）。
+
+**等税理士回答（回答后可能要调整）：**
+- 热敏小票（レシート）算不算要贴印纸的「領収書」；PayPay・楽天ペイ 小票上的写法；会计年度（按经营主体的决算期）；手续费的消费税区分（按合同）；外卖平台（以后用时再确认）；1% 税率只做了模板，实际切换要等法律成立和施行。
+
+**新增待办 / 以后再做：**
+- **呼叫结账的两条路径只有自动测试，没有在浏览器里走过**：不打印直接付款、取消订单（`test_service_requests` 已覆盖）。试营业时顺便走一遍；另外"点后建立的那张合算账单收款"在浏览器里也没走过（找零由 `test_merged_tax` 覆盖）。
+- **培训要点**（已写入 `staff-training-points.md`）：开店时先点一下 POS 画面（浏览器要求页面被点过一次才允许出声；顶栏的喇叭按钮点一下也行）；会計分割 vs 分担付款；合算后税额可能差 ¥1。
+- **均分计算器（割り勘）**：先不做；以后只显示每人金额，不写数据。
+- **`device_status` 缺凭据的 Error Log（ury-test）**：每次 migrate 偶尔出现 2～5 条，发送者没查到；已加临时记录（`ury/setup/request_trace.py`，**未提交**，站点配置 `ury_trace_device_status`），下次 migrate 后读 `sites/ury-test.localhost/logs/device_status_trace.log`，查清后删除（见项目记忆）。
+- **`frontend/` 的 `TimeWiseSales.tsx` 类型错误**（旧问题，已列在"技术待办（类型检查）"里）。
+- **取消账单时的桌台释放**：已修；**打印时的桌台释放** 和 **付款时的释放** 已一致（都看"有没有未打印的开放账单"）。
+
 ## 交班对话框
 - **表头还是英文**：Payment Mode / Opening / Expected / Closing / Difference 要翻译（ja / zh / en，见 `i18n-design.md`）。
 - **Closing 输入框的占位显示「0.00」**：日元不应有小数，占位改成「0」或不显示小数。

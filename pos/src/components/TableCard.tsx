@@ -1,9 +1,10 @@
 import { type MouseEvent, type ReactNode } from 'react';
 import { Bell, Eye, Loader2, Printer, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
-import { formatInvoiceTime } from '@ury/core';
+import { formatCurrency, formatInvoiceTime } from '@ury/core';
 import type { Table } from '../lib/table-api';
 import type { CardState } from '../lib/service-requests';
+import { waitingBillsLabel, type WaitingBills } from '../lib/table-bills';
 import { Badge } from '@ury/ui';
 import { TableShapeIcon } from './TableShapeIcon';
 import TableActionsMenu from './TableActionsMenu';
@@ -35,6 +36,8 @@ interface TableCardProps {
   selfOrderSlot?: ReactNode;
   /** The guests' 「お会計」 call of the table (null: none). Open rings; Acknowledged is quiet but stays until the bill is printed, paid or cancelled. */
   billCall?: CardState | null;
+  /** Printed bills of this table that are not paid yet: a small mark 「会計待ち ¥…」 (the table itself may be 空席). */
+  waitingBills?: WaitingBills | null;
 }
 
 const TableCard = ({
@@ -55,6 +58,7 @@ const TableCard = ({
   isRestricted = false,
   selfOrderSlot,
   billCall = null,
+  waitingBills = null,
 }: TableCardProps) => {
   const isOccupied = table.occupied === 1;
 
@@ -121,6 +125,14 @@ const TableCard = ({
             />
           </div>
         </div>
+
+        {waitingBills && (
+          <div data-testid="bills-waiting" className="mb-2">
+            <Badge variant="secondary" className="whitespace-nowrap">
+              {waitingBillsLabel(waitingBills, formatCurrency, (key, params) => t(key, params))}
+            </Badge>
+          </div>
+        )}
 
         <p
           className={cn(

@@ -377,7 +377,9 @@
     "no_destination_tables": "이 지점에 이동할 수 있는 빈 테이블이 없습니다",
     "transfer_not_for_merged": "합쳐진 테이블은 이동할 수 없습니다. 먼저 합치기를 해제하세요.",
     "order_already_billed": "이 주문은 이미 계산서가 발행되었습니다",
-    "no_captains_found": "담당자를 찾을 수 없습니다"
+    "no_captains_found": "담당자를 찾을 수 없습니다",
+    "bill_waiting": "계산 대기 {{amount}}",
+    "bills_waiting": "계산 대기 {{count}}건 {{amount}}"
   },
   "bill_split": {
     "split_bill": "전표 분할",

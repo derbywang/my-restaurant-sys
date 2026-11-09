@@ -377,7 +377,9 @@
     "no_destination_tables": "この店舗に移動できる空席がありません",
     "transfer_not_for_merged": "連結中のテーブルは席移動できません。先に連結を解除してください。",
     "order_already_billed": "すでに伝票が発行されています",
-    "no_captains_found": "担当者が見つかりません"
+    "no_captains_found": "担当者が見つかりません",
+    "bill_waiting": "会計待ち {{amount}}",
+    "bills_waiting": "会計待ち {{count}}件 {{amount}}"
   },
   "bill_split": {
     "split_bill": "会計分割",

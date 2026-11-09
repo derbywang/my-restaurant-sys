@@ -377,7 +377,9 @@
     "no_destination_tables": "No vacant tables available in this branch",
     "transfer_not_for_merged": "Table transfer is not allowed for merged tables. Unmerge first.",
     "order_already_billed": "This order has already been billed",
-    "no_captains_found": "No captains found"
+    "no_captains_found": "No captains found",
+    "bill_waiting": "Bill waiting {{amount}}",
+    "bills_waiting": "{{count}} bills waiting {{amount}}"
   },
   "bill_split": {
     "split_bill": "Split bill",

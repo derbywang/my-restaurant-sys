@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bell, Lock, User, Users } from 'lucide-react';
+import { Bell, User, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { Badge } from '@ury/ui';
 import { elapsedMinutes, formatCurrency } from '@ury/core';
@@ -7,6 +7,7 @@ import { t } from '../../i18n';
 import type { Table } from '../../lib/table-api';
 import type { ActiveTableOrder } from '../lib/captain-table-api';
 import type { CardState } from '../../lib/service-requests';
+import { waitingBillsLabel, type WaitingBills } from '../../lib/table-bills';
 
 export type CaptainTableOwnership = 'free' | 'mine' | 'other' | 'occupied-unknown';
 
@@ -22,6 +23,8 @@ export interface CaptainTableCardProps {
   selfOrderSlot?: ReactNode;
   /** The guests' 「お会計」 call of the table (null: none): the same as on the register's card (bell, minutes, 確認済み, red after 3 minutes). */
   billCall?: CardState | null;
+  /** Printed bills of this table not paid yet: a small mark 「会計待ち ¥…」; the table itself is 空席 or 使用中 by its occupancy. */
+  waitingBills?: WaitingBills | null;
 }
 
 const elapsedLabel = (timestamp: string | null): string | null => {
@@ -56,23 +59,22 @@ const CaptainTableCard = ({
   onTap,
   selfOrderSlot,
   billCall = null,
+  waitingBills = null,
 }: CaptainTableCardProps) => {
   const isOccupied = table.occupied === 1;
-  const isBilled = Boolean(order?.invoicePrinted);
   const hasMergePartners = Boolean(mergePartners && mergePartners.length > 0);
   const elapsed = isOccupied ? elapsedLabel(table.latest_invoice_time) : null;
 
-  const colorClasses = isBilled
-    ? 'border-slate-400 bg-slate-100 text-slate-900'
-    : ownership === 'mine'
+  // the state of the card is the occupancy of the table (空席 / 使用中); a bill waiting for the payment is a mark
+  const colorClasses =
+    ownership === 'mine'
       ? 'border-sky-400 bg-sky-50 text-sky-900'
       : ownership === 'free'
         ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
         : 'border-amber-400 bg-amber-50 text-amber-900';
 
-  const statusLabel = isBilled
-    ? t('captain.status_billed')
-    : ownership === 'mine'
+  const statusLabel =
+    ownership === 'mine'
       ? t('captain.status_mine')
       : ownership === 'free'
         ? t('captain.status_free')
@@ -80,13 +82,7 @@ const CaptainTableCard = ({
           ? ownerName
           : t('captain.status_occupied');
 
-  const statusBadgeVariant = isBilled
-    ? 'secondary'
-    : ownership === 'mine'
-      ? 'info'
-      : ownership === 'free'
-        ? 'success'
-        : 'warning';
+  const statusBadgeVariant = ownership === 'mine' ? 'info' : ownership === 'free' ? 'success' : 'warning';
 
   return (
     <div
@@ -121,7 +117,6 @@ const CaptainTableCard = ({
         <span className="min-w-0 break-words text-lg font-bold" title={table.name}>
           {table.name}
         </span>
-        {isBilled && <Lock className="h-4 w-4 shrink-0" aria-label={t('captain.billed_locked')} />}
       </div>
 
       {hasMergePartners && (
@@ -137,6 +132,12 @@ const CaptainTableCard = ({
         <Badge variant={statusBadgeVariant} size="sm" className="w-fit truncate max-w-full">
           {statusLabel}
         </Badge>
+
+        {waitingBills && (
+          <Badge variant="secondary" size="sm" data-testid="bills-waiting" className="w-fit truncate max-w-full">
+            {waitingBillsLabel(waitingBills, formatCurrency, (key, params) => t(key, params))}
+          </Badge>
+        )}
 
         {isOccupied && ownership !== 'mine' && ownerName && (
           <span className="flex items-center gap-1 truncate text-xs font-medium opacity-80">

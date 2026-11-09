@@ -377,7 +377,9 @@
     "no_destination_tables": "本门店没有可用的空闲桌台",
     "transfer_not_for_merged": "已合并的桌台不能换桌，请先取消合并。",
     "order_already_billed": "此订单已出账",
-    "no_captains_found": "未找到服务员"
+    "no_captains_found": "未找到服务员",
+    "bill_waiting": "待结账 {{amount}}",
+    "bills_waiting": "待结账 {{count}}张 {{amount}}"
   },
   "bill_split": {
     "split_bill": "拆分账单",

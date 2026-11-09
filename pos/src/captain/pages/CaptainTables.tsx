@@ -13,11 +13,8 @@ import { cardState } from '../../lib/service-requests';
 import { useServiceRequestStore } from '../../store/service-request-store';
 import { getRooms, getTables, type Room, type Table } from '../../lib/table-api';
 import { getMergeGroupMembers, sortTablesByMergeGroups } from '../../lib/table-utils';
-import {
-  getActiveTableOrders,
-  getUserFullNames,
-  type ActiveTableOrder,
-} from '../lib/captain-table-api';
+import { getUserFullNames, type ActiveTableOrder } from '../lib/captain-table-api';
+import { getTableBills, type WaitingBills } from '../../lib/table-bills';
 import CaptainTableCard, {
   type CaptainTableOwnership,
 } from '../components/CaptainTableCard';
@@ -46,6 +43,7 @@ export default function CaptainTables() {
   const [tables, setTables] = useState<Table[]>([]);
   const selfOrder = useSelfOrderTables();
   const [activeOrders, setActiveOrders] = useState<Map<string, ActiveTableOrder>>(new Map());
+  const [waitingBills, setWaitingBills] = useState<Map<string, WaitingBills>>(new Map());
   const [ownerNames, setOwnerNames] = useState<Map<string, string>>(new Map());
   const [tablesLoading, setTablesLoading] = useState(false);
   const [tablesError, setTablesError] = useState<string | null>(null);
@@ -108,8 +106,18 @@ export default function CaptainTables() {
 
   const loadActiveOrders = useCallback(async (branchName: string) => {
     try {
-      const orders = await getActiveTableOrders(branchName);
+      // the order of the guests at the table now decides its state; printed bills waiting for the payment are a mark
+      const bills = await getTableBills(branchName);
+      const orders = new Map<string, ActiveTableOrder>();
+      const waiting = new Map<string, WaitingBills>();
+      bills.forEach((entry, table) => {
+        if (entry.current) {
+          orders.set(table, { ...entry.current, invoicePrinted: false });
+        }
+        if (entry.waiting) waiting.set(table, entry.waiting);
+      });
       setActiveOrders(orders);
+      setWaitingBills(waiting);
 
       const waiters = Array.from(orders.values()).map((order) => order.waiter);
       const names = await getUserFullNames(waiters);
@@ -260,6 +268,7 @@ export default function CaptainTables() {
                   ownerName={ownership === 'mine' ? undefined : ownerName}
                   mergePartners={mergePartners}
                   billCall={cardState(billCalls, table.name, billCallsNow)}
+                  waitingBills={waitingBills.get(table.name) ?? null}
                   onTap={() => handleTableTap(table)}
                   selfOrderSlot={
                     <SelfOrderToggle

@@ -30,6 +30,7 @@ export interface ActiveTableOrder {
   invoiceName: string;
   waiter: string;
   grandTotal: number;
+  /** Always false on the table cards now: a printed bill is a mark (see lib/table-bills.ts), not the state of the card. */
   invoicePrinted: boolean;
 }
 

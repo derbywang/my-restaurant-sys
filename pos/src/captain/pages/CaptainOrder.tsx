@@ -27,6 +27,8 @@ import TableTransferDialog from '../../components/TableTransferDialog';
 import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
 import { t } from '../../i18n';
+import ServiceRequestBanner from '../../components/ServiceRequestBanner';
+import { useAcknowledgeCallsOfTable } from '../../hooks/useAcknowledgeCallsOfTable';
 import { customerId } from '../../lib/default-customer';
 import { refusedNoteChange, syncFailureMessageKey } from '../../lib/order-sync';
 import { noteIsLocked, noteLockedMessageKey } from '../../lib/sent-items';
@@ -47,6 +49,8 @@ type Mode = 'menu' | 'order';
  */
 export default function CaptainOrder() {
   const { table } = useParams<{ table: string }>();
+  // opening the order of a table with a call for the bill makes the call "seen" (quiet; the card keeps it until the bill)
+  useAcknowledgeCallsOfTable(table ?? null);
   const navigate = useNavigate();
   const user = useRootStore((state: RootState) => state.user);
 
@@ -581,6 +585,7 @@ export default function CaptainOrder() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <ServiceRequestBanner onOpen={(request) => navigate(`/order/table/${request.table}`)} />
       {/* Header */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-200 px-3 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">

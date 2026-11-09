@@ -7,6 +7,9 @@ import LanguageMenu from '../../components/LanguageMenu';
 import SelfOrderToggle from '../../components/SelfOrderToggle';
 import { useSelfOrderTables } from '../../hooks/useSelfOrderTables';
 import { t } from '../../i18n';
+import ServiceRequestBanner from '../../components/ServiceRequestBanner';
+import { cardState } from '../../lib/service-requests';
+import { useServiceRequestStore } from '../../store/service-request-store';
 import { getRooms, getTables, type Room, type Table } from '../../lib/table-api';
 import { getMergeGroupMembers, sortTablesByMergeGroups } from '../../lib/table-utils';
 import {
@@ -129,6 +132,18 @@ export default function CaptainTables() {
     }
   }, [branch, loadActiveOrders]);
 
+  // the calls for the bill of the branch (kept fresh by the listener of the app) and the tables they come from
+  const billCalls = useServiceRequestStore((state) => state.requests);
+  const billCallsNow = useServiceRequestStore((state) => state.now);
+  const tablesVersion = useServiceRequestStore((state) => state.tablesVersion);
+  useEffect(() => {
+    if (tablesVersion === 0) return;
+    if (selectedRoom) void getTables(selectedRoom).then((fetched) => setTables(sortTablesByMergeGroups(fetched))).catch(() => undefined);
+    if (branch) void loadActiveOrders(branch);
+    // only a new version asks for it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablesVersion]);
+
   const refresh = useCallback(() => {
     if (selectedRoom) loadTables(selectedRoom);
     if (branch) loadActiveOrders(branch);
@@ -176,6 +191,7 @@ export default function CaptainTables() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
+      <ServiceRequestBanner onOpen={(request) => navigate(`/order/table/${request.table}`)} />
       <div className="sticky top-0 z-10 border-b border-gray-200 bg-white p-3">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-lg font-bold text-gray-900">{t('captain.tables_title')}</h1>
@@ -241,6 +257,7 @@ export default function CaptainTables() {
                   ownership={ownership}
                   ownerName={ownership === 'mine' ? undefined : ownerName}
                   mergePartners={mergePartners}
+                  billCall={cardState(billCalls, table.name, billCallsNow)}
                   onTap={() => handleTableTap(table)}
                   selfOrderSlot={
                     <SelfOrderToggle

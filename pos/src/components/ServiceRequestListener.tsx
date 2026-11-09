@@ -9,6 +9,10 @@ import { useRootStore } from '../store/root-store';
 /** Polling is the backup of the push (a lost connection, a proxy that does not pass it). */
 const POLL_MS = 15_000;
 const EVENT = 'service_request';
+/** A table was ordered at by the guests (self ordering): its card must not say 空席 any more. */
+const TABLE_EVENT = 'table_updated';
+/** The table lists are read again this often as well (a push can be lost). */
+const TABLES_POLL_MS = 30_000;
 
 /**
  * Keeps the 「お会計」 calls of the branch fresh for the whole POS: the push refreshes at once, the poll every 15 s, and
@@ -20,6 +24,8 @@ const ServiceRequestListener: React.FC = () => {
   const canSee = Boolean(permissions?.take_orders);
   const setRequests = useServiceRequestStore((state) => state.setRequests);
   const tick = useServiceRequestStore((state) => state.tick);
+  const bumpTables = useServiceRequestStore((state) => state.bumpTables);
+  const setRefresh = useServiceRequestStore((state) => state.setRefresh);
   const heard = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
@@ -39,28 +45,38 @@ const ServiceRequestListener: React.FC = () => {
 
   useEffect(() => {
     if (!canSee) return;
+    setRefresh(() => void refresh());
     void refresh();
     const poll = window.setInterval(() => void refresh(), POLL_MS);
     const clock = window.setInterval(tick, 15_000);
+    const tables = window.setInterval(bumpTables, TABLES_POLL_MS);
     return () => {
       window.clearInterval(poll);
       window.clearInterval(clock);
+      window.clearInterval(tables);
     };
-  }, [canSee, refresh, tick]);
+  }, [canSee, refresh, tick, bumpTables, setRefresh]);
 
   useEffect(() => {
     if (!canSee) return;
     let cancelled = false;
     let detach: (() => void) | null = null;
-    const handler = () => void refresh();
+    // a call (new, seen, done) changes what the cards show, and the table of a call may have just become occupied
+    const handler = () => {
+      void refresh();
+      bumpTables();
+    };
+    const tableHandler = () => bumpTables();
     getRealtimeSocket()
       .then((socket) => {
         if (cancelled) return;
         socket.on(EVENT, handler);
+        socket.on(TABLE_EVENT, tableHandler);
         // after a reconnect the push of the time in between was lost: look again
         socket.on('connect', handler);
         detach = () => {
           socket.off(EVENT, handler);
+          socket.off(TABLE_EVENT, tableHandler);
           socket.off('connect', handler);
         };
       })
@@ -69,7 +85,7 @@ const ServiceRequestListener: React.FC = () => {
       cancelled = true;
       detach?.();
     };
-  }, [canSee, refresh]);
+  }, [canSee, refresh, bumpTables]);
 
   // a member of staff opens the order of a table (from the tables, the banner or the order list)
   const selectedTable = usePOSStore((state) => state.selectedTable);

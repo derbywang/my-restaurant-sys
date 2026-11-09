@@ -11,6 +11,7 @@ import AuthGuard from './components/AuthGuard';
 import POSOpeningProvider from './components/POSOpeningProvider';
 import ScreenSizeProvider from './components/ScreenSizeProvider';
 import KotAlertListener from './components/KotAlertListener';
+import ServiceRequestListener from './components/ServiceRequestListener';
 import CaptainRouteGuard from './captain/components/CaptainRouteGuard';
 import CaptainTables from './captain/pages/CaptainTables';
 import CaptainOrder from './captain/pages/CaptainOrder';
@@ -42,6 +43,8 @@ function App() {
         <AuthGuard>
           <POSOpeningProvider>
             <Router basename="/pos">
+              {/* the calls for the bill reach every screen of the POS, the register's and the captain's */}
+              <ServiceRequestListener />
               <Routes>
                 <Route element={<AppLayout />}>
                   <Route index element={<HomeRedirect />} />

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { Lock, User, Users } from 'lucide-react';
+import { Bell, Lock, User, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { Badge } from '@ury/ui';
 import { elapsedMinutes, formatCurrency } from '@ury/core';
 import { t } from '../../i18n';
 import type { Table } from '../../lib/table-api';
 import type { ActiveTableOrder } from '../lib/captain-table-api';
+import type { CardState } from '../../lib/service-requests';
 
 export type CaptainTableOwnership = 'free' | 'mine' | 'other' | 'occupied-unknown';
 
@@ -19,6 +20,8 @@ export interface CaptainTableCardProps {
   onTap: () => void;
   /** The self-order button of the table (a SelfOrderToggle), when the branch uses self ordering. */
   selfOrderSlot?: ReactNode;
+  /** The guests' 「お会計」 call of the table (null: none): the same as on the register's card (bell, minutes, 確認済み, red after 3 minutes). */
+  billCall?: CardState | null;
 }
 
 const elapsedLabel = (timestamp: string | null): string | null => {
@@ -52,6 +55,7 @@ const CaptainTableCard = ({
   mergePartners,
   onTap,
   selfOrderSlot,
+  billCall = null,
 }: CaptainTableCardProps) => {
   const isOccupied = table.occupied === 1;
   const isBilled = Boolean(order?.invoicePrinted);
@@ -85,12 +89,34 @@ const CaptainTableCard = ({
         : 'warning';
 
   return (
-    <div className={cn('flex flex-col rounded-xl border-2', colorClasses)}>
+    <div
+      className={cn(
+        'flex flex-col rounded-xl border-2',
+        colorClasses,
+        billCall && (billCall.late ? 'ring-4 ring-red-500' : billCall.quiet ? 'ring-2 ring-amber-400' : 'ring-4 ring-amber-500')
+      )}
+    >
     <button
       type="button"
       onClick={onTap}
       className="flex min-h-[7.5rem] flex-1 flex-col items-stretch p-3 text-left transition-all active:scale-[0.98]"
     >
+      {billCall && (
+        <div
+          data-testid="bill-call"
+          className={cn(
+            'mb-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold',
+            billCall.late ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'
+          )}
+        >
+          <Bell className={cn('h-4 w-4 shrink-0', !billCall.quiet && 'animate-bounce')} />
+          <span>{t('service_request.call_bill')}</span>
+          <span className="font-medium">{t('service_request.minutes', { minutes: billCall.minutes })}</span>
+          {billCall.quiet && (
+            <span className="ml-auto rounded bg-white/70 px-1.5 py-0.5 font-medium">{t('service_request.acknowledged')}</span>
+          )}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 break-words text-lg font-bold" title={table.name}>
           {table.name}

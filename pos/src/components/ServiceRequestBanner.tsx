@@ -3,7 +3,7 @@ import { Bell, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { t } from '../i18n';
 import { DINE_IN } from '../data/order-types';
-import { bannerRequests, waitedSeconds, LATE_AFTER_SECONDS } from '../lib/service-requests';
+import { bannerRequests, waitedSeconds, LATE_AFTER_SECONDS, type ServiceRequest } from '../lib/service-requests';
 import { useServiceRequestStore } from '../store/service-request-store';
 import { usePOSStore } from '../store/pos-store';
 
@@ -12,7 +12,7 @@ import { usePOSStore } from '../store/pos-store';
  * table (the call is then Acknowledged: quiet; the table card keeps showing it until the bill is printed, paid or cancelled).
  * Touching an entry opens that table's order.
  */
-const ServiceRequestBanner: React.FC = () => {
+const ServiceRequestBanner: React.FC<{ onOpen?: (request: ServiceRequest) => void }> = ({ onOpen }) => {
   const navigate = useNavigate();
   const requests = useServiceRequestStore((state) => state.requests);
   const now = useServiceRequestStore((state) => state.now);
@@ -36,6 +36,11 @@ const ServiceRequestBanner: React.FC = () => {
               key={request.name}
               type="button"
               onClick={() => {
+                if (onOpen) {
+                  onOpen(request);
+                  return;
+                }
+                // the register: the order of the table in the POS
                 setSelectedOrderType(DINE_IN);
                 setSelectedTable(request.table, request.room || null);
                 navigate('/pos');

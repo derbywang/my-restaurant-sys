@@ -138,7 +138,7 @@ const TableView = () => {
   }, [branch, rooms, persistRoomCounts]);
 
   const loadTables = useCallback(
-    async (roomName: string, options?: { useCache?: boolean }) => {
+    async (roomName: string, options?: { useCache?: boolean; silent?: boolean }) => {
       if (!roomName) return;
       setError(null);
 
@@ -149,7 +149,8 @@ const TableView = () => {
         return;
       }
 
-      setLoadingTables(true);
+      // a refresh in the background (a call, a table ordered at) does not put the grid back to its skeleton
+      if (!options?.silent) setLoadingTables(true);
       try {
         const fetchedTables = await getTables(roomName);
         const sortedTables = sortTablesByMergeGroups(fetchedTables);
@@ -170,6 +171,16 @@ const TableView = () => {
     if (!selectedRoom) return;
     loadTables(selectedRoom);
   }, [selectedRoom, loadTables]);
+
+  // a call for the bill, a table the guests ordered at (self ordering) and the poll: read the tables again, so that a
+  // table that has just become occupied is not shown as 空席 any more
+  const tablesVersion = useServiceRequestStore((state) => state.tablesVersion);
+  useEffect(() => {
+    if (tablesVersion === 0 || !selectedRoom) return;
+    void loadTables(selectedRoom, { useCache: false, silent: true });
+    // only a new version asks for it (loadTables changes with the cache)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tablesVersion]);
 
   const handleNavigateToPOS = (tableName: string) => {
     if (!selectedRoom) return;

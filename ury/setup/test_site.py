@@ -542,7 +542,7 @@ def close_sub_shift(opening):
     require_test_site()
     from ury.ury.doctype.sub_pos_closing.sub_pos_closing import get_pos_invoices
 
-    end = now_datetime()
+    end = _not_before_last_posting(now_datetime())
     with as_user(opening.user):
         invoices = get_pos_invoices(opening.period_start_date, end, POS_PROFILE, opening.user)
         totals, _taxes, payments = _closing_rows(opening, invoices)

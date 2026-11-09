@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 
 import frappe
 
@@ -16,6 +17,7 @@ from ury.setup.test_site import (
 	as_user,
 	close_shift,
 	_closing_rows,
+	_not_before_last_posting,
 	close_sub_shift,
 	disable_multiple_cashier,
 	enable_multiple_cashier,
@@ -282,9 +284,9 @@ class TestDeskClosingForm(URYFlowTestCase):
 
 		method = frappe.get_attr(frappe.get_hooks("override_whitelisted_methods")[self.GET_POS_INVOICES][-1])
 		with as_user(CASHIER):
-			invoices = method(
-				start="2020-01-01 00:00:00", end=frappe.utils.now(), pos_profile=POS_PROFILE, user=CASHIER
-			)
+			# the dev container's clock steps back now and then: not "now" but not before the last posting
+			end = str(_not_before_last_posting(frappe.utils.now_datetime()))
+			invoices = method(start="2020-01-01 00:00:00", end=end, pos_profile=POS_PROFILE, user=CASHIER)
 		self.assertEqual({inv.name for inv in invoices}, {own, by_captain})
 
 
@@ -322,6 +324,29 @@ class TestMultipleCashierClosing(URYFlowTestCase):
 		cash = next(row for row in closing.payment_reconciliation if row.mode_of_payment == "Cash")
 		self.assertEqual(cash.closing_amount, sub_closing.payment_reconciliation[0].closing_amount)
 		self.assertEqual(cash.difference, -paid_main.grand_total)
+
+
+class TestTheClockStepsBack(URYFlowTestCase):
+	"""The dev container's wall clock steps back by up to half a second every ~30 s (measured 2026-11-09, WSL2
+	time sync). That made `test_pos_closing` fail now and then: the closing time was earlier than the invoice
+	paid a moment before. The harness's closings must not depend on it."""
+
+	def tearDown(self):
+		disable_multiple_cashier()
+		super().tearDown()
+
+	def test_a_sub_closing_includes_an_invoice_paid_after_the_clock_reading(self):
+		enable_multiple_cashier(main=CASHIER)
+		open_pos(CASHIER)
+		sub_opening = open_pos(CASHIER2)
+		order = place_order(CASHIER2, [(FOOD_ITEM, 1)], table=TABLES[1])
+		paid = pay_order(order, user=CASHIER2)
+		# the clock reads a second before the invoice's posting time
+		posted = datetime.datetime.combine(paid.posting_date, (datetime.datetime.min + paid.posting_time).time())
+		with mock.patch("ury.setup.test_site.now_datetime", return_value=posted - datetime.timedelta(seconds=1)):
+			closing = close_sub_shift(sub_opening)
+		self.assertEqual(closing.docstatus, 1)
+		self.assertEqual(closing.grand_total, paid.grand_total)
 
 
 class TestSubCashierOpenOrders(URYFlowTestCase):

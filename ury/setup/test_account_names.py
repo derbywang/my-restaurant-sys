@@ -3,6 +3,7 @@ the tax, 「売掛金（カード会社）」「売掛金（楽天ペイ）」 f
 (a Receivable account would need a customer on every payment entry, which the POS payment has none for).
 Sites that have the old names (CT 10% ..., 未収入金（...）) are renamed by the setup and by a patch."""
 
+import json
 import unittest
 
 import frappe
@@ -13,6 +14,7 @@ from ury.setup.account_names import (
 	TAX_RENAMES,
 	rename_legacy_accounts,
 	rewrite_item_tax_rates,
+	rewrite_legacy_item_tax_rates,
 )
 from ury.setup.cashless import CASHLESS_MODES, apply_cashless_payments
 from ury.setup.jp_tax import ITEM_TAX_TEMPLATES, RATE_ROWS, apply_jp_tax_setup
@@ -134,17 +136,39 @@ class TestRenamingASite(URYTestCase):
 
 class TestTheRatesOfOldBills(URYFlowTestCase):
 	"""A bill keeps the rate of each item by the name of its tax account (item_tax_rate): the rename must follow, or an old
-	bill printed again would lose its reduced rate."""
+	bill printed again would lose its reduced rate. Frappe writes the JSON with ensure_ascii, so a name like
+	"CT 8% - 三" is stored as "CT 8% - \\u4e09" (found on the development site: the first version of the patch missed it)."""
 
-	def test_the_names_in_item_tax_rate_follow_the_rename(self):
+	def setUp(self):
+		super().setUp()
 		open_pos(CASHIER)
 		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
-		row = frappe.db.get_value("POS Invoice Item", {"parent": order}, "name")
-		old, new = f"CT 8% - {ABBR}", f"{TAX_8} - {ABBR}"
-		frappe.db.set_value("POS Invoice Item", row, "item_tax_rate", '{"%s": 8.0, "other": 1}' % old)
-		changed = rewrite_item_tax_rates(old, new)
-		self.assertGreaterEqual(changed, 1)
-		value = frappe.db.get_value("POS Invoice Item", row, "item_tax_rate")
-		self.assertIn(new, value)
-		self.assertNotIn(old, value)
-		self.assertIn('"other": 1', value)
+		self.row = frappe.db.get_value("POS Invoice Item", {"parent": order}, "name")
+		self.old, self.new = f"CT 8% - {ABBR}", f"{TAX_8} - {ABBR}"
+
+	def _value(self):
+		return frappe.db.get_value("POS Invoice Item", self.row, "item_tax_rate")
+
+	def test_the_names_in_item_tax_rate_follow_the_rename_as_frappe_writes_them(self):
+		# the abbreviation of the shop's company is 三: the JSON of the site has \\u4e09 in it (the test site's TS is ASCII)
+		old, new = "CT 8% - 三", f"{TAX_8} - 三"
+		frappe.db.set_value("POS Invoice Item", self.row, "item_tax_rate", json.dumps({old: 8.0, "other": 1}))
+		self.assertIn("\\u4e09", self._value())  # really escaped, like the data of the site
+		self.assertGreaterEqual(rewrite_item_tax_rates(old, new), 1)
+		self.assertEqual(json.loads(self._value()), {new: 8.0, "other": 1})
+
+	def test_a_name_written_as_plain_text_follows_too(self):
+		frappe.db.set_value("POS Invoice Item", self.row, "item_tax_rate", json.dumps({self.old: 8.0}, ensure_ascii=False))
+		rewrite_item_tax_rates(self.old, self.new)
+		self.assertEqual(json.loads(self._value()), {self.new: 8.0})
+
+	def test_what_the_first_patch_missed_is_found_later(self):
+		frappe.db.set_value(
+			"POS Invoice Item", self.row, "item_tax_rate",
+			json.dumps({f"CT 10% - {ABBR}": 0.0, self.old: 8.0, f"CT 1% - {ABBR}": 0.0}),
+		)
+		self.assertGreaterEqual(rewrite_legacy_item_tax_rates(COMPANY), 1)
+		self.assertEqual(
+			json.loads(self._value()), {f"{TAX_10} - {ABBR}": 0.0, self.new: 8.0, f"{TAX_1} - {ABBR}": 0.0}
+		)
+		self.assertEqual(rewrite_legacy_item_tax_rates(COMPANY), 0)  # nothing is left: safe to run again

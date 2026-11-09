@@ -13,6 +13,8 @@ bills: a bill printed again would lose its reduced rate. `rewrite_item_tax_rates
 Nothing here commits (the caller does: migrate, the setup wizard).
 """
 
+import json
+
 import frappe
 
 TAX_RENAMES = {
@@ -31,18 +33,35 @@ def _rename(account, new_title):
 
 
 def rewrite_item_tax_rates(old_name, new_name):
-	"""Replace an account name in the `item_tax_rate` text of bill items. Returns how many rows were changed."""
+	"""Replace an account name in the `item_tax_rate` text of bill items. Returns how many rows were changed.
+
+	Frappe writes that JSON with ensure_ascii, so "CT 8% - 三" is stored as "CT 8% - \\u4e09": both spellings are replaced
+	(the new name in the spelling the row had)."""
+	spellings = {(old_name, new_name), (json.dumps(old_name)[1:-1], json.dumps(new_name)[1:-1])}
+	# the rows to look at: those that mention the ASCII start of the name ("CT 8%"); the replacing is done here
+	start = old_name.split(" - ")[0]
 	changed = 0
 	for table in ("POS Invoice Item", "Sales Invoice Item"):
 		rows = frappe.db.sql(
 			f"select name, item_tax_rate from `tab{table}` where item_tax_rate like %(like)s",
-			{"like": f"%{old_name}%"},
+			{"like": f"%{start}%"},
 			as_dict=True,
 		)
 		for row in rows:
-			frappe.db.set_value(table, row.name, "item_tax_rate", row.item_tax_rate.replace(old_name, new_name), update_modified=False)
-			changed += 1
+			value = row.item_tax_rate
+			for old, new in spellings:
+				value = value.replace(old, new)
+			if value != row.item_tax_rate:
+				frappe.db.set_value(table, row.name, "item_tax_rate", value, update_modified=False)
+				changed += 1
 	return changed
+
+
+def rewrite_legacy_item_tax_rates(company):
+	"""The old tax account names that are still written in the bill items of `company` (the first version of the rename
+	patch missed the escaped spelling) get the new names. Returns the number of rows changed; 0 when nothing is left."""
+	abbr = frappe.db.get_value("Company", company, "abbr")
+	return sum(rewrite_item_tax_rates(f"{old} - {abbr}", f"{new} - {abbr}") for old, new in TAX_RENAMES.items())
 
 
 def rename_legacy_accounts(company):

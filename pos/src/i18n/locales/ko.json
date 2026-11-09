@@ -400,7 +400,8 @@
     "next_bill": "다음 전표",
     "split_from": "{{invoice}}에서 분할",
     "related": "관련 전표",
-    "open_sibling_failed": "관련 전표를 열 수 없습니다"
+    "open_sibling_failed": "관련 전표를 열 수 없습니다",
+    "separate_notice": "계산 분할은 각각 별도의 계산서(별도의 거래)가 됩니다. 결제만 나누는 경우(더치페이 등)에는 분할하지 말고, 결제 화면에서 결제 수단을 여러 개 입력하세요."
   },
   "bill_merge": {
     "merge_bill": "전표 합치기",

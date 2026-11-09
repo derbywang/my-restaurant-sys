@@ -400,7 +400,8 @@
     "next_bill": "Next bill",
     "split_from": "Split from {{invoice}}",
     "related": "Related bills",
-    "open_sibling_failed": "Could not open related bill"
+    "open_sibling_failed": "Could not open related bill",
+    "separate_notice": "Splitting the bill makes separate bills (separate transactions). To only share the payment (for example splitting the cost), do not split: enter several payment methods on the payment screen."
   },
   "bill_merge": {
     "merge_bill": "Merge bill",

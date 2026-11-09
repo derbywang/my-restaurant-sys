@@ -156,6 +156,13 @@ const BillSplitDialog = ({
           </DialogDescription>
         </DialogHeader>
 
+        <p
+          data-testid="split-separate-notice"
+          className="mx-6 mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          {t('bill_split.separate_notice')}
+        </p>
+
         <div className="space-y-3 px-6 pb-2">
           {items.map((item) => {
             const moveQty = moveQtyByRow[item.name] ?? 0;

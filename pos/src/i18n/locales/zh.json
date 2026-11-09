@@ -400,7 +400,8 @@
     "next_bill": "下一张账单",
     "split_from": "拆分自 {{invoice}}",
     "related": "相关账单",
-    "open_sibling_failed": "无法打开相关账单"
+    "open_sibling_failed": "无法打开相关账单",
+    "separate_notice": "会计分割会产生各自独立的账单（独立交易）。如果只是几个人分摊付款（例如均摊），请不要分割，而是在收款画面输入多种支付方式。"
   },
   "bill_merge": {
     "merge_bill": "合并账单",

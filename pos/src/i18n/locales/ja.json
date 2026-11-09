@@ -400,7 +400,8 @@
     "next_bill": "次の伝票",
     "split_from": "{{invoice}} から分割",
     "related": "関連する伝票",
-    "open_sibling_failed": "関連する伝票を開けませんでした"
+    "open_sibling_failed": "関連する伝票を開けませんでした",
+    "separate_notice": "会計分割は、別々のお会計（別の取引）になります。支払いだけを分ける場合（割り勘など）は、分割せずに、お会計画面で支払方法を複数入力してください。"
   },
   "bill_merge": {
     "merge_bill": "会計合算",

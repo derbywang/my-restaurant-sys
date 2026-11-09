@@ -27,12 +27,55 @@ class URYPOSInvoice(POSInvoice):
 	"""
 
 	def calculate_taxes_and_totals(self):
+		# a pair tax found by a former calculation of this object is looked at again (the partner may have changed). Not
+		# when the bill is being submitted (docstatus 1 while it is saved): that is not looked at again, it keeps it.
+		if self.flags.get("merged_tax_auto") and self.docstatus == 0:
+			self.flags.merged_tax_override = None
+			self.flags.merged_tax_auto = False
+		self._calculate_once()
+		override = self._merged_pair_override()
+		if override:
+			# the bill made later takes its part of the tax of the merged bill, rounded once for the whole (2026-11-09)
+			self.flags.merged_tax_override = override
+			self.flags.merged_tax_auto = True
+			self._calculate_once()
+
+	def _calculate_once(self):
 		self.validate_discount_on()
 		self.flags.taxable_by_rate = {}
 		# same as AccountsController.calculate_taxes_and_totals, with our calculation
 		URYTaxesAndTotals(self)
 		self.calculate_commission()
 		self.calculate_contribution()
+
+	def _merged_pair_override(self):
+		"""For an open bill that is the LATER one of a merged pair: {tax account: its tax}, so that the two bills together have
+		the tax of each rate rounded once (docs/design/jp-tax-design.md). None for every other bill (not merged, the bill made
+		first, a bill that is paid or cancelled, or a pair tax that `merged_bill.apply_pair_tax` has set already).
+
+		This keeps the amounts SAVED on both open bills equal to what the payment dialog, the receipt and the payment will
+		say, so the detail, the list and the cards (which show the saved amounts) agree with them."""
+		if self.flags.get("merged_tax_override") or self.docstatus != 0 or not self.name or self.get("is_return"):
+			return None
+		partner_name = self.get("custom_merged_pos_invoice")
+		if not partner_name:
+			return None
+		row = frappe.db.get_value(
+			"POS Invoice", partner_name, ["docstatus", "creation", "custom_merged_pos_invoice"], as_dict=True
+		)
+		if not row or row.docstatus == 2 or row.custom_merged_pos_invoice != self.name:
+			return None
+		if (str(self.get("creation") or ""), self.name) <= (str(row.creation), partner_name):
+			return None  # this is the bill made first: it keeps the tax it rounds for itself
+
+		partner = frappe.get_doc("POS Invoice", partner_name)
+		# a discount on a merged bill is the same percentage on both bills
+		partner.additional_discount_percentage = self.get("additional_discount_percentage")
+		partner.discount_amount = 0
+		partner._calculate_once()
+		merged = merged_tax_by_account(partner, self)
+		first = own_tax_by_account(partner)
+		return {account: float(tax - first.get(account, 0)) for account, tax in merged.items()}
 
 	def validate_discount_on(self):
 		"""In Japan a discount on the whole order is taken off the amount without tax

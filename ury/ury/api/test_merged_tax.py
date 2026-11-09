@@ -172,3 +172,125 @@ class TestMergedTaxIsRoundedOnce(URYFlowTestCase):
 			self.assertIn("¥201", page)
 			self.assertIn("¥2,211", page)
 		self.assertEqual(frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]}), before)
+
+
+class TestMergedBillMoneyAndNumbers(TestMergedTaxIsRoundedOnce):
+	"""The same pair (two bills of 1,005 + tax: 2,211 together) seen through the change, the shift and the numbers a
+	cashier reads before paying (found in the browser test 2026-11-10: change 690 instead of 689; the detail said 3,310
+	while the payment said 3,311)."""
+
+	def _values(self, name, *fields):
+		return frappe.db.get_value("POS Invoice", name, list(fields), as_dict=True)
+
+	def _pay_cash(self, invoice, handed_over):
+		"""Settle with `handed_over` in cash (more than due: there is change); the dialog tells the server the amount due."""
+		from ury.ury.doctype.ury_order.ury_order import make_invoice
+
+		doc = frappe.get_doc("POS Invoice", invoice)
+		print_bill(invoice, CASHIER)
+		profile = frappe.get_doc("POS Profile", POS_PROFILE)
+		with as_user(CASHIER):
+			make_invoice(
+				customer=doc.customer,
+				payments=[{"mode_of_payment": profile.payments[0].mode_of_payment, "amount": handed_over}],
+				cashier=CASHIER, pos_profile=POS_PROFILE, owner=CASHIER, table=doc.restaurant_table,
+				invoice=invoice, expected_total=2211,
+			)
+
+	# --- the change -----------------------------------------------------------------
+
+	def test_the_change_is_the_cash_over_the_merged_amount_clicking_the_first(self):
+		self._pay_cash(self.first, 2500)
+		first, second = (self._values(n, "paid_amount", "change_amount", "rounded_total") for n in (self.first, self.second))
+		self.assertEqual(first.change_amount + second.change_amount, 289)
+		for bill in (first, second):
+			self.assertEqual(bill.paid_amount - bill.change_amount, bill.rounded_total)
+
+	def test_the_change_is_the_same_clicking_the_second(self):
+		self._pay_cash(self.second, 2500)
+		first, second = (self._values(n, "paid_amount", "change_amount", "rounded_total") for n in (self.first, self.second))
+		self.assertEqual(first.change_amount + second.change_amount, 289)
+		for bill in (first, second):
+			self.assertEqual(bill.paid_amount - bill.change_amount, bill.rounded_total)
+
+	def test_the_receipt_says_the_same_change(self):
+		self._pay_cash(self.first, 2500)
+		for invoice in (self.first, self.second):
+			page = text(render(invoice))
+			self.assertIn("お預かり | ¥2,500", page)
+			self.assertIn("合計（税込） | ¥2,211", page)
+			self.assertIn("お釣り | ¥289", page)  # 2,500 - 2,211: the receipt adds up
+
+	def test_the_cash_of_the_shift_is_what_the_shop_kept(self):
+		self._pay_cash(self.first, 2500)
+		closing = close_shift(self.opening)
+		cash = next(row for row in closing.payment_reconciliation if row.mode_of_payment == "Cash")
+		self.assertEqual(cash.expected_amount, 2211)
+
+	# --- the numbers before paying ---------------------------------------------------------------
+
+	def test_the_saved_drafts_have_the_amounts_of_the_pair(self):
+		first = self._values(self.first, "rounded_total", "custom_merged_total")
+		second = self._values(self.second, "rounded_total", "custom_merged_total")
+		self.assertEqual((first.rounded_total, second.rounded_total), (1105, 1106))
+		# what each bill says about the other one: together they are 2,211 whichever is opened
+		self.assertEqual(first.rounded_total + first.custom_merged_total, 2211)
+		self.assertEqual(second.rounded_total + second.custom_merged_total, 2211)
+
+	def test_a_dish_added_later_keeps_the_pair_consistent(self):
+		place_order(CASHIER, [(FOOD_ITEM, 2)], table=TABLES[0], invoice=self.first)
+		first = self._values(self.first, "rounded_total", "custom_merged_total")
+		second = self._values(self.second, "rounded_total", "custom_merged_total")
+		with as_user(CASHIER):
+			combined = preview_order_totals(self.first)["rounded_total"]
+		self.assertEqual(first.rounded_total + second.rounded_total, combined)
+		self.assertEqual(first.rounded_total + first.custom_merged_total, combined)
+		self.assertEqual(second.rounded_total + second.custom_merged_total, combined)
+
+	def test_the_order_list_shows_the_pair_amount(self):
+		from ury.ury_pos.api import getPosInvoice
+
+		with as_user(CASHIER):
+			rows = getPosInvoice("Unbilled", 50, 0)["data"]
+		card = next(row for row in rows if row["name"] in (self.first, self.second))
+		self.assertEqual(card["rounded_total"] + round(card["custom_merged_total"]), 2211)
+
+	# --- the pair comes apart ----------------------------------------------------------------------
+
+	def test_after_unmerging_each_saved_draft_is_rounded_by_itself_again(self):
+		with as_user(CASHIER):
+			unmerge_bills(self.first)
+		first, second = self._values(self.first, "rounded_total", "custom_merged_total"), self._values(
+			self.second, "rounded_total", "custom_merged_total"
+		)
+		self.assertEqual((first.rounded_total, second.rounded_total), (1105, 1105))
+		self.assertEqual((first.custom_merged_total or 0, second.custom_merged_total or 0), (0, 0))
+
+	def test_cancelling_the_bill_made_first_gives_the_other_its_own_rounding_back(self):
+		from ury.ury.doctype.ury_order.ury_order import cancel_order
+
+		with as_user(CASHIER):
+			cancel_order(self.first, "test")
+		self.assertEqual(self._values(self.second, "rounded_total").rounded_total, 1105)
+
+	def test_cancelling_the_bill_made_later_leaves_the_first_as_it_was(self):
+		from ury.ury.doctype.ury_order.ury_order import cancel_order
+
+		with as_user(CASHIER):
+			cancel_order(self.second, "test")
+		self.assertEqual(self._values(self.first, "rounded_total").rounded_total, 1105)
+
+	# --- a discount on the saved drafts --------------------------------------------------------------
+
+	def test_a_discount_on_the_saved_drafts_keeps_the_pair_rule(self):
+		for name in (self.first, self.second):
+			doc = frappe.get_doc("POS Invoice", name)
+			doc.additional_discount_percentage = 10
+			doc.save()
+		first = self._values(self.first, "net_total", "total_taxes_and_charges", "rounded_total")
+		second = self._values(self.second, "net_total", "total_taxes_and_charges", "rounded_total")
+		net = first.net_total + second.net_total
+		self.assertEqual(first.total_taxes_and_charges + second.total_taxes_and_charges, (net * 10) // 100)
+		with as_user(CASHIER):
+			combined = preview_order_totals(self.first, 10)["rounded_total"]
+		self.assertEqual(first.rounded_total + second.rounded_total, combined)

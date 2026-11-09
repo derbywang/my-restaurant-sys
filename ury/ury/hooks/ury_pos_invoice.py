@@ -357,6 +357,9 @@ def _apply_pair_tax_for_submit(paid, target):
     calculated.calculate_taxes_and_totals()
     target.calculate_taxes_and_totals()
     apply_pair_tax(calculated, target)
+    # the change is worked out again from the final amounts (see make_invoice): the bill paid first holds all of it
+    target.change_amount = 0
+    target.base_change_amount = 0
 
 
 def refresh_merged_snapshot(doc):

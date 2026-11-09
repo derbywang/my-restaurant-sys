@@ -2279,7 +2279,9 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
         allocate_payments(invoice, target, payments)
 
         target.flags.ignore_payment_sync = True
-        
+        target.change_amount = 0
+        target.base_change_amount = 0
+
         frappe.flags.in_bill_merge_sync = True
         try:
             target.save(ignore_permissions=True)
@@ -2295,6 +2297,10 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
                 "payments", dict(mode_of_payment=d["mode_of_payment"], amount=d["amount"])
             )
 
+    # ERPNext works out the change only while change_amount is 0 (POS Invoice.validate_change_amount): a value left by an
+    # earlier save, made when the total was another one, would stay. Let it be worked out from the final amounts.
+    invoice.change_amount = 0
+    invoice.base_change_amount = 0
     # invoice.owner = owner
     invoice.save()
     try:

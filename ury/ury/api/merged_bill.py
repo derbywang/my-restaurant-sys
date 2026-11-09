@@ -57,6 +57,7 @@ def apply_pair_tax(one, other):
 	own_first = own_tax_by_account(first)
 	override = {account: float(tax - own_first.get(account, 0)) for account, tax in merged.items()}
 	later.flags.merged_tax_override = override
+	later.flags.merged_tax_auto = False  # set by hand: it stays, through the save and the submit
 	later.calculate_taxes_and_totals()
 	return first, later
 
@@ -189,10 +190,10 @@ def unmerge_pair(first, second):
 
 	for name in changed:
 		doc = frappe.get_doc("POS Invoice", name)
-		if flt(doc.additional_discount_percentage) or flt(doc.discount_amount):
-			doc.additional_discount_percentage = 0
-			doc.discount_amount = 0
-			doc.save(ignore_permissions=True)
+		# saved again in any case: the bill made later had the tax of the merged bill, and is rounded by itself again
+		doc.additional_discount_percentage = 0
+		doc.discount_amount = 0
+		doc.save(ignore_permissions=True)
 	return changed
 
 

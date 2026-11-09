@@ -77,18 +77,24 @@ class TestReceiptLines(URYFlowTestCase):
 
 	# --- what is not joined -----------------------------------------------------------
 
-	def test_a_different_note_is_not_joined(self):
+	def test_a_different_note_is_joined_too_the_receipt_does_not_print_notes(self):
+		"""The note is for the kitchen and is not on the receipt: two lines that differ only by a note would look the same to the
+		guest ("Burger 3 x 180", "Burger 3 x 180") and look like a double charge."""
 		order = self._order()
-		self._add_row(order, 1, comment="わさび抜き")
-		self.assertEqual(len(self._lines(order)), 2)
-
-	def test_the_same_note_is_joined(self):
-		order = self._order()
-		self._add_row(order, 1, comment="わさび抜き")
 		self._add_row(order, 2, comment="わさび抜き")
+		self._add_row(order, 3, comment="辛さ控えめ")
 		lines = self._lines(order)
-		self.assertEqual(len(lines), 2)  # the first row has no note, the other two have the same one
-		self.assertTrue(any("3 × ¥1,000" in line for line in lines))
+		self.assertEqual(len(lines), 1)
+		self.assertIn("6 × ¥1,000", lines[0])
+		self.assertIn("¥6,000", lines[0])
+
+	def test_the_orders_rows_still_have_their_own_notes(self):
+		"""Only the receipt joins them: the order (and so the kitchen tickets) keeps the rows and their notes apart."""
+		order = self._order()
+		self._add_row(order, 2, comment="わさび抜き")
+		text(render(order))
+		doc = frappe.get_doc("POS Invoice", order)
+		self.assertEqual([row.get("comment") or "" for row in doc.items], ["", "わさび抜き"])
 
 	def test_a_different_discount_of_the_row_is_not_joined(self):
 		order = self._order()

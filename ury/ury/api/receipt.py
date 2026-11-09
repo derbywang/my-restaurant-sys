@@ -234,12 +234,13 @@ def _lines_and_rates(invoice, standard):
 			if rate:
 				item_rate = max(item_rate, rate)
 		# Every addition to an order is a row of its own (the kitchen needs them one by one); on the receipt the rows of the
-		# same dish, the same price, the same note, the same tax rates and the same discount are one line. The amount is the
-		# sum of the amounts of the rows (not worked out again from the quantity); only the display changes.
+		# same dish, the same price, the same tax rates and the same discount are one line. The note is NOT part of it: the
+		# receipt does not print notes, so two lines that differed only by a note would look the same to the guest and look
+		# like a double charge. The amount is the sum of the amounts of the rows (not worked out again from the quantity);
+		# only the display changes.
 		key = (
 			item.item_code,
 			flt(item.rate),
-			(item.get("comment") or "").strip(),
 			json.dumps(_item_rates(item), sort_keys=True),
 			flt(item.get("discount_percentage")),
 			flt(item.get("discount_amount")),

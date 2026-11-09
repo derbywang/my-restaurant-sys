@@ -16,6 +16,7 @@
 **新增待办 / 以后再做：**
 - **呼叫结账的两条路径只有自动测试，没有在浏览器里走过**：不打印直接付款、取消订单（`test_service_requests` 已覆盖）。试营业时顺便走一遍；另外"点后建立的那张合算账单收款"在浏览器里也没走过（找零由 `test_merged_tax` 覆盖）。
 - **培训要点**（已写入 `staff-training-points.md`）：开店时先点一下 POS 画面（浏览器要求页面被点过一次才允许出声；顶栏的喇叭按钮点一下也行）；会計分割 vs 分担付款；合算后税额可能差 ¥1。
+- **`Enable Kiosk Ordering` 字段改名（2026-11-10 决定：做，等下一次有 DocType 改动时一起做，不单独 migrate）**：`URY Self Ordering Profile.enable_kiosk_ordering`（标签已是"设备点餐"）改成 `enable_device_ordering`。要附补丁（保留原值：改列名 / 复制值后再删旧列）、`deploy_check`（"有桌上平板设备时设备点餐开关必须是 1"）和相关测试、前端 / 接口里读这个字段的地方一起改；已有站点靠补丁，新站点来自 DocType JSON。下一次 DocType 改动候选：顾客多语言（`default_language`、`allowed_languages`、会话的 `language`）。
 - **均分计算器（割り勘）**：先不做；以后只显示每人金额，不写数据。
 - **`device_status` 缺凭据的 Error Log（ury-test）**：每次 migrate 偶尔出现 2～5 条，发送者没查到；已加临时记录（`ury/setup/request_trace.py`，**未提交**，站点配置 `ury_trace_device_status`），下次 migrate 后读 `sites/ury-test.localhost/logs/device_status_trace.log`，查清后删除（见项目记忆）。
 - **`frontend/` 的 `TimeWiseSales.tsx` 类型错误**（旧问题，已列在"技术待办（类型检查）"里）。

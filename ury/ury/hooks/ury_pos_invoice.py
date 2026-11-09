@@ -37,6 +37,14 @@ def before_submit(doc, method):
 
 def on_trash(doc, method):
     table_status_delete(doc, method)
+    _resolve_service_requests(doc)
+
+
+def _resolve_service_requests(doc):
+    """The order is paid, cancelled or deleted: a guest's 「お会計」 call about it is done."""
+    from ury.ury.api.service_requests import resolve_requests_of_invoice
+
+    resolve_requests_of_invoice(doc.name)
 
 
 def tax_category_for_order(doc):
@@ -379,6 +387,7 @@ def on_update(doc, method):
 def on_submit(doc, method):
     sync_merged_invoice(doc)
     release_merged_tables(doc)
+    _resolve_service_requests(doc)
 
 def release_merged_tables(doc):
 

@@ -30,6 +30,7 @@ import os
 
 import frappe
 from ury.ury.api.branch_realtime import publish_to_branch
+from ury.ury.api.service_requests import announce
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 from frappe.utils.password import get_decrypted_password
@@ -1166,6 +1167,7 @@ def request_bill(session):
             "requested_at": now_datetime(),
         })
         req.insert(ignore_permissions=True)
+        announce(req, "new")
 
     return {"status": "Requested", "request": req.name}
 

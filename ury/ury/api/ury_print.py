@@ -13,6 +13,7 @@ from pypdf import PdfWriter
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from ury.ury.doctype.ury_order.ury_order import release_table_of_invoice
+from ury.ury.api.service_requests import resolve_requests_of_invoice
 
 no_cache = 1
 
@@ -76,6 +77,7 @@ def network_printing(
                     release_table_of_invoice(name, restaurant_table)
                 else:
                     frappe.db.set_value("POS Invoice", name, "invoice_printed", 1)
+                resolve_requests_of_invoice(name)
 
                 return "Success"
             finally:
@@ -165,6 +167,8 @@ def qz_print_update(invoice):
                 if new_invoice_printed != 1 or (released and new_table_status != 0):
                     return {"status": "Failure"}
         
+        # the bill is with the guest: the 「お会計」 call about it is done
+        resolve_requests_of_invoice(invoice)
         return {"status": "Success"}
         
     except Exception as e:

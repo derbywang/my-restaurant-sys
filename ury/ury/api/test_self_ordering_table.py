@@ -7,6 +7,7 @@ profile's time is up. Sessions of an earlier opening stop being valid. Run on th
 """
 
 import json
+from unittest import mock
 from datetime import timedelta
 
 import frappe
@@ -1159,6 +1160,28 @@ class TestPayingAndAskingForTheBillAreOffUntilTheStaffSideIsThere(SelfOrderingCa
 			request_bill(session)
 		with self.assertRaises(frappe.ValidationError):
 			create_payment_request(session)
+
+
+class TestAskingForTheBillTellsTheStaff(SelfOrderingCase):
+	def test_the_staff_of_the_branch_are_told_after_the_commit_and_asking_twice_tells_nobody_again(self):
+		from ury.ury.api.self_ordering import request_bill
+
+		self.staff_open()
+		original = frappe.db.get_value("URY Self Ordering Profile", PROFILE, "enable_request_bill")
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_request_bill", 1)
+		frappe.db.commit()
+		self.addCleanup(lambda: (frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_request_bill", original), frappe.db.commit()))
+		session = self.scan()
+		add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
+		with mock.patch("ury.ury.api.service_requests.publish_to_branch") as publish:
+			first = request_bill(session)
+			second = request_bill(session)
+		self.assertEqual(first["status"], "Requested")
+		self.assertEqual(second["status"], "Already Requested")
+		self.assertEqual(publish.call_count, 1)
+		self.assertEqual(publish.call_args.args[1]["kind"], "new")
+		self.assertEqual(publish.call_args.args[1]["table"], TABLE)
+		self.assertTrue(publish.call_args.kwargs.get("after_commit"))
 
 
 class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):

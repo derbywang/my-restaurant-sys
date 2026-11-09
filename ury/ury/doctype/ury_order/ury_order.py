@@ -2162,6 +2162,11 @@ def cancel_order(invoice_id, reason):
         frappe.db.set_value("POS Invoice", invoice_id, "status", "Cancelled")
         frappe.db.set_value("POS Invoice", invoice_id, "cancel_reason", reason)
 
+    # a guest's 「お会計」 call about this order is done (a draft is cancelled without the document events)
+    from ury.ury.api.service_requests import resolve_requests_of_invoice
+
+    resolve_requests_of_invoice(invoice_id)
+
 # Roles permitted to authorize an additional discount when settling an order.
 DISCOUNT_ALLOWED_ROLES = frozenset(
     {"URY Manager", "URY Cashier", "System Manager", "Administrator"}

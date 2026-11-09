@@ -269,6 +269,7 @@ RESET_DOCTYPES = (
     "Serial and Batch Bundle",
     "URY KOT",
     "URY Order",
+    "URY Service Request",
 )
 
 

@@ -1184,6 +1184,23 @@ class TestAskingForTheBillTellsTheStaff(SelfOrderingCase):
 		self.assertTrue(publish.call_args.kwargs.get("after_commit"))
 
 
+class TestTheStaffAreToldWhenGuestsOrderAtATable(SelfOrderingCase):
+	"""The register's table list is loaded once; the table is occupied in the database as soon as the guests order, so the
+	POS has to be told (found in the browser test: a table called for the bill while the card still said 空席)."""
+
+	def test_the_staff_of_the_branch_are_told_the_table_is_occupied_after_the_commit(self):
+		self.staff_open()
+		session = self.scan()
+		with mock.patch("ury.ury.api.self_ordering.publish_to_branch") as publish:
+			add_customer_items(session, [{"item": FOOD_ITEM, "qty": 1}])
+		calls = [c for c in publish.call_args_list if c.args[0] == "table_updated"]
+		self.assertEqual(len(calls), 1)
+		self.assertEqual(calls[0].args[1]["table"], TABLE)
+		self.assertEqual(calls[0].args[1]["kind"], "ordered")
+		self.assertTrue(calls[0].kwargs.get("after_commit"))
+		self.assertEqual(frappe.db.get_value("URY Table", TABLE, "occupied"), 1)
+
+
 class TestTheOrderTellsThatTheBillWasAskedFor(SelfOrderingCase):
 	"""After a reload the page must still say 「お会計をお呼びしました」, so the order the page reads says it."""
 

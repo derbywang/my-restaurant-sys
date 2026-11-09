@@ -1074,6 +1074,13 @@ def _add_customer_items(session, items, age_confirmed=0):
                 "URY Table", invoice.restaurant_table,
                 {"occupied": 1, "latest_invoice_time": table_seated_at(invoice)},
             )
+            # the POS reads its table list once: tell the staff that this table is occupied now (after the commit)
+            publish_to_branch(
+                "table_updated",
+                {"table": invoice.restaurant_table, "branch": invoice.branch, "kind": "ordered"},
+                invoice.branch,
+                after_commit=True,
+            )
 
         shown = len(frappe.local.message_log)
         try:

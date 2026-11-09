@@ -14,6 +14,7 @@ import {
 } from '../lib/default-customer';
 import { DEFAULT_ORDER_TYPE, OrderType } from '../data/order-types';
 import { getTableOrder, TableOrder } from '../lib/order-api';
+import { mergeCartLines } from '../lib/invoice-cart';
 import { getPaymentModes, getPaymentModeTypes } from '../lib/payment-api';
 
 // Constants
@@ -776,7 +777,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
       const response = await getTableOrder(table);
       const order = response.message;
       if (order && order.name && order.items && order.items.length > 0) {
-        const orderItems: OrderItem[] = order.items.map(item => {
+        // the rows of the same dish (the guests' orders add a new row each time) are one line of the cart
+        const orderItems: OrderItem[] = mergeCartLines(order.items.map(item => {
           const orderItem = {
             id: item.item_code,
             name: item.item_name,
@@ -798,7 +800,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
             ...orderItem,
             uniqueId: generateUniqueId(orderItem as OrderItem)
           } as OrderItem;
-        });
+        }));
 
         set({
           tableOrder: response,

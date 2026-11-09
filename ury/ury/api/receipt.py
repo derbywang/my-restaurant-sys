@@ -19,7 +19,8 @@ from ury.ury.api.merged_bill import table_label
 PRINT_FORMAT = "URY JP Receipt"
 REGISTRATION_NUMBER = re.compile(r"T\d{13}")
 ORDER_TYPES = {"Dine In": "店内", "Take Away": "お持ち帰り"}
-CREDIT_NOTE = "※クレジットカードによる信用取引の決済です"
+# no ※ at the start: on the receipt ※ means 軽減税率対象 (see the note at the bottom)
+CREDIT_NOTE = "クレジットカードによる信用取引の決済です"
 # 収入印紙: cash received of this much or more, counted without the consumption tax (the same rule is in
 # pos/src/lib/stamp-duty.ts, which tells the cashier before the payment is confirmed)
 STAMP_THRESHOLD = 50000

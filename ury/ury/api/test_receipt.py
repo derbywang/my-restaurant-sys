@@ -88,7 +88,7 @@ class TestJPReceipt(URYFlowTestCase):
 		pay_order(order, discount=10)
 		out = text(render(order))
 		self.assertIn("割引 | -¥150", out)
-		self.assertIn("10%対象（税抜） | ¥1,350", out)
+		self.assertIn("10%対象 割引後（税抜） | ¥1,350", out)
 		self.assertIn("消費税等 10% | ¥135", out)
 		self.assertIn("合計（税込） | ¥1,485", out)
 

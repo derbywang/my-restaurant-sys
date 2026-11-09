@@ -5,6 +5,7 @@
 	.jp-receipt table { width: 100%; border-collapse: collapse; }
 	.jp-receipt td, .jp-receipt th { padding: 1px 0; vertical-align: top; }
 	.jp-receipt .r { text-align: right; white-space: nowrap; }
+	.jp-receipt td.r { padding-left: 6px; }
 	.jp-receipt .c { text-align: center; }
 	.jp-receipt .title { font-size: 16px; font-weight: bold; text-align: center; margin: 6px 0; }
 	.jp-receipt .total td { font-size: 15px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; }
@@ -53,12 +54,12 @@
 		<tr><td>{% if row.reduced %}※{% endif %}{{ row.rate }}対象 割引前（税抜）</td><td class="r">{{ row.gross }}</td></tr>
 		<tr><td>　割引 {{ row.rate }}対象</td><td class="r">-{{ row.discount }}</td></tr>
 		{%- endif %}
-		<tr><td>{% if row.reduced %}※{% endif %}{{ row.rate }}対象（税抜）</td><td class="r">{{ row.taxable }}</td></tr>
+		<tr><td>{% if row.reduced %}※{% endif %}{{ row.rate }}対象{% if row.discount %} 割引後{% endif %}（税抜）</td><td class="r">{{ row.taxable }}</td></tr>
 		<tr><td>　消費税等 {{ row.rate }}</td><td class="r">{{ row.tax }}</td></tr>
 		{%- endfor %}
 		<tr class="total"><td>合計（税込）</td><td class="r">{{ r.total }}</td></tr>
 		{%- if r.paid %}
-		{%- if r.methods %}<tr><td>お支払方法</td><td class="r">{{ r.methods }}</td></tr>{% endif %}
+		{%- if r.methods %}<tr><td colspan="2">お支払方法：{{ r.methods }}</td></tr>{% endif %}
 		{%- for pay in r.cashless %}
 		<tr><td>{{ pay.mode }}</td><td class="r">{{ pay.amount }}</td></tr>
 		{%- endfor %}
@@ -68,5 +69,5 @@
 	</table>
 	{%- if r.has_reduced %}<div class="small" style="margin-top: 4px">※は軽減税率対象</div>{% endif %}
 	{%- if r.credit_note %}<div class="small" style="margin-top: 4px">{{ r.credit_note }}</div>{% endif %}
-	{%- if r.stamp_box %}<div class="c small" style="margin-top: 8px; border: 1px solid #000; padding: 10px 0">{{ r.stamp_box }}</div>{% endif %}
+	{%- if r.stamp_box %}<div class="stamp-box" style="display: table; width: 26mm; height: 22mm; margin: 8px 0 0 auto; border: 1px solid #000; text-align: center"><div style="display: table-cell; vertical-align: middle; font-size: 10.5px">{{ r.stamp_box }}</div></div>{% endif %}
 </div>

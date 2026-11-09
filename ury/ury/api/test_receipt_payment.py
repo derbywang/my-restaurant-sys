@@ -10,7 +10,7 @@ from ury.setup.test_site import CASHIER, FOOD_ITEM, TABLES, URYFlowTestCase, ope
 from ury.ury.api.receipt import STAMP_THRESHOLD, stamp_duty_needed
 from ury.ury.api.test_receipt import render, text
 
-CREDIT_NOTE = "※クレジットカードによる信用取引の決済です"
+CREDIT_NOTE = "クレジットカードによる信用取引の決済です"  # no ※: that mark means 軽減税率対象 on the receipt
 STAMP_BOX = "収入印紙 貼付欄"
 
 
@@ -58,27 +58,59 @@ class TestReceiptPayment(URYFlowTestCase):
 
 	def test_cash_only_says_cash(self):
 		out = self._paid(1000, [("Cash", 1100)])
-		self.assertIn("お支払方法 | 現金", out)
+		self.assertIn("お支払方法：現金", out)
 		self.assertNotIn(CREDIT_NOTE, out)
 
 	def test_a_card_says_the_card_and_that_it_is_a_credit_transaction(self):
 		out = self._paid(1000, [("クレジットカード", 1100)])
-		self.assertIn("お支払方法 | クレジットカード", out)
+		self.assertIn("お支払方法：クレジットカード", out)
 		self.assertIn(CREDIT_NOTE, out)
 
 	def test_the_cash_mode_is_always_called_genkin_whatever_its_name_on_the_site(self):
 		out = self._paid(1000, [("Cash", 1100)])
-		self.assertIn("お支払方法 | 現金", out)
-		self.assertNotIn("お支払方法 | Cash", out)
+		self.assertIn("お支払方法：現金", out)
+		self.assertNotIn("お支払方法：Cash", out)
+
+	def test_the_credit_note_does_not_use_the_mark_of_the_reduced_rate(self):
+		# ※ means 軽減税率対象 (the receipt says so at the bottom); a dine-in bill paid by card has no reduced rate at all
+		out = self._paid(1000, [("クレジットカード", 1100)])
+		self.assertNotIn("※", out)
+
+	def test_a_long_method_name_does_not_squeeze_the_other_rows(self):
+		"""The methods line took the right-hand column of the table, which does not wrap: the labels of all the other rows
+		were squeezed into a few characters and broke ("10%対象（税" / "抜）"). It is a line of its own now."""
+		self._set_price(1000)
+		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		pay_with(order, [("Cash", 500), ("クレジットカード", 600)])
+		html = render(order)
+		self.assertIn("お支払方法：現金、クレジットカード", text(html))
+		import re
+
+		for cell in re.findall(r'<td class="r"[^>]*>(.*?)</td>', html, flags=re.S):
+			self.assertNotIn("、", cell)  # no list of methods in a right-hand cell (they are amounts)
+		self.assertRegex(html, r'<td colspan="2"[^>]*>お支払方法：')
+
+	def test_the_amounts_have_room_from_the_names_and_the_stamp_box_is_the_size_of_a_stamp(self):
+		"""Seen on the sample PDFs: a long dish name touched the quantity and the amount, and the stamp box was smaller than
+		a stamp (about 22 x 19 mm; the box is 26 x 22 mm)."""
+		html = self._paid_html(50000, [("Cash", 55000)])
+		self.assertRegex(html, r"\.jp-receipt td\.r\s*\{[^}]*padding-left:\s*6px")
+		self.assertRegex(html, r"stamp-box[^>]*width:\s*26mm[^>]*height:\s*22mm|stamp-box[^>]*height:\s*22mm[^>]*width:\s*26mm")
+
+	def _paid_html(self, price, payments):
+		self._set_price(price)
+		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		pay_with(order, payments)
+		return render(order)
 
 	def test_a_wallet_is_shown_by_its_name_without_the_credit_note(self):
 		out = self._paid(1000, [("PayPay", 1100)])
-		self.assertIn("お支払方法 | PayPay", out)
+		self.assertIn("お支払方法：PayPay", out)
 		self.assertNotIn(CREDIT_NOTE, out)
 
 	def test_cash_and_card_list_both(self):
 		out = self._paid(1000, [("Cash", 500), ("クレジットカード", 600)])
-		self.assertIn("お支払方法 | 現金、クレジットカード", out)
+		self.assertIn("お支払方法：現金、クレジットカード", out)
 		self.assertIn(CREDIT_NOTE, out)
 
 	def test_before_the_payment_there_is_nothing_of_it(self):

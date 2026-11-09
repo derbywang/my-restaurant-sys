@@ -49,7 +49,7 @@ class TestDiscountByRate(URYFlowTestCase):
 		out = text(render(order))
 		self.assertIn("10%対象 割引前（税抜） | ¥1,500", out)
 		self.assertIn("割引 10%対象 | -¥150", out)
-		self.assertIn("10%対象（税抜） | ¥1,350", out)
+		self.assertIn("10%対象 割引後（税抜） | ¥1,350", out)
 		self.assertIn("消費税等 10% | ¥135", out)
 
 	def test_two_rates_each_have_their_own_discount(self):
@@ -65,7 +65,7 @@ class TestDiscountByRate(URYFlowTestCase):
 		for rate, (gross, net) in per_rate.items():
 			self.assertIn(f"{rate}%対象 割引前（税抜） | ¥{gross:,.0f}", out)
 			self.assertIn(f"割引 {rate}%対象 | -¥{gross - net:,.0f}", out)
-			self.assertIn(f"{rate}%対象（税抜） | ¥{net:,.0f}", out)
+			self.assertIn(f"{rate}%対象 割引後（税抜） | ¥{net:,.0f}", out)
 
 	def test_the_discounts_of_the_rates_add_up_to_the_discount(self):
 		order = place_order(CASHIER, [(FOOD_ITEM, 3), (ALCOHOL_ITEM, 2)], table=TABLES[0], order_type="Take Away")
@@ -88,6 +88,7 @@ class TestDiscountByRate(URYFlowTestCase):
 		order = place_order(CASHIER, [(FOOD_ITEM, 1), (ALCOHOL_ITEM, 1)], table=TABLES[0])
 		out = text(render(order))
 		self.assertNotIn("割引前", out)
+		self.assertNotIn("割引後", out)
 		self.assertNotIn("対象 |", out.replace("10%対象（税抜）", ""))
 		with as_user(CASHIER):
 			totals = preview_order_totals(order)
@@ -105,4 +106,4 @@ class TestDiscountByRate(URYFlowTestCase):
 		out = text(render(first))
 		self.assertIn("10%対象 割引前（税抜） | ¥1,500", out)
 		self.assertIn("割引 10%対象 | -¥150", out)
-		self.assertIn("10%対象（税抜） | ¥1,350", out)
+		self.assertIn("10%対象 割引後（税抜） | ¥1,350", out)

@@ -1,8 +1,9 @@
 import { type MouseEvent, type ReactNode } from 'react';
-import { Eye, Loader2, Printer, Users } from 'lucide-react';
+import { Bell, Eye, Loader2, Printer, Users } from 'lucide-react';
 import { cn } from '@ury/ui';
 import { formatInvoiceTime } from '@ury/core';
 import type { Table } from '../lib/table-api';
+import type { CardState } from '../lib/service-requests';
 import { Badge } from '@ury/ui';
 import { TableShapeIcon } from './TableShapeIcon';
 import TableActionsMenu from './TableActionsMenu';
@@ -32,6 +33,8 @@ interface TableCardProps {
   isRestricted?: boolean;
   /** The self-order button of the table (a SelfOrderToggle), when the branch uses self ordering. */
   selfOrderSlot?: ReactNode;
+  /** The guests' 「お会計」 call of the table (null: none). Open rings; Acknowledged is quiet but stays until the bill is printed, paid or cancelled. */
+  billCall?: CardState | null;
 }
 
 const TableCard = ({
@@ -51,6 +54,7 @@ const TableCard = ({
   isPrinting,
   isRestricted = false,
   selfOrderSlot,
+  billCall = null,
 }: TableCardProps) => {
   const isOccupied = table.occupied === 1;
 
@@ -70,11 +74,28 @@ const TableCard = ({
           : isRestricted
             ? TABLE_STATE_STYLES.restricted
             : cn(TABLE_STATE_STYLES.available, 'cursor-pointer hover:shadow-md'),
+        billCall && (billCall.late ? 'ring-4 ring-red-500' : billCall.quiet ? 'ring-2 ring-amber-400' : 'ring-4 ring-amber-500'),
         menuOpen ? 'z-20' : 'z-0',
         className
       )}
     >
       <div className="flex flex-1 flex-col">
+        {billCall && (
+          <div
+            data-testid="bill-call"
+            className={cn(
+              'mb-3 flex items-center gap-2 rounded-md px-2 py-1 text-sm font-semibold',
+              billCall.late ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-900'
+            )}
+          >
+            <Bell className={cn('h-4 w-4', !billCall.quiet && 'animate-bounce')} />
+            <span>{t('service_request.call_bill')}</span>
+            <span className="font-medium">{t('service_request.minutes', { minutes: billCall.minutes })}</span>
+            {billCall.quiet && (
+              <span className="ml-auto rounded bg-white/70 px-1.5 py-0.5 text-xs font-medium">{t('service_request.acknowledged')}</span>
+            )}
+          </div>
+        )}
         <div className="mb-3 flex flex-wrap items-start justify-between gap-x-1 gap-y-2">
           <div className="flex min-w-[6rem] flex-1 items-center gap-2">
             <div className="shrink-0">

@@ -620,5 +620,14 @@
     "stopped": "{{table}} 셀프 주문을 중지했습니다",
     "failed": "셀프 주문을 전환하지 못했습니다",
     "bill_printed": "계산서 발행됨 (결제 대기)"
+  },
+  "service_request": {
+    "call_bill": "계산",
+    "minutes": "{{minutes}}분 대기",
+    "acknowledged": "확인함",
+    "banner_title": "계산 요청",
+    "banner_item": "{{table}}: 계산을 요청했습니다（{{minutes}}분）",
+    "mute": "알림음 끄기",
+    "unmute": "알림음 켜기"
   }
 }

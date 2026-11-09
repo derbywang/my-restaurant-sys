@@ -620,5 +620,14 @@
     "stopped": "已停止 {{table}} 的自助点餐",
     "failed": "无法切换自助点餐",
     "bill_printed": "已打印账单（待收款）"
+  },
+  "service_request": {
+    "call_bill": "结账",
+    "minutes": "已等待 {{minutes}} 分钟",
+    "acknowledged": "已确认",
+    "banner_title": "客人呼叫结账",
+    "banner_item": "{{table}}：客人要求结账（{{minutes}}分钟）",
+    "mute": "关闭提示音",
+    "unmute": "开启提示音"
   }
 }

@@ -23,6 +23,8 @@ import CaptainTransferDialog from '../components/CaptainTransferDialog';
 import TableCard from '../components/TableCard';
 import SelfOrderToggle from '../components/SelfOrderToggle';
 import { useSelfOrderTables } from '../hooks/useSelfOrderTables';
+import { cardState } from '../lib/service-requests';
+import { useServiceRequestStore } from '../store/service-request-store';
 import MergeLinkConnector from '../components/MergeLinkConnector';
 
 const TableView = () => {
@@ -37,6 +39,8 @@ const TableView = () => {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
   const selfOrder = useSelfOrderTables();
+  const billCalls = useServiceRequestStore((state) => state.requests);
+  const billCallsNow = useServiceRequestStore((state) => state.now);
   const [tablesCache, setTablesCache] = useState<Record<string, Table[]>>({});
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
@@ -390,6 +394,7 @@ const TableView = () => {
       onPrint={(event) => handlePrintTable(table, event)}
       isPrinting={printingTable === table.name}
       isRestricted={isRestricted}
+      billCall={cardState(billCalls, table.name, billCallsNow)}
       selfOrderSlot={
         <SelfOrderToggle
           state={selfOrder.state}

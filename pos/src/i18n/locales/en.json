@@ -620,5 +620,14 @@
     "stopped": "Self-order stopped for {{table}}",
     "failed": "Could not switch self-order",
     "bill_printed": "Bill printed (awaiting payment)"
+  },
+  "service_request": {
+    "call_bill": "Bill",
+    "minutes": "waiting {{minutes}} min",
+    "acknowledged": "Seen",
+    "banner_title": "Bill requested",
+    "banner_item": "{{table}}: the guests ask for the bill ({{minutes}} min)",
+    "mute": "Turn the bell off",
+    "unmute": "Turn the bell on"
   }
 }

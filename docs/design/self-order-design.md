@@ -272,11 +272,17 @@
 
 **设计**：
 
-- **接口**（需要登录，权限同 `take_orders`，限本分店）：`get_open_service_requests()` 返回未解决的请求（桌台、类型、`requested_at`、订单名）；`acknowledge_service_request(name)` 标记已看到；`resolve_service_request(name)` 标记已处理。
-- **实时 + 轮询**：`request_bill` 和新增的「呼叫店员」（`request_assistance`，类型 Assistance）创建记录后 `frappe.publish_realtime("service_request_<分店>", ..., after_commit=True)`，POS 订阅它，收到后立即刷新。开发环境的 Socket.IO 已经可以用，所以实时推送可以在开发站点上测试；**同时保留每 15 秒的轮询作为备用**（断线、重连期间、nginx 配置有问题时仍然能看到请求），实时和轮询用同一个刷新函数，去重靠请求名。
-- **桌台页**：有未处理请求的桌台卡片整张高亮并显示铃铛图标和「お会計」或「呼び出し」及等待分钟数（超过 3 分钟变红）；多个请求按等待时间排列。
-- **提醒**：收到新请求时顶部出现提示条并响一声（可在 POS 设置里关闭声音）；提示条点击后跳到那张桌的订单。
-- **处理**：店员打开那张桌的订单即视为已看到（Acknowledged）；打印账单时该订单的 Bill 请求自动 Resolved；付款提交或取消订单时该订单的所有请求自动 Resolved。Assistance 请求在订单画面上有「対応済み」按钮。
+- **桌台页**：有请求的桌台卡片高亮，卡片顶部一行显示铃铛、「お会計」和等待分钟数；超过 3 分钟（秒数大于 180）整行和外框变红；多个请求取等待最久的。**等待时间由服务器按顾客按下按钮的时刻算好（`waited_seconds`），POS 只加上取回清单之后经过的时间，不依赖平板的时钟和时区。**
+- **提醒（2026-11-09 决定）**：所有能点单的店员（收银员和服务员）都提醒。新请求到达时顶部出现提示条（点某一项跳到那张桌的订单）并响一声（用浏览器自带的声音，不带声音文件；提示条上的喇叭按钮可关声音，设置存在本机浏览器里；浏览器要点过一次页面才允许出声）。**先只有“超过 3 分钟变红”，不加别的升级提醒，试营业时再定。**
+- **三种状态在界面上的区别**：
+  | 状态 | 什么时候 | 提示条 | 声音 | 桌卡 |
+  |---|---|---|---|---|
+  | 未看到（Open） | 顾客按下按钮，还没有店员打开这张桌的订单 | 显示 | 响一次 | 铃铛跳动、琥珀色粗外框、「お会計 N分待ち」 |
+  | 已看到（Acknowledged） | 有店员打开了这张桌的订单 | 收起 | 不再响 | **铃铛、「お会計」和等待分钟数照旧显示**，只是铃铛不跳、外框变细，右侧多一个「確認済み」小标签 |
+  | 已处理（Resolved） | 打印账单、付款或取消订单 | — | — | 整行消失 |
+  服务员可能只是为了加菜打开订单，所以**打开订单只让提醒变安静，不让桌卡上的呼叫消失**；等待分钟数从顾客按下按钮起算，打开订单不重新计时，超过 3 分钟照样变红。
+- **接口**：`ury/ury/api/service_requests.py`：`get_open_service_requests`（GET，只读，限本分店，需要 POS Invoice 的 create 权限）、`acknowledge_requests_of_table(table)`（POST，把这张桌的 Open 变 Acknowledged，不改 `requested_at`；已是 Acknowledged 时不再通知）、`resolve_requests_of_invoice(invoice)`（内部：打印账单 `qz_print_update` / `network_printing`、付款提交 `on_submit`、取消或删除 `on_trash` 和 `cancel_order`）。所有变化用事件 `service_request`（载荷 `kind` = new / acknowledged / resolved）经 `publish_to_branch` 推给本分店的店员，POS 同时每 15 秒轮询一次备用（重连后也立刻刷新一次）。
+- **只做「お会計」（Bill）**；「呼び出し」（Assistance）以后再加，POS 现在不显示它。
 - **顾客端**：`get_order_status` 已返回 `open_requests`，页面显示「お会計をお呼びしました」；顾客不能取消请求（避免来回点）；同一张桌同一类型已有 Open 请求时返回 `Already Requested`（现有）。
 - 请求是桌台级的；自助机（无桌台）没有呼叫功能。
 

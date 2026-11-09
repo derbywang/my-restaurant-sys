@@ -17,6 +17,7 @@ import type { RootState } from '../store/root-store';
 import { logout } from '@ury/core';
 import { showToast } from '@ury/ui';
 import LanguageMenu from './LanguageMenu';
+import SoundToggle from './SoundToggle';
 
 const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -147,6 +148,8 @@ const Header = () => {
         {/* Right side actions */}
         <div className="flex items-center gap-4">
           {/* User menu */}
+          {/* the switch of the sound of the calls for the bill: always in sight */}
+          <SoundToggle />
           <div className="relative" ref={userMenuRef}>
             <Button
               onClick={handleUserMenuToggle}

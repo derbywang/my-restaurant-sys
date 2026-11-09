@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../lib/bell', () => ({
+  isBellMuted: () => false,
+  setBellMuted: vi.fn(),
+  ringBell: vi.fn(),
+}));
+
+import { ringBell, setBellMuted } from '../lib/bell';
 
 import { useServiceRequestStore } from './service-request-store';
 
@@ -23,5 +31,27 @@ describe('refresh', () => {
     });
     useServiceRequestStore.getState().refresh();
     expect(asked).toBe(1);
+  });
+});
+
+describe('toggleMuted (the speaker buttons of the top bars and of the banner are one switch)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('turning the sound on rings once (the cashier hears the volume; the click also lets the browser play sound)', () => {
+    useServiceRequestStore.setState({ muted: true });
+    useServiceRequestStore.getState().toggleMuted();
+    expect(useServiceRequestStore.getState().muted).toBe(false);
+    expect(setBellMuted).toHaveBeenCalledWith(false);
+    expect(ringBell).toHaveBeenCalledTimes(1);
+  });
+
+  it('turning the sound off is silent and is remembered', () => {
+    useServiceRequestStore.setState({ muted: false });
+    useServiceRequestStore.getState().toggleMuted();
+    expect(useServiceRequestStore.getState().muted).toBe(true);
+    expect(setBellMuted).toHaveBeenCalledWith(true);
+    expect(ringBell).not.toHaveBeenCalled();
   });
 });

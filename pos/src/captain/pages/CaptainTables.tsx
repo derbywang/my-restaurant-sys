@@ -8,6 +8,7 @@ import SelfOrderToggle from '../../components/SelfOrderToggle';
 import { useSelfOrderTables } from '../../hooks/useSelfOrderTables';
 import { t } from '../../i18n';
 import ServiceRequestBanner from '../../components/ServiceRequestBanner';
+import SoundToggle from '../../components/SoundToggle';
 import { cardState } from '../../lib/service-requests';
 import { useServiceRequestStore } from '../../store/service-request-store';
 import { getRooms, getTables, type Room, type Table } from '../../lib/table-api';
@@ -199,6 +200,7 @@ export default function CaptainTables() {
             <Button variant="ghost" size="sm" onClick={refresh}>
               {t('captain.refresh')}
             </Button>
+            <SoundToggle />
             <LanguageMenu />
           </div>
         </div>

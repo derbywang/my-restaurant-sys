@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ServiceRequest } from '../lib/service-requests';
-import { isBellMuted, setBellMuted } from '../lib/bell';
+import { isBellMuted, ringBell, setBellMuted } from '../lib/bell';
 
 interface ServiceRequestState {
   requests: ServiceRequest[];
@@ -32,5 +32,7 @@ export const useServiceRequestStore = create<ServiceRequestState>((set, get) => 
     const muted = !get().muted;
     setBellMuted(muted);
     set({ muted });
+    // turning the sound on rings once: the volume can be checked, and this click lets the browser play sound afterwards
+    if (!muted) ringBell();
   },
 }));

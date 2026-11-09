@@ -28,6 +28,7 @@ import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
 import { t } from '../../i18n';
 import ServiceRequestBanner from '../../components/ServiceRequestBanner';
+import SoundToggle from '../../components/SoundToggle';
 import { useAcknowledgeCallsOfTable } from '../../hooks/useAcknowledgeCallsOfTable';
 import { customerId } from '../../lib/default-customer';
 import { refusedNoteChange, syncFailureMessageKey } from '../../lib/order-sync';
@@ -599,6 +600,7 @@ export default function CaptainOrder() {
         </div>
 
         <div className="flex items-center gap-2">
+          <SoundToggle />
           {canModify && (
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1 lg:hidden">
               <button

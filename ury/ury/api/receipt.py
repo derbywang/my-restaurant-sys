@@ -224,7 +224,7 @@ def _standard_rate(invoice):
 
 def _lines_and_rates(invoice, standard):
 	by_rate = {}
-	lines = []
+	joined = {}  # what makes two rows one line -> the line (kept in the order of the first row)
 	for item in invoice.items:
 		item_rate = 0
 		for tax in invoice.taxes:
@@ -233,15 +233,39 @@ def _lines_and_rates(invoice, standard):
 			rate = _row_rate(item, tax)
 			if rate:
 				item_rate = max(item_rate, rate)
-		lines.append(
-			{
+		# Every addition to an order is a row of its own (the kitchen needs them one by one); on the receipt the rows of the
+		# same dish, the same price, the same note, the same tax rates and the same discount are one line. The amount is the
+		# sum of the amounts of the rows (not worked out again from the quantity); only the display changes.
+		key = (
+			item.item_code,
+			flt(item.rate),
+			(item.get("comment") or "").strip(),
+			json.dumps(_item_rates(item), sort_keys=True),
+			flt(item.get("discount_percentage")),
+			flt(item.get("discount_amount")),
+		)
+		line = joined.get(key)
+		if line is None:
+			joined[key] = {
 				"name": item.item_name or item.item_code,
-				"qty": f"{flt(item.qty):g}",
-				"rate": yen(item.rate),
-				"amount": yen(item.amount),
+				"qty": flt(item.qty),
+				"rate": flt(item.rate),
+				"amount": flt(item.amount),
 				"reduced": 0 < item_rate < standard,
 			}
-		)
+		else:
+			line["qty"] += flt(item.qty)
+			line["amount"] += flt(item.amount)
+	lines = [
+		{
+			"name": line["name"],
+			"qty": f"{line['qty']:g}",
+			"rate": yen(line["rate"]),
+			"amount": yen(line["amount"]),
+			"reduced": line["reduced"],
+		}
+		for line in joined.values()
+	]
 
 	for tax in invoice.taxes:
 		taxable = {}

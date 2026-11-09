@@ -100,7 +100,9 @@
     "change_due": "应找零：{{amount}}",
     "change_not_cash": "付款金额超出应收 {{amount}}。只有现金可以找零。",
     "success": "结账成功：已收 {{amount}}",
-    "stamp_notice": "收取的现金不含税为 {{amount}}，达到 5 万日元以上。纸质收据需要贴收入印纸。"
+    "stamp_notice": "收取的现金不含税为 {{amount}}，达到 5 万日元以上。纸质收据需要贴收入印纸。",
+    "tax_before_discount": "{{rate}}%对象 折扣前（不含税）",
+    "tax_discount": "　折扣 {{rate}}%对象"
   },
   "pos": {
     "not_opened_title": "收银未开班",

@@ -16,6 +16,9 @@ export interface OrderTotalsTax {
   /** The amount (without tax) this rate is calculated on. */
   taxable_amount: number;
   tax_amount: number;
+  /** A discount on the whole order, by rate: the amount (without tax) before it, and what it took off. */
+  gross_amount?: number;
+  discount_amount?: number;
 }
 
 export interface OrderTotals {

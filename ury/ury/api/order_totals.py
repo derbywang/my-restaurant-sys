@@ -69,10 +69,12 @@ def combine_totals(first, second):
 	taxes = {}
 	for tax in [*first["taxes"], *second["taxes"]]:
 		row = taxes.setdefault(
-			(tax["account_head"], tax["rate"]), {**tax, "taxable_amount": 0, "tax_amount": 0}
+			(tax["account_head"], tax["rate"]), {**tax, "taxable_amount": 0, "tax_amount": 0, "gross_amount": 0, "discount_amount": 0}
 		)
 		row["taxable_amount"] += tax["taxable_amount"]
 		row["tax_amount"] += tax["tax_amount"]
+		row["gross_amount"] += tax["gross_amount"]
+		row["discount_amount"] += tax["discount_amount"]
 	combined = {
 		key: first[key] + second[key]
 		for key in (
@@ -209,18 +211,27 @@ def totals_of(doc):
 	if doc is None:
 		return {"currency": None, "total": 0, "discount_percentage": 0, "discount_amount": 0, "net_total": 0,
 			"taxes": [], "total_taxes_and_charges": 0, "grand_total": 0, "rounded_total": 0}
+	from ury.ury.api.receipt import gross_by_rate
+
 	taxable = doc.flags.get("taxable_by_rate") or {}
+	gross = gross_by_rate(doc)
 	taxes = []
 	for tax in doc.taxes:
 		if not tax.tax_amount:
 			continue
 		by_rate = taxable.get(tax.idx) or {}
+		rate = next(iter(by_rate), tax.rate)
+		taxable_amount = sum(by_rate.values()) if by_rate else tax.net_amount
+		before = gross.get(rate, taxable_amount)
 		taxes.append(
 			{
 				"account_head": tax.account_head,
 				"description": tax.description,
-				"rate": next(iter(by_rate), tax.rate),
-				"taxable_amount": sum(by_rate.values()) if by_rate else tax.net_amount,
+				"rate": rate,
+				# a discount on the whole order, by rate: the amount before it and the discount
+				"gross_amount": before,
+				"discount_amount": max(0, before - taxable_amount) if before - taxable_amount > 0.5 else 0,
+				"taxable_amount": taxable_amount,
 				"tax_amount": tax.tax_amount_after_discount_amount,
 			}
 		)

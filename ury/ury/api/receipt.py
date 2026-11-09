@@ -64,9 +64,10 @@ def jp_receipt_data(doc):
 		standard = _standard_rate(invoice)
 		lines, by_rate = _lines_and_rates(invoice, standard)
 		for rate, amounts in by_rate.items():
-			total = rates.setdefault(rate, {"taxable": 0, "tax": 0})
+			total = rates.setdefault(rate, {"taxable": 0, "tax": 0, "gross": 0})
 			total["taxable"] += amounts["taxable"]
 			total["tax"] += amounts["tax"]
+			total["gross"] += amounts["gross"]
 		sections.append(
 			{
 				"name": invoice.name,
@@ -110,6 +111,9 @@ def jp_receipt_data(doc):
 				"taxable": yen(amounts["taxable"]),
 				"tax": yen(amounts["tax"]),
 				"reduced": 0 < rate < standard,
+				# a discount on the whole order, by rate: before it, the discount, (after it is "taxable")
+				"gross": yen(amounts["gross"]) if _discount_of(amounts) else "",
+				"discount": yen(_discount_of(amounts)) if _discount_of(amounts) else "",
 			}
 			for rate, amounts in sorted(rates.items(), reverse=True)
 		],
@@ -125,6 +129,18 @@ def jp_receipt_data(doc):
 		),
 		"change": yen(change) if paid and change else "",
 	})
+
+
+def _discount_of(amounts):
+	"""The part of a rate's amount that the discount on the whole order took off (0 when there was none)."""
+	discount = flt(amounts.get("gross")) - flt(amounts.get("taxable"))
+	return discount if discount > 0.5 else 0
+
+
+def gross_by_rate(invoice):
+	"""{rate: the amount before the discount on the whole order} of an invoice (for the payment dialog's totals)."""
+	_lines, by_rate = _lines_and_rates(invoice, _standard_rate(invoice))
+	return {rate: amounts["gross"] for rate, amounts in by_rate.items()}
 
 
 def _payment_lines(invoices):
@@ -233,6 +249,11 @@ def _lines_and_rates(invoice, standard):
 			continue
 		saved = flt(tax.tax_amount_after_discount_amount)
 		rates = sorted(taxable)
+		gross = {}
+		for item in invoice.items:
+			rate = _row_rate(item, tax)
+			if rate and tax.charge_type == "On Net Total":
+				gross[rate] = gross.get(rate, 0) + flt(item.amount)
 		for position, rate in enumerate(rates):
 			if len(rates) == 1:
 				amount = saved
@@ -240,8 +261,9 @@ def _lines_and_rates(invoice, standard):
 				amount = int(taxable[rate] * rate / 100)
 			else:
 				amount = saved - sum(int(taxable[r] * r / 100) for r in rates[:-1])
-			row = by_rate.setdefault(rate, {"taxable": 0, "tax": 0})
+			row = by_rate.setdefault(rate, {"taxable": 0, "tax": 0, "gross": 0})
 			row["taxable"] += taxable[rate]
+			row["gross"] += gross.get(rate, taxable[rate])
 			row["tax"] += amount
 	return lines, by_rate
 

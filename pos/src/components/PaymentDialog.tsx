@@ -336,11 +336,25 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 </div>
               )}
               {totals?.taxes.map((tax) => (
-                <div key={tax.account_head} className="flex justify-between">
-                  <span className="text-gray-600">
-                    {t('payment.tax_line', { rate: tax.rate, base: formatCurrency(tax.taxable_amount) })}
-                  </span>
-                  <span>{formatCurrency(tax.tax_amount)}</span>
+                <div key={tax.account_head}>
+                  {(tax.discount_amount ?? 0) > 0 && (
+                    <>
+                      <div className="flex justify-between text-gray-600">
+                        <span>{t('payment.tax_before_discount', { rate: tax.rate })}</span>
+                        <span>{formatCurrency(tax.gross_amount ?? 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>{t('payment.tax_discount', { rate: tax.rate })}</span>
+                        <span>-{formatCurrency(tax.discount_amount ?? 0)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      {t('payment.tax_line', { rate: tax.rate, base: formatCurrency(tax.taxable_amount) })}
+                    </span>
+                    <span>{formatCurrency(tax.tax_amount)}</span>
+                  </div>
                 </div>
               ))}
               {/* Adjustment (if any) */}

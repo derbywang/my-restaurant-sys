@@ -9,7 +9,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from erpnext.controllers.queries import item_query
 from ury.ury_pos.api import getBranch, getBranchRoom, getRoom, posOpening
-from ury.ury.api.merged_bill import allocate_payments, check_change_is_cash, check_expected_total, lock_for_payment
+from ury.ury.api.merged_bill import allocate_payments, apply_pair_tax, check_change_is_cash, check_expected_total, lock_for_payment
 from ury.ury.api.pos_permissions import DISCOUNT_ROLES, can_reduce_sent_items, require_billing_permission
 from ury.ury.api.ury_kot_generate import kot_execute
 from ury.ury.api.ury_kot_generate import process_items_for_cancel_kot
@@ -2268,7 +2268,9 @@ def make_invoice(customer, payments, cashier, pos_profile,owner, additionalDisco
         target.additional_discount_percentage = invoice.additional_discount_percentage
         target.discount_amount = 0
         target.calculate_taxes_and_totals()
-        
+        # the tax of each rate is rounded once for the merged bill (the bill made later takes the difference)
+        apply_pair_tax(invoice, target)
+
         doc_req = invoice.rounded_total
         target_req = target.rounded_total
         check_expected_total(expected_total, doc_req + target_req)

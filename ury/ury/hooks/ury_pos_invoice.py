@@ -315,6 +315,9 @@ def sync_merged_invoice(doc):
 
         # sync submit/payment status
         if doc.docstatus == 1 and target.docstatus == 0:
+            # the other bill is submitted from a document loaded here: it takes its part of the tax of the merged
+            # bill again (the tax of each rate is rounded once for the whole), or the submit would calculate its own
+            _apply_pair_tax_for_submit(doc, target)
 
             target.flags.ignore_validate_update_after_submit = True
 
@@ -345,6 +348,15 @@ def sync_merged_invoice(doc):
 
     finally:
         frappe.flags.in_bill_merge_sync = False
+
+
+def _apply_pair_tax_for_submit(paid, target):
+    from ury.ury.api.merged_bill import apply_pair_tax
+
+    calculated = frappe.get_doc(paid.as_dict())
+    calculated.calculate_taxes_and_totals()
+    target.calculate_taxes_and_totals()
+    apply_pair_tax(calculated, target)
 
 
 def refresh_merged_snapshot(doc):

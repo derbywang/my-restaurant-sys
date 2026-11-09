@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from ury.ury.api.merged_bill import table_label
+from ury.ury.api.merged_bill import apply_pair_tax, table_label
 from ury.ury.api.pos_closing import _check_branch
 
 
@@ -41,6 +41,9 @@ def preview_order_totals(invoice, discount_percentage=None):
 			item.additional_discount_percentage = percentage
 			item.discount_amount = 0
 		item.calculate_taxes_and_totals()
+	if partner:
+		# the tax of each rate is rounded once for the merged bill, as it will be when it is paid
+		apply_pair_tax(doc, partner)
 
 	totals = totals_of(doc)
 	if partner:

@@ -46,10 +46,10 @@ def jp_receipt_data(doc):
 
 	rates = {}  # rate -> {"taxable": , "tax": }
 	sections = []
+	_check_against_recalculation(invoices)
 	for index, invoice in enumerate(invoices):
 		standard = _standard_rate(invoice)
 		lines, by_rate = _lines_and_rates(invoice, standard)
-		_check_against_recalculation(invoice)
 		for rate, amounts in by_rate.items():
 			total = rates.setdefault(rate, {"taxable": 0, "tax": 0})
 			total["taxable"] += amounts["taxable"]
@@ -62,6 +62,12 @@ def jp_receipt_data(doc):
 				"total": yen(invoice.total),
 			}
 		)
+
+	merged_tax = _merged_tax_of_rates(invoices, rates) if len(invoices) > 1 else None
+	if merged_tax:
+		# two bills handed over as one: the tax of each rate is rounded once for the merged taxable amount
+		for rate, tax in merged_tax.items():
+			rates[rate]["tax"] = tax
 
 	paid = doc.docstatus == 1
 	standard = max([*rates, 0])
@@ -94,7 +100,11 @@ def jp_receipt_data(doc):
 			}
 			for rate, amounts in sorted(rates.items(), reverse=True)
 		],
-		"total": yen(sum(flt(i.rounded_total or i.grand_total) for i in invoices)),
+		"total": yen(
+			sum(flt(i.net_total) for i in invoices) + sum(amounts["tax"] for amounts in rates.values())
+			if merged_tax
+			else sum(flt(i.rounded_total or i.grand_total) for i in invoices)
+		),
 		**(_payment_lines(invoices) if paid else {"cashless": [], "cash_received": "", "cash_label": ""}),
 		"change": yen(change) if paid and change else "",
 	})
@@ -209,21 +219,39 @@ def _lines_and_rates(invoice, standard):
 	return lines, by_rate
 
 
-def _check_against_recalculation(invoice):
-	"""Calculate the invoice again in memory; log a difference, never raise."""
+def _merged_tax_of_rates(invoices, rates):
+	"""{rate: tax} of a merged bill: the taxable amount of each rate (the amounts of both bills added) with its tax cut once,
+	the way the shop configured. None when the shop has no taxes on these bills."""
+	from ury.overrides.pos_invoice import ROUNDING_MODES, rounding_mode_of, tax_of_rate
+
+	if not rates or not invoices[0].taxes:
+		return None
+	mode = rounding_mode_of(invoices[0])
+	precision = invoices[0].taxes[0].precision("tax_amount")
+	return {rate: float(tax_of_rate(amounts["taxable"], rate, precision, mode)) for rate, amounts in rates.items() if mode in ROUNDING_MODES}
+
+
+def _check_against_recalculation(invoices):
+	"""Calculate the invoice (the two invoices of a merged bill, as one) again in memory; log a difference, never raise."""
 	try:
-		again = frappe.get_doc(invoice.as_dict())
-		again.calculate_taxes_and_totals()
-		saved = [flt(t.tax_amount_after_discount_amount) for t in invoice.taxes]
-		fresh = [flt(t.tax_amount_after_discount_amount) for t in again.taxes]
-		if saved == fresh and flt(again.grand_total) == flt(invoice.grand_total):
-			return
-		frappe.log_error(
-			title="Receipt: saved amounts differ from a new calculation",
-			message=(
-				f"{invoice.name}: saved grand_total {invoice.grand_total}, taxes {saved}; "
-				f"calculated again {again.grand_total}, taxes {fresh}. The saved amounts were printed."
-			),
-		)
+		agains = [frappe.get_doc(invoice.as_dict()) for invoice in invoices]
+		for again in agains:
+			again.calculate_taxes_and_totals()
+		if len(agains) == 2:
+			from ury.ury.api.merged_bill import apply_pair_tax
+
+			apply_pair_tax(*agains)
+		for invoice, again in zip(invoices, agains):
+			saved = [flt(t.tax_amount_after_discount_amount) for t in invoice.taxes]
+			fresh = [flt(t.tax_amount_after_discount_amount) for t in again.taxes]
+			if saved == fresh and flt(again.grand_total) == flt(invoice.grand_total):
+				continue
+			frappe.log_error(
+				title="Receipt: saved amounts differ from a new calculation",
+				message=(
+					f"{invoice.name}: saved grand_total {invoice.grand_total}, taxes {saved}; "
+					f"calculated again {again.grand_total}, taxes {fresh}. The saved amounts were printed."
+				),
+			)
 	except Exception:
 		frappe.log_error(title="Receipt: could not check the amounts", message=frappe.get_traceback())

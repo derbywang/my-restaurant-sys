@@ -109,9 +109,66 @@ class URYTaxesAndTotals(calculate_taxes_and_totals):
 			((net * rate / 100).quantize(quantum, rounding=mode) for rate, net in net_by_rate.items()),
 			Decimal(0),
 		)
+		# a bill merged into another (会計合算) takes what is left of the tax of the two bills together
+		# (`apply_pair_tax`): the tax of each rate is rounded once for the merged bill
+		override = doc.flags.get("merged_tax_override") or {}
+		if tax.account_head in override:
+			return float(override[tax.account_head])
 		return float(total)
 
 	def rounding_mode(self):
 		profile = self.doc.get("pos_profile")
 		mode = profile and frappe.get_cached_value("POS Profile", profile, "custom_tax_rounding")
 		return mode if mode in ROUNDING_MODES else DEFAULT_ROUNDING
+
+
+def tax_of_rate(net, rate, precision, mode):
+	"""The tax of `net` at `rate` percent, cut the way the shop configured (`mode` is a key of ROUNDING_MODES)."""
+	quantum = Decimal(1).scaleb(-precision)
+	return (Decimal(str(net)) * Decimal(str(rate)) / 100).quantize(quantum, rounding=ROUNDING_MODES[mode])
+
+
+def rounding_mode_of(doc):
+	profile = doc.get("pos_profile")
+	mode = profile and frappe.get_cached_value("POS Profile", profile, "custom_tax_rounding")
+	return mode if mode in ROUNDING_MODES else DEFAULT_ROUNDING
+
+
+def net_by_rate_of(doc):
+	"""{tax account: {rate: net amount}} of an invoice that has just been calculated."""
+	taxable = doc.flags.get("taxable_by_rate") or {}
+	result = {}
+	for tax in doc.taxes:
+		for rate, net in (taxable.get(tax.idx) or {}).items():
+			account = result.setdefault(tax.account_head, {})
+			account[rate] = account.get(rate, 0) + net
+	return result
+
+
+def merged_tax_by_account(first, second):
+	"""The tax of each tax account for the two invoices as ONE bill: the net amounts of each rate added, the tax of the
+	rate cut once. {account: tax}. Both invoices must have been calculated."""
+	mode = rounding_mode_of(first)
+	net_first, net_second = net_by_rate_of(first), net_by_rate_of(second)
+	precision = (first.taxes or second.taxes)[0].precision("tax_amount") if (first.taxes or second.taxes) else 0
+	result = {}
+	for account in set(net_first) | set(net_second):
+		rates = set(net_first.get(account, {})) | set(net_second.get(account, {}))
+		result[account] = sum(
+			(
+				tax_of_rate(net_first.get(account, {}).get(rate, 0) + net_second.get(account, {}).get(rate, 0), rate, precision, mode)
+				for rate in rates
+			),
+			Decimal(0),
+		)
+	return result
+
+
+def own_tax_by_account(doc):
+	"""The tax of each tax account of one invoice as it was rounded for itself."""
+	mode = rounding_mode_of(doc)
+	precision = doc.taxes[0].precision("tax_amount") if doc.taxes else 0
+	return {
+		account: sum((tax_of_rate(net, rate, precision, mode) for rate, net in by_rate.items()), Decimal(0))
+		for account, by_rate in net_by_rate_of(doc).items()
+	}

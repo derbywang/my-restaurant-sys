@@ -42,6 +42,25 @@ def table_label(doc):
 	return " + ".join(tables)
 
 
+def apply_pair_tax(one, other):
+	"""Round the tax of the two bills of a merged bill ONCE for the merged taxable amount of each rate (the 税理士's
+	rule for a merged bill handed over as one 適格簡易請求書), and keep two documents.
+
+	Both bills must have been calculated (`calculate_taxes_and_totals`). The bill made first keeps the tax it has
+	rounded for itself; the bill made later takes the difference to the tax of the merged bill (at most a yen per rate
+	more than its own). The later bill is calculated again with that tax, and keeps it for the saves that follow
+	(`flags.merged_tax_override`). Returns (the bill made first, the bill made later)."""
+	from ury.overrides.pos_invoice import merged_tax_by_account, own_tax_by_account
+
+	first, later = sorted((one, other), key=lambda doc: (str(doc.get("creation") or ""), doc.name or ""))
+	merged = merged_tax_by_account(first, later)
+	own_first = own_tax_by_account(first)
+	override = {account: float(tax - own_first.get(account, 0)) for account, tax in merged.items()}
+	later.flags.merged_tax_override = override
+	later.calculate_taxes_and_totals()
+	return first, later
+
+
 def allocate_payments(invoice, target, payments):
 	"""Put the payments the cashier entered on the two bills of a merged bill, each for its
 	own amount: first the clicked bill, then the other one.

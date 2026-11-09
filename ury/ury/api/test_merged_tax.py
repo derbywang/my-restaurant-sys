@@ -1,0 +1,166 @@
+"""Merged bills (会計合算): the tax of each rate is rounded ONCE for the whole merged bill.
+
+The 税理士 (2026-11-09): two orders handed over as one 適格簡易請求書 must have the tax of each rate rounded once on the
+merged taxable amount; adding up the tax rounded on each order is not right. The two POS Invoices stay (kitchen, tables,
+unmerge, cancel do not change): the bill made first keeps its own rounded tax, the bill made later takes the difference
+(`merged_bill.apply_pair_tax`). docs/design/jp-tax-design.md. Run on the test site only.
+"""
+
+import frappe
+from frappe.utils import add_to_date
+
+from ury.setup.jp_tax import refresh_receipt_format
+from ury.setup.test_site import (
+	CASHIER,
+	FOOD_ITEM,
+	POS_PROFILE,
+	TABLES,
+	URYFlowTestCase,
+	as_user,
+	close_shift,
+	open_pos,
+	place_order,
+	print_bill,
+)
+from ury.ury.api.order_totals import preview_order_totals
+from ury.ury.api.merged_bill import unmerge_bills
+from ury.ury.api.test_receipt import render, text
+from ury.ury_pos.api import merge_bills
+
+PRICE = 1005  # 10% of it is 100.5: each bill alone cuts it to 100, the two together are 201
+
+
+class TestMergedTaxIsRoundedOnce(URYFlowTestCase):
+	def setUp(self):
+		super().setUp()
+		original = frappe.db.get_value("Item Price", {"item_code": FOOD_ITEM, "selling": 1}, "price_list_rate")
+		self.addCleanup(self._set_price, original)
+		self._set_price(PRICE)
+		profile = frappe.db.get_value("POS Profile", POS_PROFILE, ["apply_discount_on", "custom_enable_discount"])
+		self.addCleanup(self._set_discount, *profile)
+		self._set_discount("Net Total", 1)
+		refresh_receipt_format()
+		frappe.db.commit()
+		self.opening = open_pos(CASHIER)
+		self.first = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		self.second = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])
+		# the dev container's clock can step back: the bill made first is made first
+		made = frappe.db.get_value("POS Invoice", self.first, "creation")
+		frappe.db.set_value("POS Invoice", self.second, "creation", add_to_date(made, seconds=1), update_modified=False)
+		with as_user(CASHIER):
+			merge_bills(self.first, self.second)
+
+	def _set_price(self, price):
+		frappe.db.sql("update `tabItem Price` set price_list_rate = %s where item_code = %s and selling = 1", (price, FOOD_ITEM))
+		frappe.db.commit()
+
+	def _set_discount(self, apply_on, enabled):
+		frappe.db.set_value("POS Profile", POS_PROFILE, {"apply_discount_on": apply_on, "custom_enable_discount": enabled})
+		frappe.db.commit()
+		frappe.clear_document_cache("POS Profile", POS_PROFILE)
+
+	def _preview(self, invoice, discount=None):
+		with as_user(CASHIER):
+			return preview_order_totals(invoice, discount)
+
+	def _pay(self, invoice, amount, discount=None):
+		from ury.ury.doctype.ury_order.ury_order import make_invoice
+
+		doc = frappe.get_doc("POS Invoice", invoice)
+		print_bill(invoice, CASHIER)
+		profile = frappe.get_doc("POS Profile", POS_PROFILE)
+		with as_user(CASHIER):
+			make_invoice(
+				customer=doc.customer,
+				payments=[{"mode_of_payment": profile.payments[0].mode_of_payment, "amount": amount}],
+				cashier=CASHIER,
+				pos_profile=POS_PROFILE,
+				owner=CASHIER,
+				additionalDiscount=discount,
+				table=doc.restaurant_table,
+				invoice=invoice,
+				expected_total=amount,
+			)
+
+	def _tax_and_total(self, name):
+		row = frappe.db.get_value("POS Invoice", name, ["total_taxes_and_charges", "rounded_total"], as_dict=True)
+		return row.total_taxes_and_charges, row.rounded_total
+
+	# --- the amount the dialog shows --------------------------------------------------
+
+	def test_the_preview_of_either_bill_has_the_tax_rounded_once(self):
+		for invoice in (self.first, self.second):
+			totals = self._preview(invoice)
+			self.assertEqual(totals["net_total"], 2010)
+			self.assertEqual([(t["rate"], t["taxable_amount"], t["tax_amount"]) for t in totals["taxes"]], [(10, 2010, 201)])
+			self.assertEqual(totals["rounded_total"], 2211)
+
+	def test_a_bill_that_is_not_merged_is_as_before(self):
+		other = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[2])
+		self.assertEqual(self._preview(other)["rounded_total"], 1105)
+
+	def test_after_unmerging_each_bill_is_rounded_by_itself_again(self):
+		with as_user(CASHIER):
+			unmerge_bills(self.first)
+		self.assertEqual(self._preview(self.first)["rounded_total"], 1105)
+		self.assertEqual(self._preview(self.second)["rounded_total"], 1105)
+
+	# --- paying ------------------------------------------------------------------
+
+	def test_the_bill_made_first_keeps_its_tax_and_the_other_takes_the_difference(self):
+		self._pay(self.first, 2211)
+		self.assertEqual(self._tax_and_total(self.first), (100, 1105))
+		self.assertEqual(self._tax_and_total(self.second), (101, 1106))
+
+	def test_paying_the_other_bill_gives_the_same_result(self):
+		self._pay(self.second, 2211)
+		self.assertEqual(self._tax_and_total(self.first), (100, 1105))
+		self.assertEqual(self._tax_and_total(self.second), (101, 1106))
+
+	def test_both_are_paid_and_the_payments_add_up(self):
+		self._pay(self.first, 2211)
+		rows = [frappe.db.get_value("POS Invoice", n, ["status", "paid_amount"], as_dict=True) for n in (self.first, self.second)]
+		self.assertEqual([r.status for r in rows], ["Paid", "Paid"])
+		self.assertEqual(sum(r.paid_amount for r in rows), 2211)
+
+	def test_the_amount_the_old_way_gives_is_refused_as_changed(self):
+		from ury.ury.api.merged_bill import AmountChanged
+
+		print_bill(self.first, CASHIER)
+		with self.assertRaises(AmountChanged):
+			self._pay(self.first, 2210)
+
+	def test_the_shift_has_the_tax_of_the_merged_bill(self):
+		self._pay(self.first, 2211)
+		closing = close_shift(self.opening)
+		self.assertEqual(sum(t.amount for t in closing.taxes), 201)
+		self.assertEqual(closing.grand_total, 2211)
+
+	# --- a discount ------------------------------------------------------------------
+
+	def test_with_a_discount_the_tax_is_still_rounded_once_on_the_whole(self):
+		totals = self._preview(self.first, 10)
+		net = totals["net_total"]
+		self.assertEqual(totals["taxes"][0]["tax_amount"], (net * 10) // 100)
+		self._pay(self.first, totals["rounded_total"], discount=10)
+		taxes = self._tax_and_total(self.first)[0] + self._tax_and_total(self.second)[0]
+		self.assertEqual(taxes, (net * 10) // 100)
+
+	# --- the receipt -----------------------------------------------------------------
+
+	def test_the_receipt_of_either_unpaid_bill_shows_the_merged_tax_once(self):
+		for invoice in (self.first, self.second):
+			page = text(render(invoice))
+			self.assertIn("¥201", page)
+			self.assertIn("¥2,010", page)
+			self.assertIn("¥2,211", page)
+			self.assertNotIn("¥200", page)
+
+	def test_the_paid_receipt_shows_the_same_and_logs_no_difference(self):
+		self._pay(self.first, 2211)
+		before = frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]})
+		for invoice in (self.first, self.second):
+			page = text(render(invoice))
+			self.assertIn("¥201", page)
+			self.assertIn("¥2,211", page)
+		self.assertEqual(frappe.db.count("Error Log", {"method": ["like", "Receipt:%"]}), before)

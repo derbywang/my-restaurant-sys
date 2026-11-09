@@ -1184,6 +1184,43 @@ class TestAskingForTheBillTellsTheStaff(SelfOrderingCase):
 		self.assertTrue(publish.call_args.kwargs.get("after_commit"))
 
 
+class TestTheOrderTellsThatTheBillWasAskedFor(SelfOrderingCase):
+	"""After a reload the page must still say 「お会計をお呼びしました」, so the order the page reads says it."""
+
+	def setUp(self):
+		super().setUp()
+		self.staff_open()
+		original = frappe.db.get_value("URY Self Ordering Profile", PROFILE, "enable_request_bill")
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_request_bill", 1)
+		frappe.db.commit()
+		self.addCleanup(lambda: (frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_request_bill", original), frappe.db.commit()))
+		self.session = self.scan()
+		add_customer_items(self.session, [{"item": FOOD_ITEM, "qty": 1}])
+
+	def test_not_asked_before_the_button_and_asked_after_it(self):
+		from ury.ury.api.self_ordering import get_customer_order, request_bill
+
+		self.assertFalse(get_customer_order(self.session)["bill_requested"])
+		request_bill(self.session)
+		self.assertTrue(get_customer_order(self.session)["bill_requested"])
+
+	def test_a_resolved_request_is_not_asked_any_more(self):
+		from ury.ury.api.self_ordering import get_customer_order, request_bill
+
+		request_bill(self.session)
+		frappe.db.set_value("URY Service Request", {"session": self.session_name()}, "status", "Resolved")
+		self.assertFalse(get_customer_order(self.session)["bill_requested"])
+
+	def test_an_order_that_was_not_started_says_not_asked(self):
+		from ury.ury.api.self_ordering import get_customer_order
+
+		fresh = self.scan()
+		self.assertFalse(get_customer_order(fresh)["bill_requested"])
+
+	def session_name(self):
+		return frappe.db.get_value("URY Service Request", {"invoice": ["is", "set"]}, "session")
+
+
 class TestThePricesTheGuestsSeeIncludeTax(SelfOrderingCase):
 	"""総額表示: the guests are shown prices with the tax, calculated by the server, and the total of the
 	cart and of the order is the amount the bill will have. The tax-exclusive price is not sent at all."""

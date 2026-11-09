@@ -134,13 +134,15 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             </p>
           )}
           {!isPickup && context?.capabilities.request_bill_enabled && !order.billed && (
-            <button
-              className="mt-3 w-full rounded-md border py-2 text-sm font-medium disabled:opacity-50"
-              disabled={billRequested}
-              onClick={handleRequestBill}
-            >
-              {billRequested ? t('pay.bill_requested') : t('pay.request_bill')}
-            </button>
+            billRequested ? (
+              <p className="mt-3 w-full rounded-md bg-amber-50 py-2 text-center text-sm font-medium text-amber-900">
+                {t('pay.bill_requested')}
+              </p>
+            ) : (
+              <button className="mt-3 w-full rounded-md border py-2 text-sm font-medium" onClick={handleRequestBill}>
+                {t('pay.request_bill')}
+              </button>
+            )
           )}
         </section>
       )}

@@ -755,13 +755,27 @@ def _sanitize_invoice_for_customer(invoice):
         "billed": bool(invoice.invoice_printed),
         # the bill of the table was split (会計分割): what is shown is this part of it
         "split": _is_split(invoice.name, invoice.get("custom_split_group")),
+        # a call for the bill that the staff have not dealt with yet (the page says so again after a reload)
+        "bill_requested": _bill_requested(invoice.name),
     }
+
+
+def _bill_requested(invoice):
+    with _elevated():
+        return bool(
+            frappe.db.exists(
+                "URY Service Request", {"invoice": invoice, "request_type": "Bill", "status": ["!=", "Resolved"]}
+            )
+        )
 
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_order(session):
     session = _resolve_session(session, require_open=False)
-    empty = {"invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False, "split": False}
+    empty = {
+        "invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False, "split": False,
+        "bill_requested": False,
+    }
     # A session that has not ordered yet is shown the order its dishes would go on (the open order of the
     # table that is not printed, the same rule as when it orders and as the total of the cart): the guests
     # of one table share an order. The printed order of the last guests is never one.

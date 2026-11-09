@@ -24,6 +24,7 @@ import { startAutoRefresh } from '../lib/auto-refresh'
 import { orderSignature } from '../lib/order-lines'
 import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
 import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
+import { billAsked } from '../lib/bill-request'
 import { t } from '../i18n'
 import {
   addToCart as addToCartLine,
@@ -79,7 +80,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   // The cart is kept for a reload of the page once it has been restored (lib/cart-store.ts): saving before that
   // would overwrite the stored cart with the empty one the page starts with.
   const [cartRestored, setCartRestored] = useState(false)
-  const [billRequested, setBillRequested] = useState(false)
+  const [billPressed, setBillPressed] = useState(false)
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequestResult | null>(null)
   const [payingOnline, setPayingOnline] = useState(false)
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null)
@@ -219,7 +220,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     setCartRestored(false)
     setCart({})
     setOrder(null)
-    setBillRequested(false)
+    setBillPressed(false)
     setPaymentRequest(null)
     setPayingOnline(false)
     setSubmitting(false)
@@ -350,7 +351,7 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     if (!context) return
     try {
       await requestBill(context.session)
-      setBillRequested(true)
+      setBillPressed(true)
     } catch (err) {
       handleFailure(err)
     }
@@ -381,7 +382,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     loading,
     submitting,
     error,
-    billRequested,
+    // after a reload the order itself says it (the call is still there for the staff)
+    billRequested: billAsked(order, billPressed),
     paymentRequest,
     payingOnline,
     addToCart,

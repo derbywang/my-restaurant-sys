@@ -71,6 +71,8 @@ export interface CustomerOrder {
   billed: boolean
   /** the bill of the table was split and another part of it is still there */
   split?: boolean
+  /** the order has a call for the bill that the staff have not dealt with yet */
+  bill_requested?: boolean
 }
 
 /** What the cart comes to with the tax, from the server (`preview_customer_cart`). */

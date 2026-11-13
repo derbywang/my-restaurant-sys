@@ -180,6 +180,14 @@
               </div>
             
           </div>
+          <!-- a cancel ticket is confirmed with one tap, right on the card (the card header still opens the same button) -->
+          <button
+            v-if="kot.type === 'Cancelled' || kot.type === 'Partially cancelled'"
+            @click.stop="confirmOrder(kot)"
+            class="mt-3 w-full py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition duration-300 ease-in-out"
+          >
+            {{ $t('kot.confirm') }}
+          </button>
           <!-- You can add more item/quantity pairs here as needed -->
         </div>
       </div>
@@ -248,6 +256,7 @@ import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from ".
 import { t, timeNow } from "../lib/language";
 import { elapsedLabel, elapsedMinutes } from "../lib/elapsed";
 import { timeColor } from "../lib/ticket-time";
+import { mergeKots, startPolling } from "../lib/kot-refresh";
 
 let host = window.location.hostname;
 let port = window.location.port;
@@ -324,7 +333,8 @@ export default {
       daily_order_number:0,
       loadingKots: true,
       kotErrorAlert: null,
-      showKotErrorAlert: false
+      showKotErrorAlert: false,
+      stopPolling: null
     };
   },
   methods: {
@@ -379,6 +389,17 @@ export default {
           reject(error);
         }
       });
+    },
+    // The list again, without a flash: the cards that are already on the screen stay as they are (see lib/kot-refresh.js)
+    async refreshQuietly() {
+      const result = await this.call.get("ury.ury.api.ury_kot_display.kot_list", {});
+      const { kots, changed } = mergeKots(this.kot, result?.message?.KOT);
+      this.kot_alert_time = result.message.kot_alert_time;
+      if (!changed) return;
+      this.kot = kots;
+      this.updateQtyColorTable();
+      this.updateTimeRemaining();
+      this.masonryLoading();
     },
     rotateCard(kot) {
       this.masonryLoading();
@@ -659,6 +680,15 @@ export default {
         this.showModal = true;
       });
     setInterval(this.updateTimeRemaining, 60000);
+    // the push can be lost: read the list again every 30 s, quietly
+    this.stopPolling = startPolling(this.refreshQuietly, undefined, {
+      setInterval: (...args) => window.setInterval(...args),
+      clearInterval: (id) => window.clearInterval(id),
+      isBusy: () => this.loadingKots || !this.isOnline,
+    });
+  },
+  beforeUnmount() {
+    if (this.stopPolling) this.stopPolling();
   },
   beforeDestroy() {
     window.removeEventListener("online", this.handleOnline);

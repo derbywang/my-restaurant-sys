@@ -48,10 +48,13 @@ export interface SplitGroupResponse {
 
 export interface POSInvoiceItem {
   name: string;
+  item_code?: string;
   item_name: string;
   qty: number;
   rate: number;
   amount: number;
+  /** The note of the row (empty when there is none). */
+  comment?: string;
 }
 
 export interface POSInvoiceTax {

@@ -78,7 +78,9 @@
     "enter_cancel_reason": "Enter cancel reason",
     "print": "Print",
     "payment": "Payment",
-    "order_actions": "Order actions"
+    "order_actions": "Order actions",
+    "qty": "Qty",
+    "item_note": "Note: {{note}}"
   },
   "payment": {
     "title": "Payment",

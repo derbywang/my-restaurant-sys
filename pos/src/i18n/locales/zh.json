@@ -78,7 +78,9 @@
     "enter_cancel_reason": "请输入取消原因",
     "print": "打印",
     "payment": "结账",
-    "order_actions": "订单操作"
+    "order_actions": "订单操作",
+    "qty": "数量",
+    "item_note": "备注：{{note}}"
   },
   "payment": {
     "title": "结账",

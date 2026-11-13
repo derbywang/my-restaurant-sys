@@ -78,7 +78,9 @@
     "enter_cancel_reason": "取消の理由を入力",
     "print": "印刷",
     "payment": "会計",
-    "order_actions": "伝票の操作"
+    "order_actions": "伝票の操作",
+    "qty": "数量",
+    "item_note": "備考：{{note}}"
   },
   "payment": {
     "title": "お会計",

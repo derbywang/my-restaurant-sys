@@ -78,7 +78,9 @@
     "enter_cancel_reason": "취소 사유 입력",
     "print": "인쇄",
     "payment": "결제",
-    "order_actions": "주문 작업"
+    "order_actions": "주문 작업",
+    "qty": "수량",
+    "item_note": "비고: {{note}}"
   },
   "payment": {
     "title": "결제",

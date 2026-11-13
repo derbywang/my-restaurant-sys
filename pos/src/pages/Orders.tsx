@@ -22,6 +22,7 @@ import { call } from '@ury/core';
 import type { OrderType } from '../data/order-types';
 import { getOrderByName, splitBill } from '../lib/order-api';
 import { cartLinesFromInvoice } from '../lib/invoice-cart';
+import { mergeDetailRows } from '../lib/order-detail-rows';
 import {
   getOrdersTabForInvoice,
   getSplitGroup,
@@ -712,11 +713,16 @@ export default function Orders() {
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('order.items_title')}</h3>
                 <div className="space-y-3">
-                  {selectedOrderItems.map((item, index) => (
+                  {mergeDetailRows(selectedOrderItems).map((item, index) => (
                     <div key={index} className="flex justify-between items-start py-2 border-b border-gray-100">
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900">{item.item_name}</p>
-                        <p className="text-xs text-gray-500">Qty: {item.qty}</p>
+                        <p className="text-xs text-gray-500">{t('order.qty')}: {item.qty}</p>
+                        {item.comment && (
+                          <p className="text-xs text-amber-700" data-testid="order-item-note">
+                            {t('order.item_note', { note: item.comment })}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-semibold text-gray-900">

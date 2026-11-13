@@ -55,15 +55,16 @@ def reachable(port):
 class Probe:
 	"""A node process with one real socket per user; collects what each user receives."""
 
-	def __init__(self, users, seconds=8):
+	def __init__(self, users, seconds=8, fetch_prefix=""):
 		self.users = list(users)
+		self.fetch_prefix = fetch_prefix
 		self.seconds = seconds
 		self.process = None
 		self.events = {}
 		self.sids = {}
 
 	def start(self):
-		env = dict(os.environ, NODE_PATH=os.path.join(APP_ROOT, "node_modules"))
+		env = dict(os.environ, NODE_PATH=os.path.join(APP_ROOT, "node_modules"), PROBE_FETCH_PREFIX=self.fetch_prefix)
 		self.process = subprocess.Popen(
 			["node", PROBE, frappe.local.site, PASSWORD, str(self.seconds), *self.users],
 			stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
@@ -143,6 +144,7 @@ class TestRealtimeReachesTheStaff(URYTestCase):
 		frappe.db.commit()
 		open_pos(CASHIER)
 		place_order(CAPTAIN, [(FOOD_ITEM, 1)], table=TABLES[2])  # makes a real KOT: the kitchen screen's kot_update
+		frappe.db.commit()  # the kitchen screen's push waits for the commit (a real request commits when it ends)
 
 	@classmethod
 	def _remove_traces(cls, users):

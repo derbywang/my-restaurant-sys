@@ -108,6 +108,9 @@ class URYKOT(Document):
             kot_channel,
             {"kot": kotjson, "audio_file": audio_file, "last_kot_time": time},
             currentBranch,
+            # only once the ticket is saved for good: the screen reads its list again after a cancel ticket, and that
+            # read must find the ticket (the rest of a cancel can take seconds; INV-00108)
+            after_commit=True,
         )
         frappe.cache().set_value(cache_key, self.time)
 

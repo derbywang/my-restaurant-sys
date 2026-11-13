@@ -5,6 +5,27 @@ const http = require("http");
 const { io } = require("socket.io-client");
 
 const [site, password, seconds, ...users] = process.argv.slice(2);
+// PROBE_FETCH_PREFIX=kot_update_ : when such an event arrives, read the kitchen screen's list (kot_list) as that user at
+// once, like the screen does, and note whether the ticket of the event is in it (`listed`).
+const fetchPrefix = process.env.PROBE_FETCH_PREFIX || "";
+
+function listKots(sid) {
+	return new Promise((resolve) => {
+		const req = http.request(
+			{ host: "127.0.0.1", port: 8000, path: "/api/method/ury.ury.api.ury_kot_display.kot_list", method: "GET",
+			  headers: { Host: `${site}:8000`, Cookie: `sid=${sid}` } },
+			(res) => {
+				let data = "";
+				res.on("data", (c) => (data += c));
+				res.on("end", () => {
+					try { resolve(JSON.parse(data).message.KOT.map((k) => k.name)); } catch (e) { resolve(null); }
+				});
+			}
+		);
+		req.on("error", () => resolve(null));
+		req.end();
+	});
+}
 
 function login(usr) {
 	return new Promise((resolve, reject) => {
@@ -46,6 +67,14 @@ function login(usr) {
 			}
 		});
 		socket.on("connect_error", (e) => console.log(`CONNECT_ERROR ${usr}: ${e.message}`));
-		socket.onAny((ev, msg) => events[usr].push({ ev, msg: JSON.stringify(msg).slice(0, 300) }));
+		socket.onAny(async (ev, msg) => {
+			const entry = { ev, msg: JSON.stringify(msg).slice(0, 300) };
+			events[usr].push(entry);
+			if (fetchPrefix && ev.startsWith(fetchPrefix) && msg && msg.kot) {
+				entry.kot = msg.kot.name;
+				const names = await listKots(sids[usr]);
+				entry.listed = names ? names.includes(msg.kot.name) : null;
+			}
+		});
 	}
 })().catch((e) => { console.log("FATAL " + e.message); process.exit(1); });

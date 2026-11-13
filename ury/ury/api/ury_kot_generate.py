@@ -424,30 +424,39 @@ def create_cancel_kot_doc(
         
     else:
         menu = frappe.db.get_value("URY Restaurant", {"branch": branch}, "active_menu")
-    # One row for each item to cancel, with the quantity of the order line it belongs to. A dish that is
-    # on two lines has two items to cancel: each takes the next line of that dish that no row has used,
-    # so the ticket shows two rows (it used to show four, every item against every line).
-    used_lines = set()
+    # One row for each dish and note to take back. `quantity` is what the order had of that dish WITH THAT NOTE before the change
+    # (the total of its saved rows: the guests' rounds are rows of their own) and `cancelled_qty` how many are taken back; the
+    # kitchen screen shows 「<quantity - cancelled_qty> [変更前 <quantity>]」. (It used to take the quantity of 'the next line of
+    # the dish' whatever its note, so taking back 2 辛さ控えめ of a Burger that had 4 without a note showed [変更前 4].)
+    def note_of(row):
+        return (row.get("comments") or row.get("comment") or "").strip()
+
+    before_of, dish_before = {}, {}
+    for item in invoiceItems:
+        key = (item["item_code"], note_of(item))
+        before_of[key] = before_of.get(key, 0) + int(item["qty"])
+        dish_before[item["item_code"]] = dish_before.get(item["item_code"], 0) + int(item["qty"])
+
+    rows = {}  # (dish, note) -> the row, in the order of the items to cancel
     for cancelItem in cancel_items:
-        course = frappe.db.get_value("URY Menu Item", {"item": cancelItem["item_code"],"parent":menu}, "course")
-        lines = [
-            (index, item)
-            for index, item in enumerate(invoiceItems)
-            if cancelItem["item_code"] == item["item_code"]
-        ]
-        if not lines:
+        key = (cancelItem["item_code"], (cancelItem["comments"] or "").strip())
+        if cancelItem["item_code"] not in dish_before:
             continue
-        index, item = next(((i, line) for i, line in lines if i not in used_lines), lines[0])
-        used_lines.add(index)
+        row = rows.setdefault(key, {"item_name": cancelItem["item_name"], "comments": cancelItem["comments"], "cancelled": 0})
+        row["cancelled"] += abs(int(cancelItem["qty"]))
+
+    for (item_code, note), row in rows.items():
+        course = frappe.db.get_value("URY Menu Item", {"item": item_code, "parent": menu}, "course")
         kot_cancel_doc.append(
             "kot_items",
             {
-                "item": cancelItem["item_code"],
-                "item_name": cancelItem["item_name"],
-                "cancelled_qty": abs(int(cancelItem["qty"])),
-                "quantity": item["qty"],
-                "comments": cancelItem["comments"],
-                "course":course
+                "item": item_code,
+                "item_name": row["item_name"],
+                "cancelled_qty": row["cancelled"],
+                # the note was not on a saved row (a request the order does not have): the dish's total, as before
+                "quantity": before_of.get((item_code, note), dish_before[item_code]),
+                "comments": row["comments"],
+                "course": course,
             },
         )
 

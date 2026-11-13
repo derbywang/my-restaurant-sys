@@ -267,3 +267,17 @@ def set_session_language(session, lang): ...      # 更新 URY Ordering Session.
 
 品牌名（URY POS、URY MOSAIC 等）作为产品名使用时，MOSAIC 部分按上表翻译为"厨房显示屏"等。
 
+
+
+## 13. 顾客端实施记录（2026-11-14，最小范围：点餐页的固定文字、菜品名和分类名）
+
+与上文第 3.3、5、6、8 章不同的地方，以这里为准：
+
+- **语言存在点餐会话里，不是每个请求带 `lang`。** 顾客切换语言时调用 `set_session_language(session, lang)`，服务器把它写进 `URY Ordering Session.language`，之后 `get_customer_menu`、`get_customer_product`、`get_customer_order`、`add_customer_items` 的返回都按会话的语言给菜品名和分类名。理由：服务器说了算（不会收到未开放的语言），刷新页面后语言不丢，接口不用改参数。仍然不写 `User.language`、不写 Cookie、不改请求的 `frappe.local.lang`。
+- **新会话一律从 Profile 的 `default_language`（ja）开始。** 店员重新开放点餐（桌上平板）、自助机空闲重置，都是新会话；平板在等待画面时页面文字也回到日文。扫码的手机：手机的系统语言在 `allowed_languages` 里就用它，否则用默认语言。
+- **DocType**：`URY Self Ordering Profile` 增加 `allowed_languages`（Table MultiSelect，子表 `URY Ordering Language`；没填时默认 ja / zh / en，`default_language` 一定在里面；`default_language` 字段本来就有，QR 码打印也在用它）；`URY Ordering Session.language`；新子表 `URY Translation Row`（`language`、`label`；菜品说明这次不翻译，所以没有 `description`）；`URY Menu Course.translations`（URY 自己的 DocType，直接加字段）；`Item.custom_translations`（自定义字段，由 `setup_customizations.get_custom_fields()` 和补丁 `add_ordering_languages` 创建，不写进 fixtures）。`enable_kiosk_ordering` 改名为 `enable_device_ordering`（补丁 `rename_enable_kiosk_ordering` 在结构同步之前改列名，值保留）。
+- **菜品名没有翻译时显示日文标准名**（`Item.item_name`）；翻译只出现在顾客页，订单、厨房单、账单、小票、报表、员工画面都是标准名。
+- **中文是简体中文（`zh`）。** 以后需要繁体中文（`zh-TW`），**只加三样东西，不改任何结构**：① 在站点里启用 Language `zh-TW`（已存在，现在是停用状态）；② 在顾客页语言包目录加 `zh-TW.json`（没有这个文件时页面自动退回 `zh`，再退回 en）；③ 在 Profile 的 `allowed_languages` 里加一行 `zh-TW`，在菜品 / 分类的翻译表里加 `zh-TW` 的行。语言按钮的文字来自服务器（`language_options`，繁体用 Language 的名称「繁體中文」），手机的系统语言 `zh-TW` 也会先匹配 `zh-TW` 再退回 `zh`。`test_ordering_language.TestAnotherLanguageLater` 守着这一点。
+- **韩文**的语言包已有草稿，但在中文、韩文都校对完之前，`allowed_languages` 默认不含 ko，顾客页不出现韩文按钮；校对后在 Profile 里加一行 ko 即可。
+- **录入翻译**：开店前在 Desk 里编辑 Item 的「Names in Other Languages」和 URY Menu Course 的「Translations」表格；批量录入（CSV）等真实菜单到手后再做。
+- 文字对照表（日 / 英 / 中 / 韩，75 条加后端提示）：`docs/design/self-order-texts.xlsx`（同内容的 `.csv`）。

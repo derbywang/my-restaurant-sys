@@ -756,13 +756,12 @@ def _is_split(invoice_name, split_group):
     )
 
 
-def _sanitize_invoice_for_customer(invoice, session=None):
+def _sanitize_invoice_for_customer(invoice, language=None):
     # the dishes are named in the language of the guest's session (the standard name where there is no translation)
     names = {}
-    if session is not None:
-        profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+    if language:
         with _elevated():
-            names = item_names([row.item_code for row in invoice.items], session_language(session, profile))
+            names = item_names([row.item_code for row in invoice.items], language)
     return {
         "state": _order_state(invoice.docstatus, invoice.invoice_printed),
         "invoice": invoice.name,
@@ -794,6 +793,11 @@ def _sanitize_invoice_for_customer(invoice, session=None):
     }
 
 
+def _language_of(session):
+    profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+    return session_language(session, profile)
+
+
 def _bill_requested(invoice):
     with _elevated():
         return bool(
@@ -819,7 +823,7 @@ def get_customer_order(session):
             return {**empty, "state": "none"}
         invoice = frappe.get_doc("POS Invoice", name)
 
-    order = _sanitize_invoice_for_customer(invoice, session)
+    order = _sanitize_invoice_for_customer(invoice, _language_of(session))
     if order["state"] in ("cancelled", "paid"):
         # the order is over: nothing of it is shown, and nothing can be added to it
         return {**empty, "state": order["state"]}
@@ -1152,7 +1156,7 @@ def _add_customer_items(session, items, age_confirmed=0):
             # message meant for the guest must never be raised inside kot_execute.
             del frappe.local.message_log[shown:]
 
-    return _sanitize_invoice_for_customer(invoice, session)
+    return _sanitize_invoice_for_customer(invoice, session_language(session, profile))
 
 
 def _default_customer(profile):

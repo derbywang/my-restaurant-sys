@@ -39,7 +39,7 @@ def session_language(session, profile):
 
 
 def _labels(parenttype, parentfield, parents, language):
-	if not parents or not language:
+	if not parents or not language or not isinstance(language, str):
 		return {}
 	rows = frappe.get_all(
 		"URY Translation Row",

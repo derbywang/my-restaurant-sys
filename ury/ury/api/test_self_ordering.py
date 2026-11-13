@@ -8,6 +8,7 @@
 # invoice updated -> incremental KOT) should be run against a provisioned
 # bench as part of this track's acceptance criteria.
 
+from types import SimpleNamespace
 import base64
 import hmac
 import hashlib
@@ -30,6 +31,19 @@ from ury.ury.api.self_ordering import (
 
 
 MOD = "ury.ury.api.self_ordering"
+
+
+
+class _Row(SimpleNamespace):
+    """An invoice row for the mocked tests: like a real row, `.get(field)` answers with the value (a MagicMock would answer
+    with a new MagicMock for the note, which the kitchen difference reads as a different note for every row)."""
+
+    net_rate = 0
+    net_amount = 0
+    comment = ""
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
 
 
 class TestQRTokenRoundtrip(unittest.TestCase):
@@ -138,7 +152,7 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
 
         mock_resolve_menu.return_value = {"items": [{"item": "Biryani"}, {"item": "Sandwich"}]}
 
-        existing_row = MagicMock(item_code="Biryani", item_name="Biryani", qty=2)
+        existing_row = _Row(comment="", item_code="Biryani", item_name="Biryani", qty=2)
         invoice = MagicMock()
         invoice.customer = "Walk-in Customer"
         invoice.items = [existing_row]
@@ -157,7 +171,7 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
         # would.
         def append_side_effect(fieldname, row_dict):
             if fieldname == "items":
-                invoice.items.append(MagicMock(item_code=row_dict["item_code"], item_name=row_dict["item_name"], qty=row_dict["qty"]))
+                invoice.items.append(_Row(comment="", item_code=row_dict["item_code"], item_name=row_dict["item_name"], qty=row_dict["qty"]))
         invoice.append.side_effect = append_side_effect
 
         mock_resolve_invoice.return_value = (invoice, "POS-INV-100")
@@ -313,8 +327,8 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
         # Two SEPARATE Biryani rows already on the invoice (from two earlier
         # add_customer_items() calls) -- this is the realistic pre-existing
         # state that exposed the bug.
-        existing_row_1 = MagicMock(item_code="Biryani", item_name="Biryani", qty=1)
-        existing_row_2 = MagicMock(item_code="Biryani", item_name="Biryani", qty=1)
+        existing_row_1 = _Row(comment="", item_code="Biryani", item_name="Biryani", qty=1)
+        existing_row_2 = _Row(comment="", item_code="Biryani", item_name="Biryani", qty=1)
         invoice = MagicMock()
         invoice.customer = "Walk-in Customer"
         invoice.items = [existing_row_1, existing_row_2]
@@ -328,7 +342,7 @@ class TestAddCustomerItemsAppendOnly(unittest.TestCase):
 
         def append_side_effect(fieldname, row_dict):
             if fieldname == "items":
-                invoice.items.append(MagicMock(item_code=row_dict["item_code"], item_name=row_dict["item_name"], qty=row_dict["qty"]))
+                invoice.items.append(_Row(comment="", item_code=row_dict["item_code"], item_name=row_dict["item_name"], qty=row_dict["qty"]))
         invoice.append.side_effect = append_side_effect
 
         mock_resolve_invoice.return_value = (invoice, "POS-INV-100")

@@ -62,7 +62,7 @@ class TestCustomFieldsAgree(URYTestCase):
 			only_code,
 			sorted(
 				[
-					"POS Invoice.column_break_selford", "POS Invoice.custom_order_source", "POS Invoice.custom_ordering_device",
+					"Item.custom_translations", "POS Invoice.column_break_selford", "POS Invoice.custom_order_source", "POS Invoice.custom_ordering_device",
 					"POS Invoice.custom_ordering_session", "POS Invoice.self_ordering_info", "POS Profile.custom_tax_rounding",
 					"Sales Invoice.column_break_gd1mq", "Sales Invoice.column_break_rwbwf", "URY KOT.custom_merged_tables",
 				]

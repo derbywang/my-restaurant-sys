@@ -604,6 +604,7 @@ class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 		"get_customer_order",
 		"preview_customer_cart",
 		"confirm_age",
+		"set_session_language",
 		"add_customer_items",
 		"request_bill",
 		"get_order_status",

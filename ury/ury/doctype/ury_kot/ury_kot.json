@@ -258,7 +258,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-11-08 09:00:00.000000",
+ "modified": "2026-11-14 12:30:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY KOT",
@@ -329,6 +329,13 @@
    "select": 1,
    "share": 1,
    "submit": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "URY Kitchen",
+   "select": 1,
+   "export": 0,
    "write": 1
   }
  ],

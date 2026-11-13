@@ -7,7 +7,7 @@ from ury.setup.names import cash_mode_name
 # The setup endpoints work with ignore_permissions: only an administrator may call them, and the accounts they make
 # get one of the staff roles (a waiter must not be able to make a System Manager).
 SETUP_ROLES = ("System Manager", "URY Admin")
-STAFF_ROLES = ("URY Cashier", "URY Captain", "URY Manager")
+STAFF_ROLES = ("URY Cashier", "URY Captain", "URY Manager", "URY Kitchen")
 
 
 def require_setup_rights():

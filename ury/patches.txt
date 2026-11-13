@@ -27,3 +27,4 @@ ury.patches.v3_0.latest_invoice_time_datetime
 ury.patches.v3_0.staff_without_desk
 ury.patches.v3_0.rename_accounts_for_tax_advisor
 ury.patches.v3_0.rewrite_tax_account_names_in_bills
+ury.patches.v3_0.add_kitchen_role

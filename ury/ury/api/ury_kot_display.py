@@ -32,7 +32,8 @@ def serve_kot(name, time=None):
 # role, so confirmation cannot be self-attributed or forged by the caller.
 @frappe.whitelist()
 def confirm_cancel_kot(name):
-    manager_roles = {"URY Manager", "URY Admin", "System Manager"}
+    # the kitchen screen's own account (URY Kitchen) confirms what it has read; the branch check below keeps it to its branch
+    manager_roles = {"URY Manager", "URY Admin", "System Manager", "URY Kitchen"}
     if not manager_roles.intersection(frappe.get_roles()) and frappe.session.user != "Administrator":
         frappe.throw(
             "Only a manager can confirm a cancelled KOT.",

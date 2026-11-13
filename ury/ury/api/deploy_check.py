@@ -28,6 +28,8 @@ from frappe.utils import add_to_date, now_datetime
 
 FAIL, WARN, INFO = "FAIL", "WARN", "INFO"
 STAFF_ROLES = ("URY Captain", "URY Cashier")
+# the account of a kitchen screen: no Desk either, but its home page is the kitchen screen
+HOME_PAGES = {"URY Captain": "pos", "URY Cashier": "pos", "URY Kitchen": "mosaic"}
 REPORT_ROLES = {"URY Manager", "URY Admin", "System Manager"}
 BACKUP_HOURS = 24
 ERROR_LOG_HOURS = 24
@@ -150,7 +152,7 @@ def _check_report_settings():
 
 def _check_export():
 	found = []
-	for role in STAFF_ROLES:
+	for role in HOME_PAGES:
 		doctypes = _doctypes_where(role, "export")
 		if doctypes:
 			found.append((FAIL, f"{role} can export: " + ", ".join(doctypes)))
@@ -170,17 +172,17 @@ def _check_pos_invoice_permissions():
 
 def _check_staff_without_desk():
 	found = []
-	for role in STAFF_ROLES:
+	for role, expected_home in HOME_PAGES.items():
 		if not frappe.db.exists("Role", role):
 			continue
 		access, home = frappe.db.get_value("Role", role, ["desk_access", "home_page"])
 		if access:
 			found.append((FAIL, f"{role} has Desk access (the staff work in the POS)"))
-		if home != "pos":
-			found.append((FAIL, f"{role} home page is {home!r}, not 'pos'"))
+		if home != expected_home:
+			found.append((FAIL, f"{role} home page is {home!r}, not {expected_home!r}"))
 	desk_roles = set(frappe.get_all("Role", filters={"desk_access": 1}, pluck="name")) - {"Desk User"}
 	wrong = []
-	for user in _staff_users(STAFF_ROLES):
+	for user in _staff_users(tuple(HOME_PAGES)):
 		if not (_roles_of(user) & desk_roles) and frappe.db.get_value("User", user, "user_type") != "Website User":
 			wrong.append(user)
 	if wrong:

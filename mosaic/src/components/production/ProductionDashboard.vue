@@ -31,6 +31,7 @@
 <script>
 import ProductionCard from "./ProductionCard.vue";
 import { FrappeApp } from "frappe-js-sdk";
+import { onlyKitchenOf } from "../../lib/own-kitchen";
 
 const frappe = new FrappeApp(window.location.origin);
 
@@ -65,6 +66,16 @@ export default {
         });
 
         const units = result || [];
+
+        // one kitchen in the branch of the account: no need to choose
+        const mine = await fetch(
+          "/api/method/ury.ury_pos.api.get_production_units_for_branch"
+        ).then((response) => response.json());
+        const only = onlyKitchenOf(units, mine.message?.production_units);
+        if (only) {
+          this.$router.replace(`/${only}`);
+          return;
+        }
 
         for (let unit of units) {
           const [active, served, total] = await Promise.all([

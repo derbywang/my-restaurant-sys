@@ -1708,7 +1708,8 @@ def sync_order(
             "item_code": item.item_code,
             "item_name": item.item_name,
             "qty": item.qty,
-            "comments": "",
+            # the note of the saved row: the difference for the kitchen is worked out for each dish and note
+            "comments": (item.comment or "").strip(),
         }
         past_item.append(previous_item)
         sent_notes.append((item.item_code, flt(item.qty), (item.comment or "").strip()))

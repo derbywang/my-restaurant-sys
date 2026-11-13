@@ -1037,10 +1037,10 @@ def _add_customer_items(session, items, age_confirmed=0):
             invoice.custom_ordering_device = session.device
 
         # One entry per line, as sync_order does (a dish can be on several lines, each with its own
-        # note): compare_two_array totals a dish over its lines and puts the extra quantity on the
+        # note): compare_two_array totals a dish over its lines with the same note and puts the extra quantity on the
         # lines added last, so the lines appended below carry their notes to the kitchen.
         past_item = [
-            {"item_code": row.item_code, "item_name": row.item_name, "qty": row.qty, "comments": ""}
+            {"item_code": row.item_code, "item_name": row.item_name, "qty": row.qty, "comments": (row.get("comment") or "").strip()}
             for row in invoice.items
         ]
 

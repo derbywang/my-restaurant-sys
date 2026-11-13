@@ -81,6 +81,50 @@ class TestCompareTwoArrays(URYTestCase):
 			[("Sake", 2)],
 		)
 
+	# --- a dish with two notes: the difference is worked out for each note (2026-11-13) ---------------------------------
+
+	def notes(self, current, previous):
+		return sorted((row["item_code"], row["qty"], row["comments"]) for row in compare_two_array(current, previous))
+
+	def test_more_of_the_dish_without_a_note_is_sent_without_a_note(self):
+		"""Found in the browser test: the extra Burger of the line without a note was sent to the kitchen with the note of the
+		other line (the extra quantity went to 'the lines added last')."""
+		previous = [line("Burger", 4, ""), line("Burger", 2, "辛さ控えめ")]
+		current = [line("Burger", 5, ""), line("Burger", 2, "辛さ控えめ")]
+		self.assertEqual(self.notes(current, previous), [("Burger", 1, "")])
+
+	def test_more_of_the_dish_with_a_note_is_sent_with_its_note(self):
+		previous = [line("Burger", 4, ""), line("Burger", 2, "辛さ控えめ")]
+		current = [line("Burger", 4, ""), line("Burger", 3, "辛さ控えめ")]
+		self.assertEqual(self.notes(current, previous), [("Burger", 1, "辛さ控えめ")])
+
+	def test_more_of_both_notes_is_sent_for_each(self):
+		previous = [line("Burger", 4, ""), line("Burger", 2, "辛さ控えめ")]
+		current = [line("Burger", 5, ""), line("Burger", 3, "辛さ控えめ")]
+		self.assertEqual(self.notes(current, previous), [("Burger", 1, ""), ("Burger", 1, "辛さ控えめ")])
+
+	def test_taking_back_the_line_with_a_note_takes_back_that_note_and_not_the_other(self):
+		"""The dish stays on the order (the line without a note), so get_removed_items does not see it."""
+		previous = [line("Burger", 5, ""), line("Burger", 2, "辛さ控えめ")]
+		current = [line("Burger", 5, "")]
+		self.assertEqual(self.notes(current, previous), [("Burger", -2, "辛さ控えめ")])
+
+	def test_less_of_the_line_without_a_note_takes_back_without_a_note(self):
+		previous = [line("Burger", 5, ""), line("Burger", 2, "辛さ控えめ")]
+		current = [line("Burger", 3, ""), line("Burger", 2, "辛さ控えめ")]
+		self.assertEqual(self.notes(current, previous), [("Burger", -2, "")])
+
+	def test_more_of_one_note_and_less_of_the_other_at_the_same_time(self):
+		previous = [line("Burger", 4, ""), line("Burger", 3, "辛さ控えめ")]
+		current = [line("Burger", 5, ""), line("Burger", 1, "辛さ控えめ")]
+		self.assertEqual(self.notes(current, previous), [("Burger", -2, "辛さ控えめ"), ("Burger", 1, "")])
+
+	def test_the_notes_of_a_dish_that_is_gone_are_left_to_get_removed_items(self):
+		previous = [line("Burger", 2, "辛さ控えめ"), line("Sake", 1)]
+		current = [line("Sake", 1)]
+		self.assertEqual(self.notes(current, previous), [])
+		self.assertEqual([(r["item_code"], r["comments"]) for r in get_removed_items(previous, current)], [("Burger", "辛さ控えめ")])
+
 	def test_the_arguments_are_left_alone(self):
 		current = [line("Sake", 3), line("Sake", 1)]
 		previous = [line("Sake", 1)]
@@ -153,3 +197,45 @@ class TestTicketsOfAChangedOrder(URYFlowTestCase):
 		sent, taken_back = self._change(name, [(ALCOHOL_ITEM, 1)])
 		self.assertEqual(sent, {})
 		self.assertEqual(taken_back.get(ALCOHOL_ITEM), 2)
+
+
+class TestTheNotesOfTheTicketsOfAChangedOrder(URYFlowTestCase):
+	"""The same through sync_order and the tickets it makes (the case of the browser test of 2026-11-13)."""
+
+	NOTE = "辛さ控えめ"
+
+	def setUp(self):
+		super().setUp()
+		open_pos(CASHIER)
+		original = frappe.db.get_value("POS Profile", POS_PROFILE, "remove_items")
+		self.addCleanup(self._set_remove_items, original)
+		self._set_remove_items(1)
+
+	def _set_remove_items(self, value):
+		frappe.db.set_value("POS Profile", POS_PROFILE, "remove_items", value)
+		frappe.db.commit()
+		frappe.clear_document_cache("POS Profile", POS_PROFILE)
+
+	def _new_tickets(self, invoice, before):
+		"""[(type, item, quantity or cancelled quantity, note)] of the tickets made after `before`."""
+		rows = []
+		for ticket in frappe.get_all("URY KOT", filters={"invoice": invoice, "name": ["not in", list(before) or [""]]}, fields=["name", "type"], order_by="creation asc, name asc"):
+			for row in frappe.get_all("URY KOT Items", filters={"parent": ticket.name}, fields=["item", "quantity", "cancelled_qty", "comments"]):
+				number = int(row.cancelled_qty or 0) if ticket.type in ("Cancelled", "Partially cancelled") else int(row.quantity)
+				rows.append((ticket.type, number, row.comments or ""))
+		return rows
+
+	def _tickets_of(self, invoice):
+		return set(frappe.get_all("URY KOT", filters={"invoice": invoice}, pluck="name"))
+
+	def test_the_extra_dish_without_a_note_has_none_and_the_taken_back_note_is_on_the_cancel_ticket(self):
+		invoice = place_order(CASHIER, [(FOOD_ITEM, 4)], order_type="Take Away")
+		place_order(CASHIER, [(FOOD_ITEM, 4), (FOOD_ITEM, 2, self.NOTE)], order_type="Take Away", invoice=invoice)
+
+		before = self._tickets_of(invoice)  # the line without a note goes from 4 to 5
+		place_order(CASHIER, [(FOOD_ITEM, 5), (FOOD_ITEM, 2, self.NOTE)], order_type="Take Away", invoice=invoice)
+		self.assertEqual(self._new_tickets(invoice, before), [("Order Modified", 1, "")])
+
+		before = self._tickets_of(invoice)  # the line with the note is deleted
+		place_order(CASHIER, [(FOOD_ITEM, 5)], order_type="Take Away", invoice=invoice)
+		self.assertEqual(self._new_tickets(invoice, before), [("Partially cancelled", 2, self.NOTE)])

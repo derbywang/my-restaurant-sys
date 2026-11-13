@@ -531,21 +531,31 @@ def kot_execute(
 
 
 # Compare two arrays and return the items that are different.
-# `array_1` is what the order is now, `array_2` what it was. A dish can be on several lines, so it is
-# compared by the total of its lines: a positive quantity is what to send to the kitchen, a negative
-# one what to take back. A dish that is on no line of `array_1` any more is left to get_removed_items.
-def compare_two_array(array_1, array_2):
-    previous_total = {}
-    for row in array_2:
-        previous_total[row["item_code"]] = previous_total.get(row["item_code"], 0) + int(row["qty"])
+# `array_1` is what the order is now, `array_2` what it was. A dish can be on several lines, so it is compared by the total of
+# its lines WITH THE SAME NOTE (item_code and note): a positive quantity is what to send to the kitchen, a negative one what to
+# take back, each with its own note. (It used to be the total of the dish whatever the note, and the extra quantity went to the
+# lines added last: one more of the line without a note was sent with the note of the line after it, and a line with a note
+# that was taken away was taken back without its note - found 2026-11-13.) The notes of the rows that were saved must be in
+# `array_2` (`comments`). A dish that is on no line of `array_1` any more is left to get_removed_items.
+def _note_of(row):
+    return (row.get("comments") or "").strip()
 
-    lines_by_item = {}
+
+def compare_two_array(array_1, array_2):
+    previous_total, previous_row = {}, {}
+    for row in array_2:
+        key = (row["item_code"], _note_of(row))
+        previous_total[key] = previous_total.get(key, 0) + int(row["qty"])
+        previous_row.setdefault(key, row)
+
+    lines_by_key = {}
     for row in array_1:
-        lines_by_item.setdefault(row["item_code"], []).append(row)
+        lines_by_key.setdefault((row["item_code"], _note_of(row)), []).append(row)
+    dishes_now = {item_code for item_code, _note in lines_by_key}
 
     finalarray = []
-    for item_code, lines in lines_by_item.items():
-        difference = sum(int(line["qty"]) for line in lines) - previous_total.get(item_code, 0)
+    for key, lines in lines_by_key.items():
+        difference = sum(int(line["qty"]) for line in lines) - previous_total.get(key, 0)
         if difference > 0:
             # the extra quantity is on the lines added last, each keeping its own note
             left = difference
@@ -559,6 +569,11 @@ def compare_two_array(array_1, array_2):
             finalarray.extend(reversed(added))
         elif difference < 0:
             finalarray.append({**lines[-1], "qty": difference})
+
+    # a note of a dish that is still on the order but is on no line any more: what the kitchen has with that note is taken back
+    for key, total in previous_total.items():
+        if key not in lines_by_key and key[0] in dishes_now and total > 0:
+            finalarray.append({**previous_row[key], "qty": -total})
     return finalarray
 
 

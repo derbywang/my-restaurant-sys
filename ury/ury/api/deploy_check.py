@@ -232,6 +232,24 @@ def _check_devices():
 	return found
 
 
+def _check_ordering_languages():
+	"""The languages of the ordering page: the default language is one of those the guests can choose, and every one of
+	them is switched on in the site (a language that is off is not offered by Frappe's own screens and its texts may
+	be missing)."""
+	found = []
+	for name in frappe.get_all("URY Self Ordering Profile", pluck="name"):
+		allowed = frappe.get_all(
+			"URY Ordering Language", filters={"parent": name, "parenttype": "URY Self Ordering Profile"}, pluck="language"
+		)
+		default = frappe.db.get_value("URY Self Ordering Profile", name, "default_language") or "ja"
+		if default not in allowed:
+			found.append((FAIL, f"profile {name}: the default language {default} is not among the languages for the guests"))
+		for language in allowed:
+			if not frappe.db.get_value("Language", language, "enabled"):
+				found.append((WARN, f"profile {name}: the language {language} is not switched on in the site"))
+	return found
+
+
 def _sample_token_verifies(profile_name):
 	"""A token made the way the server makes it is accepted by the check the guests' pages go through."""
 	from ury.ury.api import self_ordering as so
@@ -615,6 +633,7 @@ CHECKS = (
 	("URY KOT permissions", _check_ury_kot_permissions),
 	("tablets", _check_devices),
 	("self ordering profile", _check_self_ordering_profiles),
+	("ordering languages", _check_ordering_languages),
 	("pickup and the age question", _check_pickup_and_age),
 	("default customers", _check_default_customers),
 	("dishes without a kitchen", _check_items_without_kitchen),

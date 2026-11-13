@@ -19,11 +19,12 @@
   "public_url",
   "local_url",
   "default_language",
+  "allowed_languages",
   "ordering_modes_section",
   "enable_qr_table_ordering",
   "enable_qr_pickup_ordering",
   "column_break_ordering_modes",
-  "enable_kiosk_ordering",
+  "enable_device_ordering",
   "allow_add_to_running_table",
   "product_display_section",
   "enable_product_detail_page",
@@ -140,7 +141,7 @@
   },
   {
    "default": "0",
-   "fieldname": "enable_kiosk_ordering",
+   "fieldname": "enable_device_ordering",
    "fieldtype": "Check",
    "label": "Enable Device Ordering (table tablets and kiosks)"
   },
@@ -255,11 +256,18 @@
    "fieldtype": "Table",
    "label": "Age Check Item Groups",
    "options": "URY Age Check Item Group"
+  },
+  {
+   "description": "The languages the guests can choose on the ordering page. The default language is always among them. Add a language only after its texts are proofread (e.g. Korean).",
+   "fieldname": "allowed_languages",
+   "fieldtype": "Table MultiSelect",
+   "label": "Languages for the Guests",
+   "options": "URY Ordering Language"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-08 20:00:00.000000",
+ "modified": "2026-11-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",

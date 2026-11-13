@@ -10,7 +10,8 @@
  "engine": "InnoDB",
  "field_order": [
   "course",
-  "icon"
+  "icon",
+  "translations"
  ],
  "fields": [
   {
@@ -29,11 +30,18 @@
    "fieldname": "icon",
    "fieldtype": "Data",
    "label": "Icon"
+  },
+  {
+   "description": "The name of the course in other languages, for the ordering page. Without a row the course name is shown as it is.",
+   "fieldname": "translations",
+   "fieldtype": "Table",
+   "label": "Translations",
+   "options": "URY Translation Row"
   }
  ],
  "icon": "fa fa-code-fork",
  "links": [],
- "modified": "2026-11-08 09:00:00.000000",
+ "modified": "2026-11-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Menu Course",

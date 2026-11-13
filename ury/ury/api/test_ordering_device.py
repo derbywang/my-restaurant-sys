@@ -206,7 +206,7 @@ class TestATabletThatIsNotSetUpRight(DeviceCase):
 		return answer["code"]
 
 	def test_the_switch_for_devices_is_off(self):
-		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_kiosk_ordering", 0)
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_device_ordering", 0)
 		self.assertEqual(self.code(), "E-DEVICE-ORDERING-OFF")
 
 	def test_the_profile_is_switched_off(self):
@@ -226,7 +226,7 @@ class TestATabletThatIsNotSetUpRight(DeviceCase):
 		self.assertEqual(self.code(), "E-TABLE-BRANCH")
 
 	def test_it_still_tells_the_server_it_is_alive(self):
-		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_kiosk_ordering", 0)
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_device_ordering", 0)
 		frappe.db.set_value("URY Ordering Device", self.device, "last_reported_at", None)
 		self.code()
 		self.assertIsNotNone(frappe.db.get_value("URY Ordering Device", self.device, "last_reported_at"))
@@ -235,7 +235,7 @@ class TestATabletThatIsNotSetUpRight(DeviceCase):
 		self.assertNotEqual(self.status(self.credential)["state"], "not_configured")
 
 	def test_the_ordering_itself_is_still_refused(self):
-		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_kiosk_ordering", 0)
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_device_ordering", 0)
 		with self.assertRaises(frappe.ValidationError):
 			so.get_ordering_context(device_id=DEVICE_ID, device_credential=self.credential)
 

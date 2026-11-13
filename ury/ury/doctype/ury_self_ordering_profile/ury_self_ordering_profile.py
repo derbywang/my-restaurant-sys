@@ -8,6 +8,9 @@ from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
 
 
+DEFAULT_ORDERING_LANGUAGES = ("ja", "zh", "en")
+
+
 class URYSelfOrderingProfile(Document):
     def before_insert(self):
         # Per-profile secret used to sign stateless QR table/pickup tokens
@@ -20,12 +23,24 @@ class URYSelfOrderingProfile(Document):
         self.validate_public_url()
         self.validate_local_url()
         self.set_defaults()
+        self.set_languages()
 
     def set_defaults(self):
         """What the setup already knows: the customer of the POS Profile, and a secret for the QR codes."""
         if not self.default_customer and self.pos_profile:
             self.default_customer = frappe.db.get_value("POS Profile", self.pos_profile, "customer")
         self.set_secret()
+
+    def set_languages(self):
+        """The languages of the ordering page: Japanese, Chinese and English until the owner chooses others (Korean is
+        added after its texts are proofread); the default language is always one of them."""
+        chosen = [row.language for row in self.get("allowed_languages") if row.language]
+        if not chosen:
+            for language in DEFAULT_ORDERING_LANGUAGES:
+                self.append("allowed_languages", {"language": language})
+            chosen = list(DEFAULT_ORDERING_LANGUAGES)
+        if self.default_language and self.default_language not in chosen:
+            self.append("allowed_languages", {"language": self.default_language})
 
     def set_secret(self):
         """A secret for the QR codes when there is none. The field is a Password: a saved profile shows dots, a new

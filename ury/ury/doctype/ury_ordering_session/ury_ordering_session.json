@@ -15,6 +15,7 @@
   "table",
   "table_opening",
   "age_confirmed",
+  "language",
   "token_hash",
   "status_section",
   "status",
@@ -114,11 +115,18 @@
    "label": "Invoice",
    "options": "POS Invoice",
    "read_only": 1
+  },
+  {
+   "description": "The language the guest chose on the page. Only this session; it never reaches the order or the staff.",
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "label": "Language",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-06 07:00:00.000000",
+ "modified": "2026-11-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Ordering Session",

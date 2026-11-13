@@ -24,6 +24,16 @@ def before_uninstall():
 def get_custom_fields():
 	"""URY specific custom fields that need to be added to the masters in ERPNext"""
 	return {
+		"Item": [
+			{
+				"fieldname": "custom_translations",
+				"fieldtype": "Table",
+				"label": "Names in Other Languages (ordering page)",
+				"options": "URY Translation Row",
+				"insert_after": "item_name",
+				"description": "What the guests read on the ordering page in another language. Without a row for their language the item name above is shown.",
+			},
+		],
      	"POS Invoice": [
 				{
 					"fieldname": "mobile_number",

@@ -36,6 +36,14 @@ from frappe.utils import add_to_date, get_datetime, now_datetime
 from frappe.utils.password import get_decrypted_password
 
 from ury.ury_pos.api import resolve_restaurant_menu
+from ury.ury.api.ordering_language import (
+    allowed_languages,
+    course_names,
+    default_language,
+    item_names,
+    language_options,
+    session_language,
+)
 from ury.ury.doctype.ury_order.ury_order import (
     SELF_ORDER_CLOSE_FIELDS,
     _get_table_group,
@@ -299,7 +307,7 @@ def _device_configuration_error(device, profile):
     like waiting for the table)."""
     if not profile.enabled:
         return "E-PROFILE-OFF"
-    if not profile.enable_kiosk_ordering:
+    if not profile.enable_device_ordering:
         return "E-DEVICE-ORDERING-OFF"
     if device.device_type == "Table Tablet":
         table = device.fixed_table if device.table_mode == "Fixed" else None
@@ -313,7 +321,7 @@ def _device_configuration_error(device, profile):
 def _resolve_device(device_id, credential):
     device = _find_device(device_id, credential)
     profile = frappe.get_doc("URY Self Ordering Profile", device.ordering_profile)
-    if not profile.enabled or not profile.enable_kiosk_ordering:
+    if not profile.enabled or not profile.enable_device_ordering:
         frappe.throw(_("Kiosk ordering is currently unavailable"), frappe.ValidationError)
 
     table = device.fixed_table if device.table_mode == "Fixed" else None
@@ -339,6 +347,7 @@ def _open_session(profile, source, table, device=None, table_opening=None):
             "table": table,
             "table_opening": table_opening,
             "token_hash": token_hash,
+            "language": default_language(profile),
             "status": "Active",
             "opened_at": now_datetime(),
             "expires_at": add_to_date(now_datetime(), minutes=timeout_minutes),
@@ -456,7 +465,7 @@ def _keep_alive(session):
 # Bootstrap
 # ---------------------------------------------------------------------------
 
-def _ordering_context_response(raw_session_token, source, profile, table, layout):
+def _ordering_context_response(raw_session_token, source, profile, table, layout, language=None):
     """Shared response shape for every bootstrap-style entry point
     (get_ordering_context) — never raw branch/table
     names the client didn't already have a right to see."""
@@ -465,6 +474,9 @@ def _ordering_context_response(raw_session_token, source, profile, table, layout
         "source": source,
         "restaurant": profile.restaurant,
         "table": table,
+        # the languages the guest can choose and the one the session starts in (the profile's default)
+        "languages": language_options(profile),
+        "language": language or default_language(profile),
         # "Mobile" for QR sessions (no device involved); otherwise the
         # provisioned URY Ordering Device's configured layout (Tablet /
         # Landscape Kiosk / Portrait Kiosk) — the frontend layout shell
@@ -507,7 +519,7 @@ def get_ordering_context(token=None, device_id=None, device_credential=None):
         profile, source, table, device_name, table_opening=state.self_order_opening if state else None
     )
 
-    return _ordering_context_response(raw_session_token, source, profile, table, layout)
+    return _ordering_context_response(raw_session_token, source, profile, table, layout, session.language)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -581,8 +593,17 @@ def get_customer_menu(session):
                 "price_incl_tax": prices[row["item"]],
                 "age_check": row["item"] in age_check,
             })
+    # the names in the language of the session (the standard name where there is no translation)
+    language = session_language(session, profile)
+    with _elevated():
+        names = item_names([row["item"] for row in items], language)
+        courses = course_names({row.get("course") for row in items if row.get("course")}, language)
+    for row in items:
+        row["item_name"] = names.get(row["item"], row["item_name"])
+        if row.get("course") in courses:
+            row["course_label"] = courses[row["course"]]
     # `age_confirmed`: the guest already answered the age question in this session (a reload keeps it)
-    return {**menu, "items": items, "age_confirmed": bool(session.get("age_confirmed"))}
+    return {**menu, "items": items, "age_confirmed": bool(session.get("age_confirmed")), "language": language}
 
 
 def _customer_menu(profile, order_type):
@@ -665,9 +686,16 @@ def get_customer_product(session, item_code):
         variants = _linked_item_options("POS Item Variants", item_code, invoice_price_list=None)
         addons = _linked_item_options("Item Add On", item_code, invoice_price_list=None)
 
+    # the names in the language of the session; the description is not translated
+    language = session_language(session, profile)
+    with _elevated():
+        names = item_names([item.item_code] + [o["item_code"] for o in variants + addons], language)
+    for option in variants + addons:
+        option["item_name"] = names.get(option["item_code"], option["item_name"])
+
     return {
         "item_code": item.item_code,
-        "item_name": item.item_name,
+        "item_name": names.get(item.item_code, item.item_name),
         "description": item.description if profile.show_item_descriptions else None,
         "image": item.image if profile.show_item_images else None,
         "variants": variants,
@@ -728,7 +756,13 @@ def _is_split(invoice_name, split_group):
     )
 
 
-def _sanitize_invoice_for_customer(invoice):
+def _sanitize_invoice_for_customer(invoice, session=None):
+    # the dishes are named in the language of the guest's session (the standard name where there is no translation)
+    names = {}
+    if session is not None:
+        profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+        with _elevated():
+            names = item_names([row.item_code for row in invoice.items], session_language(session, profile))
     return {
         "state": _order_state(invoice.docstatus, invoice.invoice_printed),
         "invoice": invoice.name,
@@ -742,7 +776,7 @@ def _sanitize_invoice_for_customer(invoice):
         "items": [
             {
                 "item_code": row.item_code,
-                "item_name": row.item_name,
+                "item_name": names.get(row.item_code, row.item_name),
                 "qty": row.qty,
                 "comment": row.comment,
                 "price_incl_tax": row.net_rate + tax_of(invoice, row, row.net_rate),
@@ -785,7 +819,7 @@ def get_customer_order(session):
             return {**empty, "state": "none"}
         invoice = frappe.get_doc("POS Invoice", name)
 
-    order = _sanitize_invoice_for_customer(invoice)
+    order = _sanitize_invoice_for_customer(invoice, session)
     if order["state"] in ("cancelled", "paid"):
         # the order is over: nothing of it is shown, and nothing can be added to it
         return {**empty, "state": order["state"]}
@@ -841,6 +875,20 @@ def confirm_age(session):
     with _elevated():
         frappe.db.set_value("URY Ordering Session", session.name, "age_confirmed", 1, update_modified=False)
     return {"age_confirmed": True}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def set_session_language(session, lang):
+    """The guest chose a language on the page. Only the profile's languages; it is written to this ordering session and
+    nowhere else (not to a user, a cookie or the language of the request)."""
+    session = _resolve_session(session, require_open=False)
+    profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+    if lang not in allowed_languages(profile):
+        _fail("Language not available", _("This language is not available"))
+    with _elevated():
+        frappe.db.set_value("URY Ordering Session", session.name, "language", lang, update_modified=False)
+        frappe.db.commit()
+    return {"language": lang}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1104,7 +1152,7 @@ def _add_customer_items(session, items, age_confirmed=0):
             # message meant for the guest must never be raised inside kot_execute.
             del frappe.local.message_log[shown:]
 
-    return _sanitize_invoice_for_customer(invoice)
+    return _sanitize_invoice_for_customer(invoice, session)
 
 
 def _default_customer(profile):

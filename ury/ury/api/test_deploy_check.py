@@ -199,8 +199,20 @@ from ury.ury.api.test_self_ordering_table import PROFILE
 class TestDevicesAndProfile(Rollback, DeviceCase):
 	def test_a_device_whose_profile_has_devices_switched_off_fails(self):
 		self.assertFalse(mentions(levels(deploy_check._check_devices), DEVICE_ID))
-		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_kiosk_ordering", 0)
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "enable_device_ordering", 0)
 		self.assertTrue(mentions(levels(deploy_check._check_devices), DEVICE_ID, deploy_check.FAIL))
+
+	def test_a_language_of_the_profile_that_is_switched_off_warns(self):
+		self.assertEqual(levels(deploy_check._check_ordering_languages), [])
+		frappe.get_doc(
+			{"doctype": "URY Ordering Language", "parent": PROFILE, "parenttype": "URY Self Ordering Profile",
+			 "parentfield": "allowed_languages", "language": "zh-TW"}
+		).db_insert()  # Language zh-TW is not enabled on the site
+		self.assertTrue(mentions(levels(deploy_check._check_ordering_languages), "zh-TW", deploy_check.WARN))
+
+	def test_a_default_language_the_profile_does_not_allow_fails(self):
+		frappe.db.delete("URY Ordering Language", {"parent": PROFILE, "language": "ja"})
+		self.assertTrue(mentions(levels(deploy_check._check_ordering_languages), "ja", deploy_check.FAIL))
 
 	def test_a_device_without_a_table_fails(self):
 		frappe.db.set_value("URY Ordering Device", self.device, "fixed_table", None)

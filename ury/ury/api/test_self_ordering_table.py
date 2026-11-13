@@ -87,7 +87,7 @@ class SelfOrderingCase(URYFlowTestCase):
 				"default_customer": CUSTOMER,
 				"enabled": 1,
 				"enable_qr_table_ordering": 1,
-				"enable_kiosk_ordering": 1,
+				"enable_device_ordering": 1,
 				"allow_add_to_running_table": 1,
 				"enable_pay_at_counter": 1,
 				"qr_signing_secret": "self-order-test-secret",

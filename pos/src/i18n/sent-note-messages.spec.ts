@@ -26,3 +26,11 @@ describe('what is said about the note of a dish that was sent', () => {
     expect(cart.sent_note_locked_reducer).toContain('変更する場合は、取り消してから追加し直してください');
   });
 });
+
+describe('what is said when the last line of a sent order is taken away', () => {
+  for (const language of LANGUAGES) {
+    it(`is there in ${language}`, () => {
+      expect(words(language).cart.cannot_empty_sent_order).toBeTruthy();
+    });
+  }
+});

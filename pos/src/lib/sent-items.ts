@@ -38,3 +38,15 @@ export function noteIsLocked(line: { quantity?: number; sentQuantity?: number })
 export function noteLockedMessageKey(mayTakeBack: boolean): string {
   return mayTakeBack ? 'cart.sent_note_locked_reducer' : 'cart.sent_note_locked';
 }
+
+/**
+ * Taking `uniqueId` away (or, without it, emptying the whole cart) would leave an order that is with the kitchen with no
+ * dish. The screen then shows 「注文はまだありません」 with nothing to save, and the order stays as it was. Taking the whole
+ * order back is the cancel of the order, from the invoice screen, which also tells the kitchen.
+ */
+export function wouldEmptyASentOrder(lines: (SentLine & { uniqueId: string })[], uniqueId?: string): boolean {
+  if (!lines.some((line) => sent(line) > 0)) return false;
+  return uniqueId === undefined ? true : lines.every((line) => line.uniqueId === uniqueId);
+}
+
+export const CANNOT_EMPTY_SENT_ORDER_KEY = 'cart.cannot_empty_sent_order';

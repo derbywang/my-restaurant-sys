@@ -32,7 +32,7 @@ import SoundToggle from '../../components/SoundToggle';
 import { useAcknowledgeCallsOfTable } from '../../hooks/useAcknowledgeCallsOfTable';
 import { customerId } from '../../lib/default-customer';
 import { refusedNoteChange, syncFailureMessageKey } from '../../lib/order-sync';
-import { noteIsLocked, noteLockedMessageKey } from '../../lib/sent-items';
+import { CANNOT_EMPTY_SENT_ORDER_KEY, noteIsLocked, noteLockedMessageKey, wouldEmptyASentOrder } from '../../lib/sent-items';
 
 type Mode = 'menu' | 'order';
 
@@ -167,6 +167,15 @@ export default function CaptainOrder() {
   const canReduce = permissions?.reduce_items ?? false;
   const canRemove = permissions?.remove_items ?? false;
 
+  // an order that is with the kitchen is never left with no dish; cancel the order instead
+  const removeLine = (uniqueId: string) => {
+    if (wouldEmptyASentOrder(activeOrders as never, uniqueId)) {
+      showToast.error(t(CANNOT_EMPTY_SENT_ORDER_KEY));
+      return;
+    }
+    removeFromOrder(uniqueId);
+  };
+
   const handleDeltaIncrement = (line: OrderDeltaLine) => {
     if (isInteractionDisabled) return;
     updateQuantity(line.uniqueId, line.curQty + 1);
@@ -175,7 +184,7 @@ export default function CaptainOrder() {
   const handleDeltaDecrement = (line: OrderDeltaLine) => {
     if (isInteractionDisabled) return;
     const newQty = line.curQty - 1;
-    if (newQty <= 0) removeFromOrder(line.uniqueId);
+    if (newQty <= 0) removeLine(line.uniqueId);
     else updateQuantity(line.uniqueId, newQty);
   };
 
@@ -186,13 +195,13 @@ export default function CaptainOrder() {
     // control below).
     const floor = canRemove ? 0 : 1;
     const newQty = Math.max(floor, line.curQty - 1);
-    if (newQty <= 0) removeFromOrder(line.uniqueId);
+    if (newQty <= 0) removeLine(line.uniqueId);
     else updateQuantity(line.uniqueId, newQty);
   };
 
   const handleConfirmedRemove = (line: OrderDeltaLine) => {
     if (isInteractionDisabled) return;
-    removeFromOrder(line.uniqueId);
+    removeLine(line.uniqueId);
   };
 
   const handleRestoreReduction = (line: OrderDeltaLine) => {

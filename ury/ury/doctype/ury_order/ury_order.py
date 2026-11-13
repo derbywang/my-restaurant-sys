@@ -1474,6 +1474,12 @@ def check_sent_notes_unchanged(sent_notes, requested_items):
             )
 
 
+def _has_any_dish(items):
+    if isinstance(items, str):
+        items = json.loads(items or "[]")
+    return bool(items)
+
+
 @frappe.whitelist()
 def sync_order(
     items,
@@ -1620,6 +1626,14 @@ def sync_order(
                 ),
             )
             return {"status": "Failure"}
+
+    # An order that is with the kitchen is not changed to no dish at all: the register shows nothing to save and the kitchen
+    # would be told nothing. Taking the whole order back is the cancel of the order (one cancel ticket for everything).
+    if invoice.name and invoice.docstatus == 0 and not _has_any_dish(items) and invoice.items:
+        frappe.throw(
+            _("The last line of an order cannot be deleted. To cancel the whole order, cancel the order on the invoice screen."),
+            title=_("Cannot delete the last line"),
+        )
 
     if not customer:
         frappe.throw("Please enter valid customer details")

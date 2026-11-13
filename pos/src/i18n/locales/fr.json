@@ -67,7 +67,8 @@
     "edit_comment": "Modifier le commentaire",
     "pax": "Couverts",
     "sent_note_locked": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine.",
-    "sent_note_locked_reducer": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine. Pour le modifier ici, annulez le plat puis ajoutez-le de nouveau."
+    "sent_note_locked_reducer": "Déjà envoyé en cuisine. Pour modifier, prévenez directement la cuisine. Pour le modifier ici, annulez le plat puis ajoutez-le de nouveau.",
+    "cannot_empty_sent_order": "La dernière ligne d'une commande ne peut pas être supprimée. Pour annuler toute la commande, utilisez Annuler sur l'écran des factures."
   },
   "order": {
     "select_to_view": "Sélectionnez une commande pour voir les détails",

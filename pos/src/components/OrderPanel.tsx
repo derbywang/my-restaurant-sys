@@ -20,7 +20,15 @@ import { t } from '../i18n';
 import { useCartTotals } from '../hooks/useCartTotals';
 import { customerId } from '../lib/default-customer';
 import { refusedNoteChange, refusedTakingBack, syncFailureMessageKey } from '../lib/order-sync';
-import { canClearOrder, canDecrease, canRemoveLine, noteIsLocked, noteLockedMessageKey } from '../lib/sent-items';
+import {
+  CANNOT_EMPTY_SENT_ORDER_KEY,
+  canClearOrder,
+  canDecrease,
+  canRemoveLine,
+  noteIsLocked,
+  noteLockedMessageKey,
+  wouldEmptyASentOrder,
+} from '../lib/sent-items';
 import { ROUTE_AFTER_SUBMIT, tableForSubmit } from '../lib/order-tabs';
 
 const OrderPanel = () => {
@@ -79,6 +87,22 @@ const OrderPanel = () => {
     invoice: isUpdatingOrder ? orderId : null,
   });
   const totals = cartTotals.status === 'ready' || cartTotals.status === 'loading' ? cartTotals.totals : null;
+
+  // an order that is with the kitchen is never left with no dish (it would show nothing to save); cancel the order instead
+  const removeLine = (uniqueId: string) => {
+    if (wouldEmptyASentOrder(activeOrders as never, uniqueId)) {
+      showToast.error(t(CANNOT_EMPTY_SENT_ORDER_KEY));
+      return;
+    }
+    removeFromOrder(uniqueId);
+  };
+  const emptyCart = () => {
+    if (wouldEmptyASentOrder(activeOrders as never)) {
+      showToast.error(t(CANNOT_EMPTY_SENT_ORDER_KEY));
+      return;
+    }
+    clearOrder();
+  };
 
   const handleEdit = (item: typeof activeOrders[0]) => {
     // the note of a dish that is with the kitchen stays as it is (the kitchen would never get the change)
@@ -311,7 +335,7 @@ const OrderPanel = () => {
                           const floor = mayTakeBack ? 0 : item.sentQuantity ?? 0;
                           const newQuantity = Math.max(floor, Math.round((item.quantity - 1) * 1000) / 1000);
                           if (newQuantity <= 0) {
-                            removeFromOrder(item.uniqueId!);
+                            removeLine(item.uniqueId!);
                           } else {
                             updateQuantity(item.uniqueId!, newQuantity);
                           }
@@ -337,7 +361,7 @@ const OrderPanel = () => {
                     
                     {canRemoveLine(item, mayTakeBack) && (
                       <Button
-                        onClick={() => removeFromOrder(item.uniqueId!)}
+                        onClick={() => removeLine(item.uniqueId!)}
                         variant="ghost"
                         size="icon"
                         className="text-red-500 hover:text-red-600"
@@ -352,7 +376,7 @@ const OrderPanel = () => {
             ))}
             {activeOrders.length > 0 && canClearOrder(activeOrders, mayTakeBack) && (
               <Button
-                onClick={clearOrder}
+                onClick={emptyCart}
                 variant="ghost"
                 size="sm"
                 className="w-full text-gray-600 hover:text-gray-800 mt-4"

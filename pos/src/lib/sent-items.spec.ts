@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canClearOrder, canDecrease, canRemoveLine, noteIsLocked, noteLockedMessageKey } from './sent-items';
+import { canClearOrder, canDecrease, canRemoveLine, noteIsLocked, noteLockedMessageKey, wouldEmptyASentOrder } from './sent-items';
 
 const NEW_LINE = { quantity: 2 };
 const SENT_LINE = { quantity: 2, sentQuantity: 2 };
@@ -60,5 +60,34 @@ describe('the note of a line', () => {
   it('is said to those who may take dishes back with how to change it, to the others without', () => {
     expect(noteLockedMessageKey(false)).toBe('cart.sent_note_locked');
     expect(noteLockedMessageKey(true)).toBe('cart.sent_note_locked_reducer');
+  });
+});
+
+describe('wouldEmptyASentOrder', () => {
+  const sentLine = (uniqueId: string, sentQuantity = 1) => ({ uniqueId, quantity: 1, sentQuantity });
+  const newLine = (uniqueId: string) => ({ uniqueId, quantity: 1 });
+
+  it('taking away the last line of an order that is with the kitchen would leave it empty', () => {
+    expect(wouldEmptyASentOrder([sentLine('a')], 'a')).toBe(true);
+  });
+
+  it('taking away one of two lines does not', () => {
+    expect(wouldEmptyASentOrder([sentLine('a'), sentLine('b')], 'a')).toBe(false);
+  });
+
+  it('taking away the last line of an order that was never sent is fine (nothing to take back from the kitchen)', () => {
+    expect(wouldEmptyASentOrder([newLine('a')], 'a')).toBe(false);
+  });
+
+  it('a new line next to the sent one: taking away the sent one still leaves a line', () => {
+    expect(wouldEmptyASentOrder([sentLine('a'), newLine('b')], 'a')).toBe(false);
+  });
+
+  it('emptying the whole cart of an order that is with the kitchen would leave it empty', () => {
+    expect(wouldEmptyASentOrder([sentLine('a'), newLine('b')])).toBe(true);
+  });
+
+  it('an empty cart is not an order that is with the kitchen', () => {
+    expect(wouldEmptyASentOrder([])).toBe(false);
   });
 });

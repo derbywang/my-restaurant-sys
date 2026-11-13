@@ -13,6 +13,7 @@ from ury.setup.test_site import (
 	FOOD_ITEM,
 	PRODUCTION_UNIT,
 	URYFlowTestCase,
+	URYTestCase,
 	as_user,
 	open_pos,
 	place_order,
@@ -148,6 +149,23 @@ class TestKitchenRole(URYFlowTestCase):
 			self.assertFalse(frappe.has_permission("URY KOT", "delete"))
 			self.assertFalse(frappe.has_permission("URY Production Unit", "write"))
 
+	# --- the /pos page ------------------------------------------------------------------------------------------------
+	def test_the_pos_page_sends_the_kitchen_account_to_the_kitchen_screen(self):
+		from ury.www import pos
+
+		with as_user(KITCHEN):
+			with self.assertRaises(frappe.Redirect):
+				pos.get_context(frappe._dict())
+			self.assertEqual(frappe.local.flags.redirect_location, "/mosaic")
+
+	def test_the_pos_page_stays_for_the_cashier(self):
+		from ury.www import pos
+
+		context = frappe._dict()
+		with as_user(CASHIER), mock.patch("ury.www.pos.frappe.sessions.get", return_value={}):
+			pos.get_context(context)  # no redirect
+		self.assertIn("boot", context)
+
 
 class TestKitchenAccountFromTheWizard(URYFlowTestCase):
 	def test_the_wizard_may_make_a_kitchen_account_but_still_not_a_system_manager(self):
@@ -156,3 +174,25 @@ class TestKitchenAccountFromTheWizard(URYFlowTestCase):
 		check_staff_role("URY Kitchen")  # no error
 		with self.assertRaises(frappe.ValidationError):
 			check_staff_role("System Manager")
+
+
+class TestThePosPageForTheKitchen(URYTestCase):
+	"""An account with only URY Kitchen that opens /pos is sent to the kitchen screen (not shown an error)."""
+
+	def _only_kitchen(self, roles):
+		from ury.www.pos import only_the_kitchen
+
+		with mock.patch("ury.www.pos.frappe.get_roles", return_value=roles):
+			return only_the_kitchen("someone@test.local")
+
+	def test_an_account_with_only_the_kitchen_role_is_the_kitchen(self):
+		self.assertTrue(self._only_kitchen(["All", "Guest", "URY Kitchen"]))
+
+	def test_an_account_that_also_has_another_ury_role_is_not(self):
+		self.assertFalse(self._only_kitchen(["All", "URY Kitchen", "URY Cashier"]))
+		self.assertFalse(self._only_kitchen(["All", "URY Kitchen", "URY Manager"]))
+
+	def test_others_are_not(self):
+		self.assertFalse(self._only_kitchen(["All", "URY Cashier"]))
+		self.assertFalse(self._only_kitchen(["All", "System Manager"]))
+		self.assertFalse(self._only_kitchen(["All"]))

@@ -13,7 +13,20 @@ SCRIPT_TAG_PATTERN = re.compile(r"\<script[^<]*\</script\>")
 CLOSING_SCRIPT_TAG_PATTERN = re.compile(r"</script\>")
 
 
+def only_the_kitchen(user):
+	"""The account has URY Kitchen and no other URY role (and is not an administrator): it works on the kitchen screen."""
+	roles = set(frappe.get_roles(user))
+	if roles & {"Administrator", "System Manager"}:
+		return False
+	return {role for role in roles if role.startswith("URY ")} == {"URY Kitchen"}
+
+
 def get_context(context):
+	# the account of a kitchen screen has nothing to do in the POS: send it to its screen instead of an error
+	if frappe.session.user != "Guest" and only_the_kitchen(frappe.session.user):
+		frappe.local.flags.redirect_location = "/mosaic"
+		raise frappe.Redirect
+
 	csrf_token = frappe.sessions.get_csrf_token()
 	# Manually commit the CSRF token here
 	frappe.db.commit()  # nosemgrep

@@ -247,6 +247,7 @@ import io from "socket.io-client";
 import { buildSocketUrl, keepTryingToConnect, SOCKET_RECONNECT_OPTIONS } from "../lib/realtime";
 import { t, timeNow } from "../lib/language";
 import { elapsedLabel, elapsedMinutes } from "../lib/elapsed";
+import { timeColor } from "../lib/ticket-time";
 
 let host = window.location.hostname;
 let port = window.location.port;
@@ -536,11 +537,7 @@ export default {
         ) {
           this.orderDelayNotify(kot);
         }
-        if (minutes >= this.kot_alert_time) {
-          kot.timecolor = "text-[#DC0000]";
-        } else {
-          kot.timecolor = "text-black";
-        }
+        kot.timecolor = timeColor(kot.type, minutes, this.kot_alert_time);
       });
     },
     fetchkotwithmasonry() {

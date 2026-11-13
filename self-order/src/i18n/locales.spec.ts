@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 import en from './locales/en.json'
 import ja from './locales/ja.json'
+import ko from './locales/ko.json'
+import zh from './locales/zh.json'
 
 function keysOf(obj: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(obj).flatMap(([k, v]) =>
@@ -87,5 +89,26 @@ describe('the notice when the page moves to another part of a split bill', () =>
     expect(en.bill_switch.title).toBeTruthy()
     expect(en.bill_switch.message).toBeTruthy()
     expect(en.bill_switch.staff).toMatch(/staff/i)
+  })
+
+  it('zh and ko have the same keys as ja', () => {
+    expect(keysOf(zh).sort()).toEqual(keysOf(ja).sort())
+    expect(keysOf(ko).sort()).toEqual(keysOf(ja).sort())
+  })
+
+  it('every language has the same {{placeholders}} in a text as Japanese', () => {
+    const flat = (o: Record<string, unknown>): Record<string, string> =>
+      Object.fromEntries(keysOf(o).map((k) => [k, k.split('.').reduce((x: any, p) => x?.[p], o) as string]))
+    const marks = (text: string) => (text.match(/\{\{\w+\}\}/g) ?? []).sort()
+    const base = flat(ja)
+    for (const [name, locale] of Object.entries({ zh, ko, en })) {
+      const other = flat(locale as Record<string, unknown>)
+      for (const key of Object.keys(base)) expect(marks(other[key]), `${name} ${key}`).toEqual(marks(base[key]))
+    }
+  })
+
+  it('no text of zh or ko is empty', () => {
+    expect(JSON.stringify(zh)).not.toMatch(/:\s*""/)
+    expect(JSON.stringify(ko)).not.toMatch(/:\s*""/)
   })
 })

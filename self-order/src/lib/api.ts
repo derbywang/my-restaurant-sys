@@ -17,11 +17,20 @@ export interface OrderingCapabilities {
 
 export type OrderingLayout = 'Mobile' | 'Tablet' | 'Landscape Kiosk' | 'Portrait Kiosk'
 
+/** A language the guest can choose: the code and how it is written in its own language. */
+export interface OrderingLanguage {
+  code: string
+  label: string
+}
+
 export interface OrderingContext {
   session: string
   source: string
   restaurant: string
   table: string | null
+  /** The languages the profile allows, and the one this session starts in (the profile's default). */
+  languages: OrderingLanguage[]
+  language: string
   layout: OrderingLayout
   capabilities: OrderingCapabilities
 }
@@ -41,6 +50,8 @@ export interface MenuItem {
 }
 
 export interface MenuResponse {
+  /** The language the session is in now (the names of the dishes and courses are in it). */
+  language?: string
   /** The guest already answered "20歳以上ですか？" with yes in this session. */
   age_confirmed?: boolean
   items: MenuItem[]
@@ -165,6 +176,11 @@ export async function getDeviceStatus(deviceId: string, deviceCredential: string
 export async function getMenu(session: string): Promise<MenuResponse> {
   const response = await call.get<FrappeResponse<MenuResponse>>(`${M}.get_customer_menu`, { session })
   return response.message
+}
+
+/** The guest chose a language: the server keeps it on the session and names the dishes in it from now on. */
+export async function setSessionLanguage(session: string, lang: string): Promise<void> {
+  await call.post<FrappeResponse<{ language: string }>>(`${M}.set_session_language`, { session, lang })
 }
 
 export async function getCurrentOrder(session: string): Promise<CustomerOrder> {

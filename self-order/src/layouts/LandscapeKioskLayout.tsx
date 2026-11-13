@@ -10,6 +10,7 @@ import type { OrderingContext } from '../lib/api'
 import CartPanel from './shared/CartPanel'
 import MenuGrid from './shared/MenuGrid'
 import { t } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const IDLE_WARN_MS = 60000
 const IDLE_RESET_GRACE_MS = 15000
@@ -55,6 +56,8 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
     answerAge,
     billSwitch,
     dismissBillSwitch,
+    language,
+    changeLanguage,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -110,12 +113,15 @@ function LandscapeKioskLayout({ initialContext }: LayoutProps) {
         <h1 className="text-3xl font-semibold">
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
         </h1>
-        <button
-          onClick={handleReset}
-          className="rounded-md border px-4 py-2 text-base font-medium text-muted-foreground"
-        >
-          {t('header.new_order')}
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="lg" />
+          <button
+            onClick={handleReset}
+            className="rounded-md border px-4 py-2 text-base font-medium text-muted-foreground"
+          >
+            {t('header.new_order')}
+          </button>
+        </div>
       </header>
 
       <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-10 mt-4" />

@@ -1,0 +1,113 @@
+{
+  "cart": {
+    "note_label": "特别要求（选填）",
+    "note_placeholder": "例：不要芥末",
+    "note_hint": "请用日语或简单的词语填写要求",
+    "total_incl_tax": "合计（含税）",
+    "ordered": "已点",
+    "tax_line": "{{rate}}%对象 {{base}} 的消费税",
+    "order_so_far": "已点的内容",
+    "order_total_incl_tax": "预计结账金额（含税）",
+    "title": "购物车",
+    "in_cart": "购物车内：{{count}}",
+    "items": "{{count}}件",
+    "place": "下单",
+    "placing": "正在发送…",
+    "empty_hint": "点击菜单中的菜品，即可加入购物车。"
+  },
+  "price": {
+    "incl_tax": "（含税）"
+  },
+  "age": {
+    "question": "您已年满20岁吗？",
+    "note": "酒类饮品须年满20岁方可饮用。",
+    "yes": "是",
+    "no": "否"
+  },
+  "bill_switch": {
+    "title": "下单的账单已变更",
+    "message": "已为部分客人开具了结账单。之后点的菜品将加入尚未结账的账单。",
+    "staff": "已拿到结账单的客人如需追加点餐，请告知店员。"
+  },
+  "split": {
+    "title": "账单已分开结算。",
+    "message": "此画面显示的是这份账单的订单和金额。之后点的菜品也会加入这份账单。"
+  },
+  "closed": {
+    "table_closed": {
+      "title": "点餐已结束",
+      "message": "由于正在结账等原因，无法再通过此处点餐。如需追加点餐，请告知店员。"
+    },
+    "store_closed": {
+      "title": "目前无法接受点餐",
+      "message": "现在不在营业时间，无法点餐。请告知店员。"
+    },
+    "order_closed": {
+      "title": "此订单已结束",
+      "message": "此订单已经结束。如需追加点餐，请告知店员。"
+    },
+    "session_expired": {
+      "title": "已超过有效时间",
+      "message": "由于时间过长，已无法继续使用。请重新扫描桌上的二维码，或告知店员。"
+    },
+    "reload": "刷新页面"
+  },
+  "errors": {
+    "network": "无法连接。请确认网络状态后再试一次。",
+    "server": "服务器出现问题。请稍后再试。",
+    "other": "无法处理。请再试一次，或告知店员。",
+    "age": "无法确认年龄。请再试一次。",
+    "no_code": "找不到点餐用的二维码。请重新扫描桌上的二维码。",
+    "total_failed": "无法获取合计金额。请再试一次。",
+    "close": "关闭",
+    "busy": "目前较为拥挤。请再试一次。"
+  },
+  "app": {
+    "starting": "正在启动…",
+    "device_failed": "此设备无法启动。请告知店员。"
+  },
+  "menu": {
+    "loading": "正在加载菜单…",
+    "categories": "菜单分类",
+    "all": "全部",
+    "other": "其他"
+  },
+  "header": {
+    "table": "桌号 {{table}}",
+    "pickup": "外带订单",
+    "order": "点餐",
+    "start_over": "重新开始",
+    "new_order": "新的订单",
+    "clear_cart": "清空购物车"
+  },
+  "confirm": {
+    "start_over": "要重新开始吗？购物车中的内容将被删除。",
+    "new_order": "要开始新的订单吗？购物车中的内容将被删除。",
+    "clear_cart": "要清空购物车吗？所选的菜品将全部删除。（已点的菜品不受影响）"
+  },
+  "idle": {
+    "title": "您还在使用吗？",
+    "still_here": "是的，还在使用"
+  },
+  "pay": {
+    "online": "在线支付",
+    "starting": "正在准备支付…",
+    "request_created": "已生成支付指引（{{amount}} {{currency}}）。店员将为您说明。",
+    "request_bill": "请求结账",
+    "bill_requested": "已请求结账（已通知店员）"
+  },
+  "device": {
+    "waiting_title": "请稍候，点餐即将开放",
+    "waiting_table": "店员开启餐桌后即可点餐。",
+    "waiting_store": "现在不在营业时间。请等待营业开始。",
+    "setup_working": "正在设置此设备…",
+    "setup_done": "设置完成。即将开始。",
+    "setup_failed": "设置用的链接不正确。请告知店员。",
+    "not_recognized": "此设备尚未登记。请告知店员。",
+    "misconfigured_title": "设置尚未完成",
+    "misconfigured_message": "请告知店员。（店员请注意：请把下方的代码告知管理员）",
+    "not_recognized_title": "此设备尚未登记",
+    "not_set_title": "此设备尚未设置",
+    "not_set_message": "请告知店员。（店员请注意：请用设置链接重新设置此设备）"
+  }
+}

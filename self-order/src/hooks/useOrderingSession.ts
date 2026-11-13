@@ -8,6 +8,7 @@ import {
   getMenu,
   getStoredContext,
   getStoredToken,
+  setSessionLanguage,
   previewCart,
   requestBill,
   type CartPreview,
@@ -25,7 +26,8 @@ import { orderSignature } from '../lib/order-lines'
 import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
 import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
 import { billAsked } from '../lib/bill-request'
-import { t } from '../i18n'
+import { setLanguage, t } from '../i18n'
+import { languageFromPhone, renameCart } from '../lib/language'
 import {
   addToCart as addToCartLine,
   decrementCart as decrementCartLine,
@@ -69,6 +71,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   const [order, setOrder] = useState<CustomerOrder | null>(null)
   const [cart, setCart] = useState<Cart>({})
   const [loading, setLoading] = useState(true)
+  // the language of this session (the guest's choice, or the profile's default); the words of the page follow it
+  const [language, setLanguageState] = useState<string>('ja')
   const [submitting, setSubmitting] = useState(false)
   // The red notice: a failure shows it, the next request that succeeds (and the guest's close button) takes it away.
   const [error, dispatchNotice] = useReducer(noticeReducer, null)
@@ -170,6 +174,27 @@ export function useOrderingSession(initialContext?: OrderingContext) {
         ctx = await bootstrap(token)
         menuResponse = await getMenu(ctx.session)
       }
+      // The page speaks the language of the session: the profile's default for a new session (a tablet after the staff
+      // opened the table again, a kiosk after its idle reset), what the guest chose for a resumed one. A phone that
+      // scanned the code starts in its own language when the profile allows it.
+      let sessionLanguage = menuResponse.language ?? ctx.language
+      if (!resumed && !initialContext) {
+        const wanted = languageFromPhone(
+          navigator.languages ?? [navigator.language],
+          (ctx.languages ?? []).map((entry) => entry.code),
+          sessionLanguage,
+          ctx.layout,
+        )
+        if (wanted !== sessionLanguage) {
+          await setSessionLanguage(ctx.session, wanted)
+          menuResponse = await getMenu(ctx.session)
+          sessionLanguage = wanted
+        }
+      }
+      if (sessionLanguage) {
+        await setLanguage(sessionLanguage)
+        setLanguageState(sessionLanguage)
+      }
       setContext(ctx)
       const menuItems = menuResponse.items.filter((item) => !item.disabled)
       setMenu(menuItems)
@@ -232,6 +257,24 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     setMenu([])
     init()
   }, [init])
+
+  // The guest chose another language: the server keeps it, the words of the page change at once, and the dishes (menu,
+  // cart, the order so far) are named in it. The cart keeps its quantities and notes.
+  async function changeLanguage(next: string) {
+    if (!context || next === language) return
+    try {
+      await setSessionLanguage(context.session, next)
+      await setLanguage(next)
+      setLanguageState(next)
+      const menuResponse = await getMenu(context.session)
+      const menuItems = menuResponse.items.filter((item) => !item.disabled)
+      setMenu(menuItems)
+      setCart((prev) => renameCart(prev, menuItems))
+      await loadOrder(context.session)
+    } catch (err) {
+      handleFailure(err)
+    }
+  }
 
   // the first alcohol dish of a session is asked about; after a yes the next ones are not
   function addToCart(item: MenuItem) {
@@ -376,6 +419,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
 
   return {
     context,
+    language,
+    changeLanguage,
     menu,
     order,
     cart,

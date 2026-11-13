@@ -11,6 +11,7 @@ import { isTableTablet } from '../lib/device'
 import CartPanel from './shared/CartPanel'
 import MenuGrid from './shared/MenuGrid'
 import { t } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 const IDLE_WARN_MS = 60000
 const IDLE_RESET_GRACE_MS = 15000
@@ -54,6 +55,8 @@ function TabletLayout({ initialContext }: LayoutProps) {
     answerAge,
     billSwitch,
     dismissBillSwitch,
+    language,
+    changeLanguage,
   } = useOrderingSession(initialContext)
 
   const [showIdleWarning, setShowIdleWarning] = useState(false)
@@ -112,12 +115,15 @@ function TabletLayout({ initialContext }: LayoutProps) {
         <h1 className="text-xl font-semibold">
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
         </h1>
-        <button
-          onClick={handleReset}
-          className="rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground"
-        >
-          {atTable ? t('header.clear_cart') : t('header.new_order')}
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="md" />
+          <button
+            onClick={handleReset}
+            className="rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground"
+          >
+            {atTable ? t('header.clear_cart') : t('header.new_order')}
+          </button>
+        </div>
       </header>
 
       <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-6 mt-3" />

@@ -9,7 +9,8 @@ import LandscapeKioskLayout from './layouts/LandscapeKioskLayout'
 import PortraitKioskLayout from './layouts/PortraitKioskLayout'
 import type { OrderingLayout } from './lib/api'
 import { getStoredContext } from './lib/api'
-import { t } from './i18n'
+import { useEffect } from 'react'
+import { setLanguage, t, useLanguage } from './i18n'
 
 const LAYOUTS: Record<OrderingLayout, typeof MobileQRLayout> = {
   Mobile: MobileQRLayout,
@@ -28,12 +29,20 @@ const LAYOUTS: Record<OrderingLayout, typeof MobileQRLayout> = {
  * token/session bootstrap via useOrderingSession().
  */
 function App() {
+  useLanguage() // the whole page is drawn again when the guest changes the language
   if (window.location.pathname.replace(/\/+$/, '').endsWith('/setup')) return <DeviceSetup />
   return <Shell />
 }
 
 function Shell() {
   const { isDevice, screen } = useDeviceBootstrap()
+
+  // a tablet that waits for the table (or has just started) speaks the language of the shop: whoever sat there
+  // before chose their own, and the next guests start in the default (a new session sets the profile's default)
+  const idle = isDevice && (screen.kind === 'waiting' || screen.kind === 'starting')
+  useEffect(() => {
+    if (idle) void setLanguage('ja')
+  }, [idle])
 
   const entry = entryFor({
     hasDevice: isDevice,

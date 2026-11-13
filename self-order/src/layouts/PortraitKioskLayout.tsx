@@ -11,6 +11,7 @@ import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import { mergeOrderLines } from '../lib/order-lines'
 import type { MenuItem, OrderingContext } from '../lib/api'
 
@@ -68,6 +69,8 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     answerAge,
     billSwitch,
     dismissBillSwitch,
+    language,
+    changeLanguage,
   } = useOrderingSession(initialContext)
 
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY)
@@ -142,12 +145,15 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
         <h1 className="text-2xl font-semibold">
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
         </h1>
-        <button
-          onClick={handleReset}
-          className="rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground"
-        >
-          {t('header.new_order')}
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="lg" />
+          <button
+            onClick={handleReset}
+            className="rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground"
+          >
+            {t('header.new_order')}
+          </button>
+        </div>
       </header>
 
       <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-6 mt-3" />

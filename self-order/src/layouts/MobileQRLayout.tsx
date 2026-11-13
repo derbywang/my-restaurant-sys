@@ -8,6 +8,7 @@ import { useOrderingSession } from '../hooks/useOrderingSession'
 import CartNote from '../components/CartNote'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import { mergeOrderLines } from '../lib/order-lines'
 import type { OrderingContext } from '../lib/api'
 
@@ -45,6 +46,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     answerAge,
     billSwitch,
     dismissBillSwitch,
+    language,
+    changeLanguage,
   } = useOrderingSession(initialContext)
 
   function handleStartOver() {
@@ -82,12 +85,15 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
         <h1 className="text-lg font-semibold">
           {isPickup ? t('header.pickup') : context?.table ? t('header.table', { table: context.table }) : t('header.order')}
         </h1>
-        <button
-          onClick={handleStartOver}
-          className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground"
-        >
-          {t('header.start_over')}
-        </button>
+        <div className="flex items-center gap-3">
+          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="md" />
+          <button
+            onClick={handleStartOver}
+            className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground"
+          >
+            {t('header.start_over')}
+          </button>
+        </div>
       </header>
 
       <BillSwitchNotice open={billSwitch} onClose={dismissBillSwitch} className="mx-4 mt-3" />

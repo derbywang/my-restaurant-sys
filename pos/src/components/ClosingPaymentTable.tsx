@@ -6,6 +6,7 @@ import { cn } from '@ury/ui';
 import { t } from '../i18n';
 import { usePOSStore } from '../store/pos-store';
 import { paymentModeLabel } from '../lib/payment-change';
+import { blockedYenKey, wholeYen } from '../lib/yen-input';
 
 interface ClosingPaymentTableProps {
   rows: ClosingPaymentSummary[];
@@ -22,10 +23,9 @@ const ClosingPaymentTable: React.FC<ClosingPaymentTableProps> = ({
   const paymentModeTypes = usePOSStore((state) => state.paymentModeTypes);
 
   const handleClosingAmountChange = (modeOfPayment: string, value: string) => {
-    const parsed = parseFloat(value);
-    // Clamp to non-negative in JS -- the HTML `min="0"` attribute alone does
-    // not stop programmatic or pasted negative input.
-    const closingAmount = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    // Whole yen, never negative -- the HTML `min="0"` attribute alone does
+    // not stop programmatic or pasted input.
+    const closingAmount = wholeYen(value);
     onChange(modeOfPayment, closingAmount);
   };
 
@@ -114,12 +114,18 @@ const ClosingPaymentTable: React.FC<ClosingPaymentTableProps> = ({
                   <Input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     value={row.closing_amount > 0 ? String(row.closing_amount) : ''}
                     onChange={(e) =>
                       handleClosingAmountChange(row.mode_of_payment, e.target.value)
                     }
-                    placeholder="0.00"
+                    placeholder="0"
+                    onKeyDown={(e) => {
+                      if (blockedYenKey(e.key)) e.preventDefault();
+                    }}
+                    onPaste={(e) => {
+                      if (!/^\d*$/.test(e.clipboardData.getData('text'))) e.preventDefault();
+                    }}
                     className={cn('w-full text-center', !isTouched && 'border-amber-400')}
                     size="sm"
                   />

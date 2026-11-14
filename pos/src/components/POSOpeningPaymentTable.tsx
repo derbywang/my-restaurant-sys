@@ -3,6 +3,7 @@ import { formatCurrency } from '@ury/core';
 import { t } from '../i18n';
 import type { POSOpeningPayment } from '../lib/pos-opening-api';
 import { paymentModeLabel } from '../lib/payment-change';
+import { blockedYenKey, wholeYen } from '../lib/yen-input';
 
 interface POSOpeningPaymentTableProps {
   payments: POSOpeningPayment[];
@@ -21,8 +22,7 @@ const POSOpeningPaymentTable = ({
   modeTypes = {},
 }: POSOpeningPaymentTableProps) => {
   const handleAmountChange = (mode: string, value: string) => {
-    const parsed = value === '' ? 0 : parseFloat(value);
-    const amount = Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+    const amount = wholeYen(value);
 
     const nextPayments = payments.map((payment) =>
       payment.mode_of_payment === mode
@@ -63,17 +63,17 @@ const POSOpeningPaymentTable = ({
                   <Input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     value={payment.opening_amount || ''}
                     onChange={(e) => handleAmountChange(payment.mode_of_payment, e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === '-' || e.key === 'Minus') {
+                      if (blockedYenKey(e.key)) {
                         e.preventDefault();
                       }
                     }}
                     onPaste={(e) => {
                       const pasted = e.clipboardData.getData('text');
-                      if (/-/.test(pasted)) {
+                      if (!/^\d*$/.test(pasted)) {
                         e.preventDefault();
                       }
                     }}

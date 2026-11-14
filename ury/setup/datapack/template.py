@@ -14,7 +14,7 @@ from ury.setup.datapack import schema
 HEADER_ROW, HOW_ROW, EXAMPLE_ROW, FIRST_DATA_ROW = 2, 3, 4, 5
 
 # How many data rows each sheet is prepared for (drop-downs and formulas run down to here).
-CAPACITY = {"shop": 1, "rooms": 30, "tables": 200, "kitchens": 30, "courses": 100, "menu": 500, "staff": 100, "customers": 2000}
+CAPACITY = {"shop": 1, "rooms": 30, "tables": 200, "kitchens": 30, "courses": 100, "menu": 500, "variants": 200, "toppings": 1000, "staff": 100, "customers": 2000}
 
 FONT = "Yu Gothic"
 REQUIRED_FILL = PatternFill("solid", fgColor="C2410C")

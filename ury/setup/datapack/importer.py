@@ -21,6 +21,10 @@ from ury.setup.datapack import schema
 
 LANGUAGE_CODES = ("zh", "ko", "en")
 
+# The course of the toppings on the menu (the staff's menu has them in a tab of their own) and its names.
+TOPPING_COURSE = "トッピング・追加"
+TOPPING_COURSE_NAMES = {"zh": "加料", "ko": "추가 토핑", "en": "Toppings & extras"}
+
 
 @dataclass
 class Action:
@@ -64,7 +68,10 @@ class _MenuImport:
 		self.result = Result()
 		self.shop = None
 		self.profile = None
-		self.dishes = [row.values for row in data.get("menu", [])]
+		self.errors_of_the_sheets = []
+		self.variant_groups = {}  # base dish -> [the base, its variants]
+		self.addon_links = {}  # a dish (a base or a variant) -> [the names of its toppings]
+		self.dishes = self._expand()
 
 	# ------------------------------------------------------------------------------------------------ the whole run
 
@@ -72,17 +79,89 @@ class _MenuImport:
 		if not self._check_shop():
 			return self.result
 		self._check_images()
+		self.result.errors.extend(self.errors_of_the_sheets)
 		if self.result.errors:
 			return self.result
 		self._courses()
 		self._kitchens_and_groups()
 		self._items()
 		self._menu()
+		self._links()
 		self._restaurant()
 		return self.result
 
 	def error(self, text):
 		self.result.errors.append(text)
+
+	# ------------------------------------------------------------------------------------------------ the dishes
+
+	def _expand(self):
+		"""The dishes of the menu sheet, the variants (a dish of their own, with the course, kind and kitchen of the
+		base) and the toppings (one dish for each dish that offers it, named 「dish・topping」) in one list."""
+		base = [dict(row.values, role="dish") for row in self.data.get("menu", [])]
+		by_name = {d["name"]: d for d in base}
+		variants = []
+		for row in self.data.get("variants", []):
+			v = row.values
+			main = by_name.get(v["base"])
+			if main is None:
+				continue  # the reader reports it
+			variants.append(
+				{
+					"name": v["name"], "course": main["course"], "kind": main["kind"], "kitchen": main["kitchen"],
+					"price": v["price"], "self_order": v["self_order"], "recommended": False, "stopped": False,
+					"zh": v.get("zh"), "ko": v.get("ko"), "en": v.get("en"), "image": None, "role": "variant",
+				}
+			)
+			self.variant_groups.setdefault(main["name"], [main["name"]]).append(v["name"])
+		members = base + variants
+		member_by_name = {d["name"]: d for d in members}
+
+		# A topping row can name a dish (it is offered by the dish and by its variants), a variant (only that one) or a
+		# course (every dish of it). The more exact row wins for a dish: a variant named on its own row has its own
+		# price; two rows of the same exactness for one dish and one topping are a mistake.
+		addons = {}  # name -> (exactness, row number)
+		made = {}
+		for row in self.data.get("toppings", []):
+			t = row.values
+			if t.get("target"):
+				group = self.variant_groups.get(t["target"], [t["target"]])
+				targets = [(m, 2 if m == t["target"] else 1) for m in group]
+			else:
+				targets = [(d["name"], 0) for d in members if d["course"] == t["course"]]
+			if not targets:
+				self.errors_of_the_sheets.append(
+					f"シート「トッピング・追加」{row.number}行目：対象の分類「{t.get('course')}」に品がありません。"
+				)
+				continue
+			for target, exactness in targets:
+				member = member_by_name.get(target)
+				if member is None:
+					continue
+				name = f"{target}・{t['name']}"
+				if name in addons:
+					known_exactness, known_row = addons[name]
+					if exactness < known_exactness:
+						continue
+					if exactness == known_exactness:
+						self.errors_of_the_sheets.append(
+							f"シート「トッピング・追加」{row.number}行目：「{target}」の追加「{t['name']}」が{known_row}行目と二重に指定されています。"
+						)
+						continue
+				addons[name] = (exactness, row.number)
+				made[name] = {
+					"name": name, "course": TOPPING_COURSE, "kind": t.get("kind") or member["kind"], "kitchen": member["kitchen"],
+					"price": t["price"], "self_order": False, "recommended": False, "stopped": False, "image": None,
+					"role": "topping",
+					**{
+						code: f"{member[code]}・{t[code]}" if member.get(code) and t.get(code) else None
+						for code in LANGUAGE_CODES
+					},
+				}
+				links = self.addon_links.setdefault(target, [])
+				if name not in links:
+					links.append(name)
+		return members + list(made.values())
 
 	# ------------------------------------------------------------------------------------------------ the shop
 
@@ -158,8 +237,10 @@ class _MenuImport:
 	# ------------------------------------------------------------------------------------------------ courses
 
 	def _courses(self):
-		for row in self.data.get("courses", []):
-			v = row.values
+		course_values = [row.values for row in self.data.get("courses", [])]
+		if self.addon_links and TOPPING_COURSE not in {v["name"] for v in course_values}:
+			course_values.append({"name": TOPPING_COURSE, "order": None, **TOPPING_COURSE_NAMES})
+		for v in course_values:
 			name = v["name"]
 			wanted = self._translations(v)
 			if not frappe.db.exists("URY Menu Course", name):
@@ -376,6 +457,27 @@ class _MenuImport:
 		self.result.add("update" if changed else "same", "URY Menu", menu, "、".join(changed))
 		if changed and not self.dry:
 			doc.save(ignore_permissions=True)
+
+	# ------------------------------------------------------------------------------------------------ links
+
+	def _links(self):
+		"""The variants list each other and a dish lists its toppings (the tables of the Item that the staff's dialog
+		reads). Links are only added, never taken away."""
+		wanted = []  # (child doctype, field of the Item, dish, [linked dishes])
+		for members in self.variant_groups.values():
+			for member in members:
+				wanted.append(("POS Item Variants", "custom_pos_item_variants", member, [m for m in members if m != member]))
+		for member, names in self.addon_links.items():
+			wanted.append(("Item Add On", "custom_pos_add_on_items", member, names))
+		for doctype, field_name, member, linked in wanted:
+			have = {r.item for r in frappe.get_all(doctype, filters={"parent": member, "parenttype": "Item"}, fields=["item"])}
+			missing = [x for x in linked if x not in have]
+			self.result.add("update" if missing else "same", doctype, member, "、".join(missing))
+			if missing and not self.dry:
+				doc = frappe.get_doc("Item", member)
+				for x in missing:
+					doc.append(field_name, {"item": x})
+				doc.save(ignore_permissions=True)
 
 	def _restaurant(self):
 		restaurant, menu = self.shop["restaurant"], self.shop["menu"]

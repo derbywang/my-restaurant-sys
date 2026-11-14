@@ -19,7 +19,7 @@ HEADER_ROW, FIRST_DATA_ROW = 2, 5
 
 YES = {"○", "〇", "◯", "●", "o", "yes", "y", "true", "1"}
 NO = {"×", "✕", "✗", "x", "no", "n", "false", "0"}
-UNIQUE = {"rooms": "name", "tables": "name", "kitchens": "name", "courses": "name", "menu": "name", "staff": "email"}
+UNIQUE = {"rooms": "name", "tables": "name", "kitchens": "name", "courses": "name", "menu": "name", "variants": "name", "staff": "email"}
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -42,6 +42,7 @@ def read_pack(path):
 			continue
 		data[sheet.key] = _rows(ws, sheet, errors)
 	_check_names(data, errors)
+	_check_options(data, errors)
 	return data, errors
 
 
@@ -150,9 +151,41 @@ def _check_names(data, errors):
 			if not column.source:
 				continue
 			known = {r.values["name"] for r in data[column.source]}
+			# a topping can also name a variant (it then has a price of its own)
+			if (sheet.key, column.key) == ("toppings", "target"):
+				known |= {r.values["name"] for r in data["variants"]}
 			for row in data[sheet.key]:
 				value = row.values.get(column.key)
 				if value and value not in known:
 					errors.append(
 						f"{_where(sheet, row.number, column)}「{value}」が「{schema.sheet(column.source).title}」シートにありません。"
 					)
+
+
+def _check_options(data, errors):
+	"""Variants and toppings: a variant is named like no dish of the menu; a topping has a dish or a course, not both,
+	and the same topping of the same dish (or course) is written once."""
+	variants = schema.sheet("variants")
+	menu_names = {r.values["name"] for r in data["menu"]}
+	for row in data["variants"]:
+		name = row.values.get("name")
+		if name in menu_names:
+			errors.append(
+				f"シート「{variants.title}」{row.number}行目の「品名」「{name}」は「{schema.sheet('menu').title}」シートの品名と同じです（別の名前にしてください）。"
+			)
+	toppings = schema.sheet("toppings")
+	seen = {}
+	for row in data["toppings"]:
+		target, course, name = row.values.get("target"), row.values.get("course"), row.values.get("name")
+		where = f"シート「{toppings.title}」{row.number}行目"
+		if not target and not course:
+			errors.append(f"{where}は「対象の品名」か「対象の分類」のどちらか一方を書いてください。")
+			continue
+		if target and course:
+			errors.append(f"{where}は「対象の品名」と「対象の分類」のどちらか一方だけを書いてください（両方は書けません）。")
+			continue
+		key = (target or course, name)
+		if key in seen:
+			errors.append(f"{where}は{seen[key]}行目と同じ追加です（「{target or course}」の「{name}」）。")
+		else:
+			seen[key] = row.number

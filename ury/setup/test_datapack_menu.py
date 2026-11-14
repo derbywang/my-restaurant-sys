@@ -54,6 +54,8 @@ def pack(menu=None, **override):
 			dish(TUNA, COURSE, "食品", KITCHEN_SUSHI, 1000, recommended=True, zh="金枪鱼握寿司", ko="참치 니기리", en="Tuna nigiri"),
 			dish(BEER, COURSE_DRINK, "酒類", KITCHEN_MAIN, 500, self_order=False),
 		),
+		"variants": [],
+		"toppings": [],
 		"staff": [],
 		"customers": [],
 	}
@@ -312,3 +314,211 @@ class TestFromTheExcelFile(RolledBack):
 		self.assertEqual(frappe.db.get_value("URY Menu Item", {"parent": MENU, "item": TUNA}, "special_dish"), 1)
 		again = importer.plan_menu(data)
 		self.assertEqual({a.verb for a in again.actions}, {"same"})
+
+
+TUNA_UP = "DPまぐろ握り（上）"
+TOPPING = "大盛り"
+TOPPING_COURSE = "トッピング・追加"
+
+
+def variant(base, name, price, **extra):
+	values = {"base": base, "name": name, "price": price, "zh": None, "ko": None, "en": None, "self_order": True, "note": None}
+	values.update(extra)
+	return values
+
+
+def topping(name, price, target=None, course=None, **extra):
+	values = {"target": target, "course": course, "name": name, "price": price, "kind": None, "zh": None, "ko": None, "en": None, "note": None}
+	values.update(extra)
+	return values
+
+
+def with_options(variants=None, toppings=None, **override):
+	return pack(
+		variants=rows(*(variants if variants is not None else [variant(TUNA, TUNA_UP, 1650, zh="金枪鱼握寿司（上）")])),
+		toppings=rows(*(toppings if toppings is not None else [topping(TOPPING, 100, target=TUNA, zh="加大")])),
+		**override,
+	)
+
+
+def links(item, field_name):
+	return {r.item for r in frappe.get_all({"custom_pos_item_variants": "POS Item Variants", "custom_pos_add_on_items": "Item Add On"}[field_name], filters={"parent": item}, fields=["item"])}
+
+
+class TestVariants(RolledBack):
+	def apply(self, data=None):
+		result = importer.apply_menu(data or with_options())
+		self.assertEqual(result.errors, [])
+		return result
+
+	def test_the_plan_lists_the_new_dishes_and_links_and_writes_nothing(self):
+		before = frappe.db.count("Item")
+		result = importer.plan_menu(with_options())
+		self.assertEqual(result.errors, [])
+		seen = verbs(result)
+		self.assertEqual(seen[("Item", TUNA_UP)], "create")
+		self.assertEqual(seen[("Item", f"{TUNA}・{TOPPING}")], "create")
+		self.assertEqual(seen[("POS Item Variants", TUNA)], "update")
+		self.assertEqual(seen[("Item Add On", TUNA)], "update")
+		self.assertEqual(frappe.db.count("Item"), before)
+
+	def test_a_variant_is_a_dish_of_its_own_with_the_kitchen_and_kind_of_its_base(self):
+		self.apply()
+		self.assertEqual(frappe.db.get_value("Item", TUNA_UP, "item_group"), f"{KITCHEN_SUSHI}（食品）")
+		line = frappe.get_all("URY Menu Item", filters={"parent": MENU, "item": TUNA_UP}, fields=["course", "rate", "self_order_allowed"])[0]
+		self.assertEqual((line.course, line.rate, line.self_order_allowed), (COURSE, 1650, 1))
+		self.assertEqual(rate_of(TUNA_UP), 1650)
+
+	def test_a_variant_can_be_kept_away_from_the_guests_grid(self):
+		data = with_options(variants=[variant(TUNA, TUNA_UP, 1650, self_order=False)])
+		self.apply(data)
+		self.assertEqual(frappe.db.get_value("URY Menu Item", {"parent": MENU, "item": TUNA_UP}, "self_order_allowed"), 0)
+
+	def test_the_base_and_its_variants_list_each_other(self):
+		data = with_options(variants=[variant(TUNA, TUNA_UP, 1650), variant(TUNA, "DPまぐろ握り（特上）", 2200)])
+		self.apply(data)
+		self.assertEqual(links(TUNA, "custom_pos_item_variants"), {TUNA_UP, "DPまぐろ握り（特上）"})
+		self.assertEqual(links(TUNA_UP, "custom_pos_item_variants"), {TUNA, "DPまぐろ握り（特上）"})
+
+	def test_the_base_comes_before_its_variants_on_the_menu(self):
+		self.apply()
+		order = [r.item for r in frappe.get_all("URY Menu Item", filters={"parent": MENU}, fields=["item"], order_by="idx")]
+		self.assertLess(order.index(TUNA), order.index(TUNA_UP))
+
+	def test_the_names_of_a_variant_in_the_languages(self):
+		self.apply()
+		names = {r.language: r.label for r in frappe.get_all("URY Translation Row", filters={"parent": TUNA_UP, "parentfield": "custom_translations"}, fields=["language", "label"])}
+		self.assertEqual(names, {"zh": "金枪鱼握寿司（上）"})
+
+
+class TestToppings(RolledBack):
+	def apply(self, data=None):
+		result = importer.apply_menu(data or with_options())
+		self.assertEqual(result.errors, [])
+		return result
+
+	def test_a_topping_is_a_dish_named_after_its_main_dish(self):
+		self.apply()
+		name = f"{TUNA}・{TOPPING}"
+		self.assertEqual(frappe.db.get_value("Item", name, "item_name"), name)
+		self.assertEqual(rate_of(name), 100)
+
+	def test_a_topping_is_on_the_menu_but_not_in_the_guests_grid(self):
+		self.apply()
+		line = frappe.get_all("URY Menu Item", filters={"parent": MENU, "item": f"{TUNA}・{TOPPING}"}, fields=["course", "self_order_allowed", "special_dish", "disabled"])[0]
+		self.assertEqual(line.course, TOPPING_COURSE)
+		self.assertEqual((line.self_order_allowed, line.special_dish, line.disabled), (0, 0, 0))
+		self.assertTrue(frappe.db.exists("URY Menu Course", TOPPING_COURSE))
+
+	def test_the_dish_and_its_variants_both_offer_the_topping(self):
+		self.apply()
+		self.assertEqual(links(TUNA, "custom_pos_add_on_items"), {f"{TUNA}・{TOPPING}"})
+		self.assertEqual(links(TUNA_UP, "custom_pos_add_on_items"), {f"{TUNA_UP}・{TOPPING}"})
+		self.assertEqual(rate_of(f"{TUNA_UP}・{TOPPING}"), 100)
+
+	def test_a_topping_has_the_kitchen_and_group_of_the_main_dish(self):
+		self.apply()
+		self.assertEqual(frappe.db.get_value("Item", f"{TUNA}・{TOPPING}", "item_group"), f"{KITCHEN_SUSHI}（食品）")
+
+	def test_the_names_of_a_topping_are_made_of_both_names(self):
+		self.apply()
+		names = {r.language: r.label for r in frappe.get_all("URY Translation Row", filters={"parent": f"{TUNA}・{TOPPING}", "parentfield": "custom_translations"}, fields=["language", "label"])}
+		self.assertEqual(names, {"zh": "金枪鱼握寿司・加大"})  # the dish has zh, ko and en, the topping only zh
+		names = {r.language: r.label for r in frappe.get_all("URY Translation Row", filters={"parent": f"{TUNA_UP}・{TOPPING}", "parentfield": "custom_translations"}, fields=["language", "label"])}
+		self.assertEqual(names, {"zh": "金枪鱼握寿司（上）・加大"})
+
+	def test_a_topping_for_a_course_is_offered_by_every_dish_of_the_course(self):
+		more = pack(
+			menu=rows(
+				dish(TUNA, COURSE, "食品", KITCHEN_SUSHI, 1000),
+				dish("DPたまご", COURSE, "食品", KITCHEN_SUSHI, 200),
+				dish(BEER, COURSE_DRINK, "酒類", KITCHEN_MAIN, 500),
+			),
+			toppings=rows(topping(TOPPING, 100, course=COURSE)),
+		)
+		self.apply(more)
+		self.assertEqual(links(TUNA, "custom_pos_add_on_items"), {f"{TUNA}・{TOPPING}"})
+		self.assertEqual(links("DPたまご", "custom_pos_add_on_items"), {f"DPたまご・{TOPPING}"})
+		self.assertEqual(links(BEER, "custom_pos_add_on_items"), set())
+
+	def test_a_topping_row_of_one_dish_can_have_its_own_price(self):
+		more = with_options(toppings=[topping(TOPPING, 100, target=TUNA), topping(TOPPING, 150, target=TUNA_UP)], variants=[variant(TUNA, TUNA_UP, 1650)])
+		self.apply(more)
+		self.assertEqual(rate_of(f"{TUNA}・{TOPPING}"), 100)
+		self.assertEqual(rate_of(f"{TUNA_UP}・{TOPPING}"), 150)
+
+	def test_the_tax_of_a_topping_follows_its_kind_8_percent_to_go_for_food_10_for_alcohol(self):
+		more = pack(
+			toppings=rows(topping(TOPPING, 100, target=TUNA), topping("チェイサー", 50, target=BEER), topping("お持ち帰り袋", 10, target=TUNA, kind="非食品")),
+		)
+		self.apply(more)
+		food = f"{TUNA}・{TOPPING}"
+		drink = f"{BEER}・チェイサー"
+		bag = f"{TUNA}・お持ち帰り袋"
+		self.assertEqual(frappe.db.get_value("Item", drink, "item_group"), f"{KITCHEN_MAIN}（酒類）")
+		self.assertEqual(frappe.db.get_value("Item", bag, "item_group"), f"{KITCHEN_SUSHI}（非食品）")
+		self.assertIn("8", str(tax_template(food, "テイクアウト")))
+		self.assertIn("10", str(tax_template(food, "店内飲食")))
+		self.assertIn("10", str(tax_template(drink, "テイクアウト")))
+		self.assertIn("10", str(tax_template(bag, "テイクアウト")))
+
+	def test_a_topping_for_a_course_without_dishes_is_an_error(self):
+		data = pack(toppings=rows(topping(TOPPING, 100, course="DP空の分類")))
+		result = importer.plan_menu(data)
+		self.assertTrue(any("DP空の分類" in e for e in result.errors), result.errors)
+
+	def test_the_same_sheets_again_change_nothing(self):
+		self.apply()
+		second = importer.plan_menu(with_options())
+		self.assertEqual({a.verb for a in second.actions}, {"same"})
+		self.assertEqual(links(TUNA, "custom_pos_add_on_items"), {f"{TUNA}・{TOPPING}"})
+
+	def test_a_new_price_of_a_topping_is_an_update(self):
+		self.apply()
+		changed = with_options(toppings=[topping(TOPPING, 120, target=TUNA)])
+		self.assertEqual(verbs(importer.plan_menu(changed))[("Item", f"{TUNA}・{TOPPING}")], "update")
+		self.apply(changed)
+		self.assertEqual(rate_of(f"{TUNA}・{TOPPING}"), 120)
+
+	def test_a_topping_that_is_not_in_the_sheets_any_more_is_kept(self):
+		self.apply()
+		self.apply(with_options(toppings=[topping("味噌汁", 150, target=TUNA)]))
+		self.assertEqual(links(TUNA, "custom_pos_add_on_items"), {f"{TUNA}・{TOPPING}", f"{TUNA}・味噌汁"})
+
+	def test_the_dishes_of_the_options_have_a_kitchen(self):
+		from ury.ury.api.kitchen_check import items_without_kitchen
+
+		self.apply()
+		self.assertEqual(items_without_kitchen(BRANCH, [TUNA, TUNA_UP, f"{TUNA}・{TOPPING}"]), [])
+
+
+class TestOptionsFromTheExcelFile(RolledBack):
+	def test_filled_sheets_are_imported(self):
+		from openpyxl import load_workbook
+
+		from ury.setup.datapack import reader, schema, template
+
+		with tempfile.TemporaryDirectory() as folder:
+			path = os.path.join(folder, "pack.xlsx")
+			template.build_template(path)
+			book = load_workbook(path)
+
+			def fill(key, *table):
+				ws = book[schema.sheet(key).title]
+				for r, values in enumerate(table):
+					for c, value in enumerate(values):
+						ws.cell(5 + r, c + 1).value = value
+
+			fill("shop", [BRANCH, RESTAURANT, MENU])
+			fill("kitchens", [KITCHEN_SUSHI])
+			fill("courses", [COURSE])
+			fill("menu", [TUNA, COURSE, "食品", KITCHEN_SUSHI, 1000])
+			fill("variants", [TUNA, TUNA_UP, 1650])
+			fill("toppings", [TUNA, None, TOPPING, 100])
+			book.save(path)
+			data, errors = reader.read_pack(path)
+			self.assertEqual(errors, [])
+			result = importer.apply_menu(data)
+		self.assertEqual(result.errors, [])
+		self.assertEqual(links(TUNA, "custom_pos_item_variants"), {TUNA_UP})
+		self.assertEqual(rate_of(f"{TUNA}・{TOPPING}"), 100)

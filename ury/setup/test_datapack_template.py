@@ -295,3 +295,94 @@ class TestTheChecksOfTheReader(WithTemplate):
 	def test_a_phone_number_typed_as_a_number_is_kept_as_text(self):
 		data, _errors = reader.read_pack(self.filled({"customers": [["田中", 9012345678]]}))
 		self.assertEqual(data["customers"][0].values["phone"], "9012345678")
+
+
+class TestVariantsAndToppings(WithTemplate):
+	def variant_row(self, **values):
+		sheet = schema.sheet("variants")
+		row = [None] * len(sheet.columns)
+		base = {"base": "にぎり（並）", "name": "にぎり（上）", "price": 1650}
+		base.update(values)
+		for key, value in base.items():
+			row[sheet.columns.index(sheet.column(key))] = value
+		return row
+
+	def topping_row(self, **values):
+		sheet = schema.sheet("toppings")
+		row = [None] * len(sheet.columns)
+		base = {"target": "にぎり（並）", "name": "大盛り", "price": 100}
+		base.update(values)
+		for key, value in base.items():
+			row[sheet.columns.index(sheet.column(key))] = value
+		return row
+
+	def menu_with_the_base(self):
+		menu = schema.sheet("menu")
+		row = [None] * len(menu.columns)
+		for key, value in {"name": "にぎり（並）", "course": "握り", "kind": "食品", "kitchen": "厨房", "price": 1100}.items():
+			row[menu.columns.index(menu.column(key))] = value
+		return {"courses": [["握り"]], "kitchens": [["厨房"]], "menu": [row]}
+
+	def pack(self, variants=(), toppings=()):
+		rows = self.menu_with_the_base()
+		rows["variants"] = list(variants)
+		rows["toppings"] = list(toppings)
+		return self.filled(rows)
+
+	def test_the_two_sheets_come_after_the_menu(self):
+		titles = [s.title for s in schema.SHEETS]
+		self.assertEqual(titles.index(schema.sheet("variants").title), titles.index(schema.sheet("menu").title) + 1)
+		self.assertEqual(titles.index(schema.sheet("toppings").title), titles.index(schema.sheet("menu").title) + 2)
+
+	def test_good_rows_are_read(self):
+		data, errors = reader.read_pack(self.pack([self.variant_row()], [self.topping_row()]))
+		self.assertEqual(errors, [])
+		self.assertEqual(data["variants"][0].values["base"], "にぎり（並）")
+		self.assertEqual(data["variants"][0].values["price"], 1650)
+		self.assertIs(data["variants"][0].values["self_order"], True)
+		self.assertEqual(data["toppings"][0].values["price"], 100)
+
+	def test_a_variant_of_a_dish_that_is_not_on_the_menu_is_reported(self):
+		_data, errors = reader.read_pack(self.pack([self.variant_row(base="ない品")]))
+		self.assertTrue(any("ない品" in e and "メニュー" in e and "シートにありません" in e for e in errors), errors)
+
+	def test_a_variant_named_like_a_dish_of_the_menu_is_reported(self):
+		_data, errors = reader.read_pack(self.pack([self.variant_row(name="にぎり（並）")]))
+		self.assertTrue(any("にぎり（並）" in e and "同じ" in e for e in errors), errors)
+
+	def test_a_variant_name_used_twice_is_reported(self):
+		_data, errors = reader.read_pack(self.pack([self.variant_row(), self.variant_row()]))
+		self.assertTrue(any("6行目" in e and "5行目と同じ" in e for e in errors), errors)
+
+	def test_a_topping_needs_a_dish_or_a_course(self):
+		_data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(target=None)]))
+		self.assertTrue(any("対象の品名" in e and "対象の分類" in e for e in errors), errors)
+
+	def test_a_topping_cannot_have_both_a_dish_and_a_course(self):
+		_data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(course="握り")]))
+		self.assertTrue(any("どちらか" in e for e in errors), errors)
+
+	def test_a_topping_for_a_course_that_does_not_exist_is_reported(self):
+		_data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(target=None, course="ない分類")]))
+		self.assertTrue(any("ない分類" in e and "分類" in e for e in errors), errors)
+
+	def test_the_same_topping_of_the_same_dish_twice_is_reported(self):
+		_data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(), self.topping_row()]))
+		self.assertTrue(any("6行目" in e and "5行目と同じ" in e for e in errors), errors)
+
+	def test_a_topping_can_name_a_variant_to_have_its_own_price(self):
+		data, errors = reader.read_pack(self.pack([self.variant_row()], [self.topping_row(), self.topping_row(target="にぎり（上）", price=150)]))
+		self.assertEqual(errors, [])
+		self.assertEqual(data["toppings"][1].values["target"], "にぎり（上）")
+
+	def test_the_price_of_a_topping_may_be_zero(self):
+		data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(price=0)]))
+		self.assertEqual(errors, [])
+		self.assertEqual(data["toppings"][0].values["price"], 0)
+
+	def test_the_kind_of_a_topping_is_one_of_the_three_or_empty(self):
+		_data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(kind="料理")]))
+		self.assertTrue(any("種類" in e and "料理" in e for e in errors), errors)
+		data, errors = reader.read_pack(self.pack(toppings=[self.topping_row(kind="酒類")]))
+		self.assertEqual(errors, [])
+		self.assertEqual(data["toppings"][0].values["kind"], "酒類")

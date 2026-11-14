@@ -114,3 +114,49 @@ export function buildRows(
 
   return Array.from(rows.values());
 }
+
+export interface CarriedOver {
+  count: number;
+  total: number;
+  /** 'YYYY-MM-DD' of the oldest such invoice. */
+  oldestDate: string;
+}
+
+/** 'YYYY-MM-DD HH:mm:ss...' of an invoice; Frappe may send the time as "9:05:03.5" (no leading zero). */
+function postedAt(invoice: POSClosingInvoice): string | null {
+  if (!invoice.posting_date) return null;
+  const time = (invoice.posting_time || '00:00:00').replace(/^(\d):/, '0$1:');
+  return `${invoice.posting_date} ${time}`;
+}
+
+/**
+ * The invoices of the closing that were posted before this shift was opened: sales of an earlier
+ * day or shift that was never closed. The closing covers every unconsolidated invoice of the POS
+ * Profile (docs/design/pos-closing.md), so after a forgotten closing the next one holds two days;
+ * the dialog says so instead of letting the cashier think the sum is wrong. `periodStart` is the
+ * opening's `period_start_date` ('YYYY-MM-DD HH:mm:ss', site time like the invoices).
+ */
+export function carriedOver(
+  invoices: POSClosingInvoice[],
+  periodStart: string
+): CarriedOver | null {
+  if (!periodStart) return null;
+  let count = 0;
+  let total = 0;
+  let oldestDate = '';
+  invoices.forEach((invoice) => {
+    const when = postedAt(invoice);
+    if (!when || when >= periodStart) return;
+    count += 1;
+    total += Number(invoice.grand_total) || 0;
+    const date = invoice.posting_date as string;
+    if (!oldestDate || date < oldestDate) oldestDate = date;
+  });
+  return count ? { count, total, oldestDate } : null;
+}
+
+/** '2026-11-02' -> '11/02' */
+export function monthDay(date: string): string {
+  const [, month = '', day = ''] = date.split('-');
+  return `${month}/${day}`;
+}

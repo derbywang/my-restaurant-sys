@@ -48,6 +48,7 @@ export interface POSClosingPayment {
 export interface POSClosingInvoice {
   name: string;
   posting_date?: string;
+  posting_time?: string;
   customer?: string;
   is_return?: number;
   return_against?: string | null;

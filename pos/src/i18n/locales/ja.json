@@ -187,7 +187,7 @@
     "submit": "レジ締めをする",
     "submit_failed": "レジ締めに失敗しました",
     "load_failed": "締め情報の読み込みに失敗しました",
-    "help_expected": "本日の伝票に基づく、この支払方法のシステム上の想定金額です。",
+    "help_expected": "このレジの未締め伝票に基づく、この支払方法の予定額です（開始金額を含みます）。",
     "help_closing": "この支払方法で実際に数えた金額を入力してください。",
     "help_difference": "実際の金額から想定金額を引いた差額です。プラスは過剰、マイナスは不足を表します。",
     "validation_missing_rows": "送信前にすべての支払方法の締め金額を入力してください。",
@@ -198,7 +198,13 @@
     "confirm_submit": "はい、レジを締める",
     "confirm_back": "戻る",
     "checklist_skip": "あとで行う",
-    "checklist_skip_hint": "レジ締めはすでに送信済みです。このチェックリストは後から完了できます。"
+    "checklist_skip_hint": "レジ締めはすでに送信済みです。このチェックリストは後から完了できます。",
+    "col_mode": "支払方法",
+    "col_opening": "開始金額",
+    "col_expected": "予定額",
+    "col_closing": "実際の金額",
+    "col_difference": "差額",
+    "carried_over": "前回までの未締め伝票 {{count}}件 {{amount}}（{{date}} から）。この伝票も上の合計と予定額に含まれています。"
   },
   "checklist": {
     "title_opening": "開店チェックリスト",

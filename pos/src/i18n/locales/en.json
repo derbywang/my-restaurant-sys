@@ -187,7 +187,7 @@
     "submit": "Close POS",
     "submit_failed": "Failed to close POS",
     "load_failed": "Failed to load closing details",
-    "help_expected": "The amount the system expects for this payment mode, based on today's invoices.",
+    "help_expected": "The amount the system expects for this payment method, based on this register's unclosed invoices (opening amount included).",
     "help_closing": "Enter the actual amount you counted for this payment mode.",
     "help_difference": "Counted amount minus expected amount. Positive means an overage, negative means a shortage.",
     "validation_missing_rows": "Enter a closing amount for every payment mode before submitting.",
@@ -198,7 +198,13 @@
     "confirm_submit": "Yes, Close POS",
     "confirm_back": "Go Back",
     "checklist_skip": "Skip for now",
-    "checklist_skip_hint": "The POS close was already submitted. You can finish this checklist later."
+    "checklist_skip_hint": "The POS close was already submitted. You can finish this checklist later.",
+    "col_mode": "Payment method",
+    "col_opening": "Opening amount",
+    "col_expected": "Expected",
+    "col_closing": "Counted amount",
+    "col_difference": "Difference",
+    "carried_over": "Unclosed invoices from before: {{count}} ({{amount}}, since {{date}}). They are included in the totals and expected amounts above."
   },
   "checklist": {
     "title_opening": "Opening Checklist",

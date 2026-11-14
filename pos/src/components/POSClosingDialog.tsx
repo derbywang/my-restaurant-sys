@@ -17,6 +17,8 @@ import ClosingPaymentTable from './ClosingPaymentTable';
 import {
   aggregateInvoices,
   buildRows,
+  carriedOver,
+  monthDay,
   type AggregatedTotals,
   type OpeningBalanceDetail,
 } from '../lib/closing-rows';
@@ -104,6 +106,7 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
   const [isSubCashier, setIsSubCashier] = useState(false);
   const [periodEndDate, setPeriodEndDate] = useState<Date>(new Date());
   const [invoiceCount, setInvoiceCount] = useState(0);
+  const [carried, setCarried] = useState<ReturnType<typeof carriedOver>>(null);
   // The invoices this closing consolidates (main / single cashier). The POS Closing Entry
   // must list them in `pos_transactions`: ERPNext consolidates exactly those rows.
   const [closingInvoices, setClosingInvoices] = useState<POSClosingInvoice[]>([]);
@@ -190,6 +193,7 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
       ]);
 
       setInvoiceCount(invoices.length);
+      setCarried(carriedOver(invoices, ownEntry.period_start_date));
       setClosingInvoices(subCashier ? [] : invoices);
       const { totals: aggregatedTotals, expectedByMode } = aggregateInvoices(invoices);
       setTotals(aggregatedTotals);
@@ -463,6 +467,16 @@ const POSClosingDialog = ({ open, onOpenChange, onClosingSubmitted }: POSClosing
                   <p className="text-lg font-semibold text-gray-900">{invoiceCount}</p>
                 </div>
               </div>
+
+              {carried && (
+                <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                  {t('pos_closing.carried_over', {
+                    count: carried.count,
+                    amount: formatCurrency(carried.total),
+                    date: monthDay(carried.oldestDate),
+                  })}
+                </p>
+              )}
 
               {hasRows ? (
                 <ClosingPaymentTable

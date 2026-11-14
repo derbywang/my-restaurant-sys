@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateInvoices, buildRows, changePaymentRow } from './closing-rows';
+import { aggregateInvoices, buildRows, carriedOver, changePaymentRow, monthDay } from './closing-rows';
 import type { POSClosingInvoice, POSClosingPayment } from './pos-closing-api';
 
 const cash = (amount: number, account = 'Cash - A'): POSClosingPayment => ({
@@ -131,3 +131,49 @@ describe('a shift with cash and cashless payments', () => {
   });
 });
 
+
+describe('carriedOver (invoices still open from before this shift)', () => {
+  const at = (date: string, time: string, grand: number): POSClosingInvoice => ({
+    ...invoice([cash(grand)], 0, 'Cash - A', grand),
+    posting_date: date,
+    posting_time: time,
+  });
+
+  it('is null when every invoice was posted after the opening', () => {
+    const list = [at('2026-11-15', '10:05:00', 1000)];
+    expect(carriedOver(list, '2026-11-15 10:00:00')).toBeNull();
+  });
+
+  it('counts the invoices posted before the opening, with their total and the oldest date', () => {
+    const list = [
+      at('2026-11-03', '19:00:00', 3269),
+      at('2026-11-02', '12:30:00.123456', 4125),
+      at('2026-11-15', '10:05:00', 900),
+    ];
+    expect(carriedOver(list, '2026-11-15 10:00:00')).toEqual({
+      count: 2,
+      total: 7394,
+      oldestDate: '2026-11-02',
+    });
+  });
+
+  it('compares times without a leading zero ("9:05:03") correctly', () => {
+    const list = [at('2026-11-15', '9:05:03.5', 500), at('2026-11-15', '10:05:00', 900)];
+    expect(carriedOver(list, '2026-11-15 10:00:00')).toEqual({
+      count: 1,
+      total: 500,
+      oldestDate: '2026-11-15',
+    });
+  });
+
+  it('is null for an empty list or a missing opening time', () => {
+    expect(carriedOver([], '2026-11-15 10:00:00')).toBeNull();
+    expect(carriedOver([at('2026-11-02', '12:00:00', 1)], '')).toBeNull();
+  });
+});
+
+describe('monthDay', () => {
+  it('shows a date as MM/DD', () => {
+    expect(monthDay('2026-11-02')).toBe('11/02');
+  });
+});

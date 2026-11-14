@@ -187,7 +187,7 @@
     "submit": "交班",
     "submit_failed": "交班失败",
     "load_failed": "加载交班详情失败",
-    "help_expected": "系统根据今日账单计算出的该支付方式应有金额。",
+    "help_expected": "系统根据这个收银台尚未交班的账单算出的该支付方式应有金额（含开班金额）。",
     "help_closing": "请输入该支付方式实际清点的金额。",
     "help_difference": "清点金额减去应有金额的差额。正数为溢余，负数为短缺。",
     "validation_missing_rows": "提交前请输入每种支付方式的交班金额。",
@@ -198,7 +198,13 @@
     "confirm_submit": "是，交班",
     "confirm_back": "返回",
     "checklist_skip": "暂时跳过",
-    "checklist_skip_hint": "交班已提交，您可以稍后再完成此清单。"
+    "checklist_skip_hint": "交班已提交，您可以稍后再完成此清单。",
+    "col_mode": "支付方式",
+    "col_opening": "开班金额",
+    "col_expected": "应有金额",
+    "col_closing": "实际金额",
+    "col_difference": "差额",
+    "carried_over": "之前没结的账单 {{count}} 张 {{amount}}（{{date}} 起）。这些账单也包含在上面的合计和应有金额里。"
   },
   "checklist": {
     "title_opening": "开班检查清单",

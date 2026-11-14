@@ -42,6 +42,8 @@
 URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNext 对应的原方法对一遍，再在测试站点上运行测试。
 - **`POS Closing Entry`**：`override_doctype_class` → `ury.overrides.pos_closing_entry.URYPOSClosingEntry`，它是 `validate_pos_invoices` 的拷贝，只去掉“账单必须由交班人创建”一条；`override_whitelisted_methods` 替换了 `pos_closing_entry.get_pos_invoices`。升级后对比 ERPNext 的 `pos_closing_entry.py` 里这两个函数，并运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`
+- **登录会话（`Session.validate_user`）**：`ury/user_logins.py` 的 `patch_session_resume`（`ury/__init__.py` 启动时加载）给 Frappe 的 `Session.validate_user` 包了一层：账号不存在或已停用的残留登录当作游客，回到登录画面；`User` 的 `on_trash` / `on_update` 钩子在删除、停用账号时清掉它的全部登录。升级后对比 `frappe/sessions.py` 的 `Session.resume` / `validate_user`，并运行：
+  `bench --site ury-test.localhost run-tests --module ury.ury.api.test_stale_login`（真实登录和 HTTP，需要 8000 在运行；先走临时站点）
 - **`POS Invoice`**：`override_doctype_class` → `ury.overrides.pos_invoice.URYPOSInvoice`，`calculate_taxes_and_totals` 换成子类 `URYTaxesAndTotals`，只重写 `round_off_totals`（每个税率按账单合计只算一次税额，舍入方式取 POS Profile 的 `custom_tax_rounding`）。升级后对比 ERPNext `taxes_and_totals.py` 的 `calculate_taxes` / `round_off_totals` 以及 `AccountsController.calculate_taxes_and_totals`，并运行：
   `bench --site ury-test.localhost run-tests --module ury.overrides.test_pos_invoice`
 - **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。**改了模板或 `receipt.py` 的数据结构后，浏览器验证前必须先 `bench --site ury.localhost migrate`**（在开发站点 migrate 之前，先执行 `bench --site ury.localhost backup`；migrate 不会自动备份），否则站点里还是旧模板，新旧数据对不上（印出 `{{ no such element ... }}`）。`jp_receipt_data` 返回 `ReceiptData`，模板里缺失的字段按空字符串打印；新增字段时仍要这样写，不要把模板错误印到小票上。改了模板或 `receipt.py` 后运行：

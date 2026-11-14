@@ -384,6 +384,13 @@ def _check_site_settings():
 	return found
 
 
+def _check_error_traceback():
+	"""The error page shows the Traceback (technical English) to whoever meets an error when this is on (Frappe's default)."""
+	if frappe.db.get_single_value("System Settings", "allow_error_traceback"):
+		return [(FAIL, "System Settings 'Show Full Error' (allow_error_traceback) is on: the error page shows the traceback; turn it off")]
+	return []
+
+
 def _check_tax_id():
 	found = []
 	for company in {r.company for r in _restaurants() if r.company}:
@@ -641,6 +648,7 @@ CHECKS = (
 	("dishes without a price", _check_menu_prices),
 	("dishes not for self ordering", _check_not_for_self_ordering),
 	("site settings", _check_site_settings),
+	("error page", _check_error_traceback),
 	("registration number", _check_tax_id),
 	("receipt format", _check_receipt_format),
 	("payment method accounts", _check_payment_accounts),

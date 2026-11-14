@@ -309,6 +309,18 @@ class TestSiteAndPayment(Rollback, URYTestCase):
 		frappe.db.set_single_value("System Settings", "language", "ja")
 		self.assertFalse(mentions(levels(deploy_check._check_site_settings), "language"))
 
+	def test_the_full_error_page_is_off(self):
+		"""With it on, the error page of the shop shows the Traceback (technical English) to the staff and the guests."""
+		original = frappe.db.get_single_value("System Settings", "allow_error_traceback")
+		self.addCleanup(frappe.db.set_single_value, "System Settings", "allow_error_traceback", original)
+		frappe.db.set_single_value("System Settings", "allow_error_traceback", 1)
+		self.assertTrue(mentions(levels(deploy_check._check_error_traceback), "traceback", deploy_check.FAIL))
+		frappe.db.set_single_value("System Settings", "allow_error_traceback", 0)
+		self.assertEqual(levels(deploy_check._check_error_traceback), [])
+
+	def test_the_error_page_check_is_registered(self):
+		self.assertIn(deploy_check._check_error_traceback, [check for _name, check in deploy_check.CHECKS])
+
 	def test_the_registration_number(self):
 		frappe.db.set_value("Company", COMPANY, "tax_id", "T1234567890123")
 		self.assertFalse(mentions(levels(deploy_check._check_tax_id), COMPANY))

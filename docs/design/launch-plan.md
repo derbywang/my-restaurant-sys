@@ -197,6 +197,7 @@
 6. `bench --site <站点> set-maintenance-mode off`；`deploy_check`；让所有平板刷新页面一次。
 7. 更新前后各记一次 Error Log 总数。
 8. **浏览器要强制刷新**（电脑上 `Ctrl` + `Shift` + `R`；平板下拉刷新）：Desk 的列表脚本（例如设备列表的 `_list.js`）会被浏览器缓存，2026-11-08 改名后设备列表一直显示红色，强制刷新后才变绿。更新后核对静态文件版本已变（`bench build` 之后页面请求的文件名 / hash 变了），否则界面还在用旧代码。
+9. **正式站点把 System Settings 的 "Show Full Error and Allow Reporting of Issues to the Developer"（`allow_error_traceback`）设为 0**（2026-11-14 补；`deploy_check` 的 `error page` 检查，开着就是 FAIL）：Frappe 默认是 1，正式环境出错时错误页会把完整的 Traceback（技术性的英文）显示给店员和顾客；设为 0 后只显示简短的错误页，Traceback 仍记在 Error Log 里。做法：`bench --site <站点> set-value`不适用（它是 Single 设置），用 Desk 的 System Settings 页面，或 `bench --site <站点> execute frappe.client.set_value --kwargs '{"doctype":"System Settings","fieldname":"allow_error_traceback","value":0}'`（先按"改站点数据要确认"的规则列出）。开发站点保持 1，方便调试。
 
 **frappe_docker 会不会自动保证这个顺序：我没有核实，不要当作会。** 我印象中它的生产配置只是换镜像、重启容器，`migrate` 要自己执行（官方的更新说明里是单独的一步），也没有自动开维护模式；**所以上面的顺序要手工做，写成一个脚本**。12/1～12/4 的部署演练里用演练站点实际做一次更新（包括带结构改动的版本），确认容器重启期间的行为后再写进部署步骤。
 

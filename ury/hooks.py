@@ -174,7 +174,12 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
-    "User": {"validate": "ury.user_security.check_privileged_roles"},
+    "User": {
+        "validate": "ury.user_security.check_privileged_roles",
+        # the logins of an account that is deleted or disabled end with it, whoever does it (ury/user_logins.py)
+        "on_update": "ury.user_logins.end_logins_of_a_gone_account",
+        "on_trash": "ury.user_logins.end_logins_of_a_gone_account",
+    },
     "POS Invoice": {
         "before_insert": "ury.ury.hooks.ury_pos_invoice.before_insert",
         "before_validate": "ury.ury.hooks.ury_pos_invoice.before_validate",

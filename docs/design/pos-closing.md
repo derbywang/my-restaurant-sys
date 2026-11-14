@@ -37,6 +37,14 @@
 - 开班时间之后才结账的、开班前创建的、开班时间之前已 posting 但从未合并的账单都包含在内；交班时间之后的账单留给下一班
 - 多收银员：主收银员的交班同时合并自己和副收银员的账单
 
+## 4.1 忘了交班时的提示（2026-11-14）
+
+交班范围是该 POS Profile 全部未合并账单，所以某天忘了交班，下一班的交班会把两天的销售一起算进去。画面上要让收银员看得出来：
+
+- **交班画面**（`pos/src/lib/closing-rows.ts` 的 `carriedOver`）：汇总上方显示「前回までの未締め伝票 N件 ¥X（M/D から）」，只统计过账时间早于本班开班时间的账单；数据来自画面已有的账单。
+- **开班画面**：`get_pos_opening_screen_data` 返回 `unclosed_invoices`（`pos_closing.unclosed_summary`：张数、合计、最早日期；没有则为 null）。有的话画面最上方显示黄色提示，并要勾选「内容を確認しました」才能点「レジ開けをする」（`pos/src/lib/unclosed-notice.ts`）；不需要店长确认。
+- 测试：`ury.ury.api.test_unclosed_summary`（后端），`cd pos && yarn test`（`closing-rows.spec.ts`、`unclosed-notice.spec.ts`）。
+
 ## 5. 待办
 
 ### 5.1 主收银员自己清点的金额没有被计入（多收银员模式）——待单独调查和修复

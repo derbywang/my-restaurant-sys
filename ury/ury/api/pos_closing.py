@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import flt, get_datetime, now_datetime
 
 from ury.ury_pos.api import getBranch
 
@@ -40,6 +40,21 @@ def unconsolidated_invoices(pos_profile, end=None):
 		pluck="name",
 	)
 	return rows
+
+
+def unclosed_summary(pos_profile, before=None):
+	"""How many invoices of `pos_profile` wait for a closing, for the opening screen: the same ones
+	`unconsolidated_invoices` lists (posted up to `before`, default now), as
+	`{"count", "total", "oldest_date"}`, or None when there are none. Read only."""
+	names = unconsolidated_invoices(pos_profile, before)
+	if not names:
+		return None
+	rows = frappe.get_all("POS Invoice", filters={"name": ["in", names]}, fields=["grand_total", "posting_date"])
+	return {
+		"count": len(rows),
+		"total": sum(flt(row.grand_total) for row in rows),
+		"oldest_date": str(min(row.posting_date for row in rows)),
+	}
 
 
 @frappe.whitelist()

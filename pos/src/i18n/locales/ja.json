@@ -169,7 +169,11 @@
     "opening_balance_help": "釣銭準備金は、このシフトの開始時に申告する現金・各支払方法の金額です。レジ締めの際に売上との突合せに使用します。",
     "zero_balance_warning": "すべての支払方法で {{amount}} のまま開店しようとしています。このまま進める場合は、もう一度「確認して開店」を押してください。",
     "confirm_zero_balance": "確認して開店",
-    "session_opened_success": "レジを開けました"
+    "session_opened_success": "レジを開けました",
+    "unclosed_title": "前回のレジ締めが済んでいない伝票があります",
+    "unclosed_body": "{{count}}件・{{amount}}（{{date}} から）の伝票が、まだレジ締めされていません。今回のレジ締めの金額に含まれます。",
+    "unclosed_advice": "前回の締め忘れでないか、確認してからレジ開けをしてください。",
+    "unclosed_confirm": "内容を確認しました"
   },
   "pos_closing": {
     "title": "レジ締め",

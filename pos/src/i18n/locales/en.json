@@ -169,7 +169,11 @@
     "opening_balance_help": "Opening Balance is the starting cash/payment amount you're declaring for this shift. It's used to reconcile against sales when you close out.",
     "zero_balance_warning": "You're opening with {{amount}} across all payment modes. Tap \"Confirm & Open\" again to continue anyway.",
     "confirm_zero_balance": "Confirm & Open",
-    "session_opened_success": "POS session opened"
+    "session_opened_success": "POS session opened",
+    "unclosed_title": "Some invoices were never closed",
+    "unclosed_body": "{{count}} invoices, {{amount}} (since {{date}}) have not been closed yet. They are included in this shift's closing.",
+    "unclosed_advice": "Please check that the last closing was not forgotten before you open the register.",
+    "unclosed_confirm": "I have checked this"
   },
   "pos_closing": {
     "title": "Close POS",

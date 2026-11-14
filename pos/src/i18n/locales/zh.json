@@ -169,7 +169,11 @@
     "opening_balance_help": "备用金是您为本班次申报的起始现金/支付金额，交班时用于与销售额核对。",
     "zero_balance_warning": "您所有支付方式的备用金均为 {{amount}}。如仍要继续，请再次点击“确认并开班”。",
     "confirm_zero_balance": "确认并开班",
-    "session_opened_success": "已开班"
+    "session_opened_success": "已开班",
+    "unclosed_title": "还有没结的账单",
+    "unclosed_body": "{{count}} 张・{{amount}}（{{date}} 起）的账单还没有交班，会算进这次交班的金额。",
+    "unclosed_advice": "请确认是不是上次忘了交班，再开班。",
+    "unclosed_confirm": "我已确认"
   },
   "pos_closing": {
     "title": "交班",

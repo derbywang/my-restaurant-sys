@@ -1345,6 +1345,13 @@ def get_pos_opening_screen_data() -> dict:
         except Exception:
             daily_close_pending = False
 
+    # Invoices that were never closed (a forgotten closing): the screen asks the cashier to confirm them.
+    unclosed_invoices = None
+    if pos_profile_name:
+        from ury.ury.api.pos_closing import unclosed_summary
+
+        unclosed_invoices = unclosed_summary(pos_profile_name)
+
     # Multi-cashier status for the selected POS Profile.
     multi_cashier = _get_main_cashier_status(pos_profile_name)
 
@@ -1398,6 +1405,7 @@ def get_pos_opening_screen_data() -> dict:
         "company_currency": company_currency,
         "currency_symbol": currency_symbol,
         "allowed_profiles": allowed_profiles,
+        "unclosed_invoices": unclosed_invoices,
         "selected_profile": pos_profile_name,
         "branch": pos_profile_data.get("branch") if pos_profile_data else None,
         "restaurant": pos_profile_data.get("restaurant") if pos_profile_data else None,

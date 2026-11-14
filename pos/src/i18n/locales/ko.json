@@ -169,7 +169,11 @@
     "opening_balance_help": "시재금은 이번 근무 시작 시 신고하는 현금/결제 수단별 금액입니다. 마감 시 매출과 대조하는 데 사용됩니다.",
     "zero_balance_warning": "모든 결제 수단이 {{amount}}으로 개점됩니다. 그대로 진행하려면 \"확인 후 개점\"을 다시 눌러 주세요.",
     "confirm_zero_balance": "확인 후 개점",
-    "session_opened_success": "개점되었습니다"
+    "session_opened_success": "개점되었습니다",
+    "unclosed_title": "마감하지 않은 전표가 있습니다",
+    "unclosed_body": "{{count}}건・{{amount}} ({{date}}부터)의 전표가 아직 마감되지 않았습니다. 이번 마감 금액에 포함됩니다.",
+    "unclosed_advice": "이전 마감을 잊은 것은 아닌지 확인한 뒤 계산대를 열어 주세요.",
+    "unclosed_confirm": "내용을 확인했습니다"
   },
   "pos_closing": {
     "title": "POS 마감",

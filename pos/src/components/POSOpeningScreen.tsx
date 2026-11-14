@@ -12,6 +12,8 @@ import {
 } from '../lib/pos-opening-api';
 import { t } from '../i18n';
 import { modeTypesOf } from '../lib/shift-gate';
+import { acknowledgementMissing } from '../lib/unclosed-notice';
+import { monthDay } from '../lib/closing-rows';
 import POSOpeningPaymentTable from './POSOpeningPaymentTable';
 
 type OpeningBlockingState =
@@ -46,6 +48,7 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
   const [error, setError] = useState<string | null>(null);
   const [balances, setBalances] = useState<POSOpeningPayment[]>([]);
   const [zeroBalanceConfirmed, setZeroBalanceConfirmed] = useState(false);
+  const [unclosedConfirmed, setUnclosedConfirmed] = useState(false);
 
   const sessionStart = useMemo(() => {
     const timestamp = context?.session_start || new Date().toISOString();
@@ -85,6 +88,7 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
       }))
     );
     setZeroBalanceConfirmed(false);
+    setUnclosedConfirmed(false);
   }, [context]);
 
   const handleProfileChange = async (value: string) => {
@@ -132,6 +136,7 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
     !isLoading &&
     !isSubmitting &&
     blockingError === BLOCKING_ERROR_NONE &&
+    !acknowledgementMissing(context?.unclosed_invoices, unclosedConfirmed) &&
     context?.selected_profile != null;
 
   const mapCreateError = (message: string): string => {
@@ -270,6 +275,36 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
         </div>
 
         <div className="px-8 py-6 space-y-8">
+          {/* Invoices that were never closed: confirm before the register is opened */}
+          {context?.unclosed_invoices && context.unclosed_invoices.count > 0 && (
+            <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div className="space-y-1 text-sm text-amber-900">
+                  <p className="font-semibold">{t('pos_opening.unclosed_title')}</p>
+                  <p>
+                    {t('pos_opening.unclosed_body', {
+                      count: context.unclosed_invoices.count,
+                      amount: formatCurrency(context.unclosed_invoices.total),
+                      date: monthDay(context.unclosed_invoices.oldest_date),
+                    })}
+                  </p>
+                  <p>{t('pos_opening.unclosed_advice')}</p>
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={unclosedConfirmed}
+                  onChange={(e) => setUnclosedConfirmed(e.target.checked)}
+                  disabled={isSubmitting}
+                  className="h-4 w-4"
+                />
+                {t('pos_opening.unclosed_confirm')}
+              </label>
+            </div>
+          )}
+
           {/* Session Details */}
           <section className="space-y-4">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">

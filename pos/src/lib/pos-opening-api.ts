@@ -40,7 +40,11 @@ export interface POSOpeningPermissions {
   submit: boolean;
 }
 
+import type { UnclosedInvoices } from './unclosed-notice';
+
 export interface POSOpeningContext {
+  /** invoices that were never closed (a forgotten closing), or null */
+  unclosed_invoices?: UnclosedInvoices | null;
   company: string;
   company_currency?: string;
   currency_symbol?: string;

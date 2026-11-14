@@ -24,6 +24,7 @@ STEPS = (
     ("Japan tax setup", "ury.setup.jp_tax:apply_jp_tax_setup"),
     ("JPY number format", "ury.setup.jp_currency:apply_jpy_format"),
     ("default app", "ury.setup.wizard_defaults:apply_default_app"),
+    ("login page settings", "ury.setup.login_settings:apply_login_settings"),
 )
 
 

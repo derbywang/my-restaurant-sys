@@ -337,6 +337,18 @@ class TestSiteAndPayment(Rollback, URYTestCase):
 		frappe.db.set_single_value("System Settings", "allow_error_traceback", 0)
 		self.assertEqual(levels(deploy_check._check_error_traceback), [])
 
+	def test_the_login_by_email_link_is_off(self):
+		"""The login page of the shop offers an ID and a password only."""
+		original = frappe.db.get_single_value("System Settings", "login_with_email_link")
+		self.addCleanup(frappe.db.set_single_value, "System Settings", "login_with_email_link", original)
+		frappe.db.set_single_value("System Settings", "login_with_email_link", 1)
+		self.assertTrue(mentions(levels(deploy_check._check_login_page), "email link", deploy_check.WARN))
+		frappe.db.set_single_value("System Settings", "login_with_email_link", 0)
+		self.assertEqual(levels(deploy_check._check_login_page), [])
+
+	def test_the_login_page_check_is_registered(self):
+		self.assertIn(deploy_check._check_login_page, [check for _name, check in deploy_check.CHECKS])
+
 	def test_the_error_page_check_is_registered(self):
 		self.assertIn(deploy_check._check_error_traceback, [check for _name, check in deploy_check.CHECKS])
 

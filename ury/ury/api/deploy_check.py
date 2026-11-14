@@ -397,6 +397,13 @@ def _check_error_traceback():
 	return []
 
 
+def _check_login_page():
+	"""The login page offers an ID and a password only: the login by a link in a mail is one more way in."""
+	if frappe.db.get_single_value("System Settings", "login_with_email_link"):
+		return [(WARN, "System Settings 'Login with email link' is on: the login page offers it (メールのリンクでログイン); turn it off")]
+	return []
+
+
 def _check_tax_id():
 	found = []
 	for company in {r.company for r in _restaurants() if r.company}:
@@ -655,6 +662,7 @@ CHECKS = (
 	("dishes not for self ordering", _check_not_for_self_ordering),
 	("site settings", _check_site_settings),
 	("error page", _check_error_traceback),
+	("login page", _check_login_page),
 	("registration number", _check_tax_id),
 	("receipt format", _check_receipt_format),
 	("payment method accounts", _check_payment_accounts),

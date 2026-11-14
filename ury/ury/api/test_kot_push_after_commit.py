@@ -52,7 +52,9 @@ class TestTheScreenFindsTheTicketWhenTheyArePushed(URYFlowTestCase):
 
 		open_pos(CASHIER)
 		invoice = place_order(CASHIER, [(FOOD_ITEM, 1)], order_type="Take Away")
-		probe = Probe([CAPTAIN], seconds=6, fetch_prefix="kot_update_")  # the captain stands for the kitchen account
+		# the captain stands for the kitchen account. The probe listens for 15 s: the cancel itself takes 1 to 4 s on this machine
+		# (3.3 s on 2026-11-15), then 2.5 s before the commit; with 6 s the push came after the probe had stopped.
+		probe = Probe([CAPTAIN], seconds=15, fetch_prefix="kot_update_")
 		probe.start()
 		try:
 			cancel_kot(invoice)

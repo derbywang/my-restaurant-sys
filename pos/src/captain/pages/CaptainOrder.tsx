@@ -23,6 +23,8 @@ import CaptainOrderLine from '../components/CaptainOrderLine';
 import CaptainActionsMenu from '../components/CaptainActionsMenu';
 import ProductDialog from '../../components/ProductDialog';
 import CommentDialog from '../../components/CommentDialog';
+import CaptainUserMenu from '../components/CaptainUserMenu';
+import { hasUnsentChanges } from '../../lib/staff-logout';
 import TableTransferDialog from '../../components/TableTransferDialog';
 import CaptainTransferDialog from '../../components/CaptainTransferDialog';
 import { CustomerSelect } from '../../components/CustomerSelect';
@@ -610,6 +612,7 @@ export default function CaptainOrder() {
 
         <div className="flex items-center gap-2">
           <SoundToggle />
+          <CaptainUserMenu hasUnsent={hasUnsentChanges({ newOrChanged: newOrChangedLines, reductionPending: reductionPendingLines })} />
           {canModify && (
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1 lg:hidden">
               <button

@@ -4,6 +4,7 @@ import { AlertTriangle, Square } from 'lucide-react';
 import { Button, Spinner } from '@ury/ui';
 import { useCaptainContext } from '../hooks/useCaptainContext';
 import LanguageMenu from '../../components/LanguageMenu';
+import CaptainUserMenu from '../components/CaptainUserMenu';
 import SelfOrderToggle from '../../components/SelfOrderToggle';
 import { useSelfOrderTables } from '../../hooks/useSelfOrderTables';
 import { t } from '../../i18n';
@@ -210,6 +211,7 @@ export default function CaptainTables() {
             </Button>
             <SoundToggle />
             <LanguageMenu />
+            <CaptainUserMenu />
           </div>
         </div>
 

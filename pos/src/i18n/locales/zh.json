@@ -558,7 +558,12 @@
     "update_order": "更新订单",
     "send_order": "发送订单",
     "context_load_failed_message": "加载服务员信息失败。",
-    "table_context_load_failed": "加载桌台订单信息失败。"
+    "table_context_load_failed": "加载桌台订单信息失败。",
+    "account": "账号",
+    "logout_unsent_title": "还有未发送的菜品",
+    "logout_unsent_message": "新增或撤回的菜品还没有发送到厨房。现在退出登录，这些内容会丢失。",
+    "logout_keep_working": "继续操作",
+    "logout_anyway": "仍然退出登录"
   },
   "dashboard": {
     "just_now": "刚刚",

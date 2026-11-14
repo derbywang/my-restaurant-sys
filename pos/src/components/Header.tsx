@@ -15,6 +15,7 @@ import { useRootStore } from '../store/root-store';
 import { usePOSStore } from '../store/pos-store';
 import type { RootState } from '../store/root-store';
 import { logout } from '@ury/core';
+import { logoutToLogin } from '../lib/staff-logout';
 import { showToast } from '@ury/ui';
 import LanguageMenu from './LanguageMenu';
 import SoundToggle from './SoundToggle';
@@ -89,14 +90,14 @@ const Header = () => {
     setShowUserMenu(!showUserMenu);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      window.location.href = '/login?redirect-to=%2Fpos';
-    } catch (error) {
-      showToast.error(t('errors.failed_logout'));
-    }
-  };
+  const handleLogout = () =>
+    logoutToLogin({
+      logout,
+      go: (url) => {
+        window.location.href = url;
+      },
+      onError: () => showToast.error(t('errors.failed_logout')),
+    });
 
   const handleClearCache = () => {
     // Clear all local storage

@@ -558,7 +558,12 @@
     "update_order": "Update Order",
     "send_order": "Send Order",
     "context_load_failed_message": "Failed to load captain context.",
-    "table_context_load_failed": "Failed to load table order context."
+    "table_context_load_failed": "Failed to load table order context.",
+    "account": "Account",
+    "logout_unsent_title": "Dishes not sent yet",
+    "logout_unsent_message": "Dishes you added or took back are not sent to the kitchen yet. If you log out now, they are lost.",
+    "logout_keep_working": "Keep working",
+    "logout_anyway": "Log out anyway"
   },
   "dashboard": {
     "just_now": "just now",

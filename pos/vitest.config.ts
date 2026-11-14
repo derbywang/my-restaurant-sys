@@ -4,5 +4,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts'],
+    // the first test of a file that loads the big store imports it (several seconds when the files run side by side)
+    testTimeout: 20000,
   },
 })

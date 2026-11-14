@@ -1,11 +1,14 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ItemOptionsDialog from '../components/ItemOptionsDialog'
 import ClosedNotice from '../components/ClosedNotice'
 import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
 import SplitNotice from '../components/SplitNotice'
 import { formatCurrency } from '@ury/core'
 import { useOrderingSession } from '../hooks/useOrderingSession'
-import CartNote from '../components/CartNote'
+import CartLineRow from '../components/CartLineRow'
+import { priceText } from './shared/MenuGrid'
+import { cartCountFor } from '../lib/cart'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -28,7 +31,11 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     billRequested,
     paymentRequest,
     payingOnline,
-    addToCart,
+    selectItem,
+    addLine,
+    optionsItem,
+    closeOptions,
+    incrementCart,
     decrementCart,
     setCartNote,
     submitCart,
@@ -81,6 +88,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     <div className="min-h-screen pb-28">
       {closed && <ClosedNotice kind={closed} />}
       <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
+      <ItemOptionsDialog item={optionsItem} session={context?.session} language={language} capabilities={context?.capabilities} onAdd={addLine} onClose={closeOptions} />
       <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
         <h1 className="text-lg font-semibold">
           {isPickup ? t('header.pickup') : context?.table ? t('header.table', { table: context.table }) : t('header.order')}
@@ -157,7 +165,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
         {menu.map((item) => (
           <button
             key={item.item}
-            onClick={() => addToCart(item)}
+            onClick={() => selectItem(item)}
             className="flex flex-col overflow-hidden rounded-lg border text-left transition active:scale-[0.98]"
           >
             {context?.capabilities.show_item_images && item.item_image && (
@@ -165,9 +173,9 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
             )}
             <div className="p-2">
               <div className="text-sm font-medium">{item.item_name}</div>
-              <div className="text-sm text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
-              {cart[item.item] && (
-                <div className="mt-1 text-xs font-semibold text-primary">{t('cart.in_cart', { count: cart[item.item].qty })}</div>
+              <div className="text-sm text-muted-foreground tabular-nums">{priceText(item)}{t('price.incl_tax')}</div>
+              {cartCountFor(cart, item.item) > 0 && (
+                <div className="mt-1 text-xs font-semibold text-primary">{t('cart.in_cart', { count: cartCountFor(cart, item.item) })}</div>
               )}
             </div>
           </button>
@@ -178,31 +186,15 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
         <div className="fixed inset-x-0 bottom-0 border-t bg-background p-4">
           <ul className="mb-2 max-h-32 space-y-1 overflow-y-auto text-sm">
             {cartItems.map((entry) => (
-              <li key={entry.item.item}>
-<div className="flex items-center justify-between">
-                <span>{entry.item.item_name}</span>
-                <span className="flex items-center gap-2">
-                  <button
-                    onClick={() => decrementCart(entry.item.item)}
-                    className="h-6 w-6 rounded-full border text-xs leading-none"
-                    aria-label={`Remove one ${entry.item.item_name}`}
-                  >
-                    −
-                  </button>
-                  {entry.qty}
-                  <button
-                    onClick={() => addToCart(entry.item)}
-                    className="h-6 w-6 rounded-full border text-xs leading-none"
-                    aria-label={`Add one more ${entry.item.item_name}`}
-                  >
-                    +
-                  </button>
-                </span>
-              </div>
-{context?.capabilities.item_notes_enabled && (
-<CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => setCartNote(entry.item.item, value)} />
-)}
-</li>
+              <CartLineRow
+                key={entry.key}
+                entry={entry}
+                notesEnabled={Boolean(context?.capabilities.item_notes_enabled)}
+                onIncrement={incrementCart}
+                onDecrement={decrementCart}
+                onNote={setCartNote}
+                buttonClassName="h-6 w-6 rounded-full border text-xs leading-none"
+              />
             ))}
           </ul>
           <div className="mb-2 flex items-center justify-between text-sm font-semibold">

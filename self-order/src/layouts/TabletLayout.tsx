@@ -1,4 +1,5 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ItemOptionsDialog from '../components/ItemOptionsDialog'
 import ClosedNotice from '../components/ClosedNotice'
 import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
@@ -37,7 +38,11 @@ function TabletLayout({ initialContext }: LayoutProps) {
     error,
     billRequested,
     payingOnline,
-    addToCart,
+    selectItem,
+    addLine,
+    optionsItem,
+    closeOptions,
+    incrementCart,
     decrementCart,
     setCartNote,
     submitCart,
@@ -111,6 +116,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
     <div className="flex h-screen flex-col overflow-hidden">
       {closed && <ClosedNotice kind={closed} />}
       <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
+      <ItemOptionsDialog item={optionsItem} session={context?.session} language={language} capabilities={context?.capabilities} onAdd={addLine} onClose={closeOptions} />
       <header className="flex items-center justify-between border-b bg-background/95 px-6 py-4">
         <h1 className="text-xl font-semibold">
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
@@ -136,7 +142,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
             menu={menu}
             cart={cart}
             capabilities={context?.capabilities}
-            onAdd={addToCart}
+            onAdd={selectItem}
             gridClassName="grid grid-cols-3 gap-4 lg:grid-cols-4"
             cardClassName="flex min-w-[150px] flex-col overflow-hidden rounded-xl border text-left transition active:scale-[0.98]"
             imageClassName="h-32 w-full object-cover"
@@ -154,7 +160,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
           submitting={submitting}
           billRequested={billRequested}
           payingOnline={payingOnline}
-          onIncrement={addToCart}
+          onIncrement={incrementCart}
           onDecrement={decrementCart}
           onNoteChange={setCartNote}
           onSubmit={submitCart}

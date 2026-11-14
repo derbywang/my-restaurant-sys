@@ -47,6 +47,40 @@ export interface MenuItem {
   item_image: string | null
   course: string | null
   course_label: string | null
+  /** The dish has grades (variants) or toppings: its card opens the dialog instead of adding one at once. */
+  has_options?: boolean
+  /** The card stands for a group of grades and shows the lowest price: 「¥1,100〜」. */
+  price_from?: boolean
+}
+
+/** A grade or a topping in the dialog of a dish; the price is the price of one with the tax. */
+export interface OptionItem {
+  item_code: string
+  item_name: string
+  image: string | null
+  price_incl_tax: number
+  age_check: boolean
+  /** A topping: its name without the 「dish・」 in front (the dish is named above it). */
+  label?: string
+}
+
+/** A grade (a dish of the group of variants) with the toppings of its own. */
+export interface Grade extends OptionItem {
+  addons: OptionItem[]
+}
+
+/** What the dialog of a dish shows (`get_customer_product`). */
+export interface ProductInfo {
+  item_code: string
+  item_name: string
+  description: string | null
+  image: string | null
+  price_incl_tax: number
+  age_check: boolean
+  /** The grades of the group of variants (the dish itself among them); empty when the dish has none. */
+  variants: Grade[]
+  /** The toppings of this dish. */
+  addons: OptionItem[]
 }
 
 export interface MenuResponse {
@@ -170,6 +204,12 @@ export async function getDeviceStatus(deviceId: string, deviceCredential: string
     device_id: deviceId,
     device_credential: deviceCredential,
   })
+  return response.message
+}
+
+/** The dialog of a dish: its grades and toppings with the price with the tax, in the language of the session. */
+export async function getProduct(session: string, itemCode: string): Promise<ProductInfo> {
+  const response = await call.get<FrappeResponse<ProductInfo>>(`${M}.get_customer_product`, { session, item_code: itemCode })
   return response.message
 }
 

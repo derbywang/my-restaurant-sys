@@ -13,10 +13,12 @@
     "items": "{{count}}件",
     "place": "下单",
     "placing": "正在发送…",
-    "empty_hint": "点击菜单中的菜品，即可加入购物车。"
+    "empty_hint": "点击菜单中的菜品，即可加入购物车。",
+    "addon_line": "＋{{label}}"
   },
   "price": {
-    "incl_tax": "（含税）"
+    "incl_tax": "（含税）",
+    "from": "{{price}}起"
   },
   "age": {
     "question": "您已年满20岁吗？",
@@ -109,5 +111,17 @@
     "not_recognized_title": "此设备尚未登记",
     "not_set_title": "此设备尚未设置",
     "not_set_message": "请告知店员。（店员请注意：请用设置链接重新设置此设备）"
+  },
+  "options": {
+    "grade_heading": "种类（单选）",
+    "addon_heading": "加料・追加（可多选）",
+    "quantity": "数量",
+    "quantity_less": "减少数量",
+    "quantity_more": "增加数量",
+    "subtotal": "小计（含税）",
+    "add_to_cart": "加入购物车",
+    "close": "关闭",
+    "loading": "正在加载…",
+    "failed": "加载失败，请重试。"
   }
 }

@@ -26,13 +26,30 @@ export function languageFromPhone(
   return sessionLanguage
 }
 
-/** The cart after the menu came in another language: the dishes are named as the new menu names them. */
-export function renameCart(cart: Cart, menu: readonly MenuItem[]): Cart {
+/**
+ * The cart after the menu came in another language: the dishes are named as the new menu names them. The grades and
+ * the toppings have no card on the menu; their new names come from the dialog of their dish (`optionNames`, by code).
+ */
+export function renameCart(
+  cart: Cart,
+  menu: readonly MenuItem[],
+  optionNames: Record<string, { item_name: string; label?: string }> = {},
+): Cart {
   const byCode = new Map(menu.map((item) => [item.item, item]))
   return Object.fromEntries(
-    Object.entries(cart).map(([code, entry]) => {
-      const fresh = byCode.get(code)
-      return [code, fresh ? { ...entry, item: { ...entry.item, item_name: fresh.item_name, course_label: fresh.course_label } } : entry]
+    Object.entries(cart).map(([key, entry]) => {
+      const fresh = byCode.get(entry.item.item)
+      const named = optionNames[entry.item.item]
+      const item = fresh
+        ? { ...entry.item, item_name: fresh.item_name, course_label: fresh.course_label }
+        : named
+          ? { ...entry.item, item_name: named.item_name }
+          : entry.item
+      const addons = entry.addons.map((a) => {
+        const found = optionNames[a.item]
+        return found ? { ...a, item_name: found.item_name, label: found.label ?? found.item_name } : a
+      })
+      return [key, { ...entry, item, addons }]
     }),
   )
 }

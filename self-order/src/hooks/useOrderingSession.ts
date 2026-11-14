@@ -7,12 +7,15 @@ import {
   confirmAge,
   getMenu,
   getStoredContext,
+  getProduct,
   getStoredToken,
   setSessionLanguage,
   previewCart,
   requestBill,
   type CartPreview,
   type CustomerOrder,
+  type Grade,
+  type OptionItem,
   type MenuItem,
   type OrderingContext,
   type PaymentRequestResult,
@@ -32,11 +35,15 @@ import {
   addToCart as addToCartLine,
   decrementCart as decrementCartLine,
   hasAgeCheckedDish,
+  incrementCart as incrementCartLine,
+  lineKey,
+  NOTE_MAX_LENGTH,
   setNote,
   toPayload,
   toPreviewPayload,
   type Cart,
 } from '../lib/cart'
+import { cartAddon, cartMain, needsAgeQuestion } from '../lib/options'
 
 /** The total is asked of the server this long after the last change of the cart. */
 const PREVIEW_DELAY_MS = 300
@@ -93,7 +100,11 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   // why the ordering is over for this page (the table was closed ...): a notice replaces the menu and the cart
   const [closed, setClosed] = useState<FailureKind | null>(null)
   // the alcohol the guest is being asked about ("20歳以上ですか？"); it is not in the cart until the answer is yes
-  const [ageQuestion, setAgeQuestion] = useState<MenuItem | null>(null)
+  const [ageQuestion, setAgeQuestion] = useState<{ item_name: string } | null>(null)
+  // what goes in the cart once the guest has answered 「はい」 (a dish, or a dish with grade and toppings from the dialog)
+  const pendingAdd = useRef<(() => void) | null>(null)
+  // the card whose dialog (grades, toppings) is open
+  const [optionsItem, setOptionsItem] = useState<MenuItem | null>(null)
   // asked once per session: after a yes the next alcohol goes straight in (the server keeps the answer too)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
 
@@ -269,28 +280,70 @@ export function useOrderingSession(initialContext?: OrderingContext) {
       const menuResponse = await getMenu(context.session)
       const menuItems = menuResponse.items.filter((item) => !item.disabled)
       setMenu(menuItems)
-      setCart((prev) => renameCart(prev, menuItems))
+      // the grades and toppings in the cart are not on the menu: their names come from the dialog of their dish
+      const optionNames: Record<string, { item_name: string; label?: string }> = {}
+      const cards = [...new Set(Object.values(cart).filter((e) => e.addons.length > 0 || e.card !== e.item.item).map((e) => e.card))]
+      const products = await Promise.allSettled(cards.map((card) => getProduct(context.session, card)))
+      for (const found of products) {
+        if (found.status !== 'fulfilled') continue
+        for (const grade of found.value.variants) {
+          optionNames[grade.item_code] = { item_name: grade.item_name }
+          for (const a of grade.addons) optionNames[a.item_code] = { item_name: a.item_name, label: a.label }
+        }
+        for (const a of found.value.addons) optionNames[a.item_code] = { item_name: a.item_name, label: a.label }
+      }
+      setCart((prev) => renameCart(prev, menuItems, optionNames))
       await loadOrder(context.session)
     } catch (err) {
       handleFailure(err)
     }
   }
 
-  // the first alcohol dish of a session is asked about; after a yes the next ones are not
-  function addToCart(item: MenuItem) {
-    if (item.age_check && !ageConfirmed) {
-      setAgeQuestion(item)
+  // the first alcohol of a session is asked about; after a yes the next ones are not
+  function askAgeThen(name: string, add: () => void) {
+    if (ageConfirmed) {
+      add()
       return
     }
-    setCart((prev) => addToCartLine(prev, item))
+    pendingAdd.current = add
+    setAgeQuestion({ item_name: name })
+  }
+
+  // a dish without grades or toppings goes in the cart at once (one of it)
+  function addToCart(item: MenuItem) {
+    const add = () => setCart((prev) => addToCartLine(prev, item))
+    if (item.age_check) askAgeThen(item.item_name, add)
+    else add()
+  }
+
+  // the card of the grid was touched: a dish with grades or toppings opens its dialog
+  function selectItem(item: MenuItem) {
+    if (item.has_options) setOptionsItem(item)
+    else addToCart(item)
+  }
+
+  // 「カートに入れる」 of the dialog: the grade and the toppings (as many as the dish) go in the cart as one line
+  function addLine(card: MenuItem, grade: Grade, addons: OptionItem[], qty: number, note: string) {
+    const main = cartMain(card, grade)
+    const lineAddons = addons.map(cartAddon)
+    const add = () => {
+      setCart((prev) => {
+        const next = addToCartLine(prev, main, lineAddons, qty, card.item)
+        return note.trim() ? setNote(next, lineKey(main.item, lineAddons), note.trim().slice(0, NOTE_MAX_LENGTH)) : next
+      })
+      setOptionsItem(null)
+    }
+    if (needsAgeQuestion(grade, addons)) askAgeThen(grade.item_name, add)
+    else add()
   }
 
   // 「はい」 is recorded on the session at once (a reload before the order is sent does not ask again);
-  // 「いいえ」 records nothing and the dish is not put in the cart
+  // 「いいえ」 records nothing and nothing is put in the cart
   async function answerAge(yes: boolean) {
-    const item = ageQuestion
+    const add = pendingAdd.current
+    pendingAdd.current = null
     setAgeQuestion(null)
-    if (!yes || !item || !context) return
+    if (!yes || !add || !context) return
     try {
       await confirmAge(context.session)
     } catch (err) {
@@ -298,15 +351,19 @@ export function useOrderingSession(initialContext?: OrderingContext) {
       return
     }
     setAgeConfirmed(true)
-    setCart((prev) => addToCartLine(prev, item))
+    add()
   }
 
-  function decrementCart(itemCode: string) {
-    setCart((prev) => decrementCartLine(prev, itemCode))
+  function incrementCart(key: string) {
+    setCart((prev) => incrementCartLine(prev, key))
   }
 
-  function setCartNote(itemCode: string, note: string) {
-    setCart((prev) => setNote(prev, itemCode, note))
+  function decrementCart(key: string) {
+    setCart((prev) => decrementCartLine(prev, key))
+  }
+
+  function setCartNote(key: string, note: string) {
+    setCart((prev) => setNote(prev, key, note))
   }
 
   const cartItems = Object.values(cart)
@@ -432,6 +489,11 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     paymentRequest,
     payingOnline,
     addToCart,
+    selectItem,
+    addLine,
+    optionsItem,
+    closeOptions: () => setOptionsItem(null),
+    incrementCart,
     decrementCart,
     setCartNote,
     submitCart,

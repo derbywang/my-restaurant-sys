@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MenuItem } from './api'
-import type { Cart } from './cart'
+import { addToCart, setNote, type Cart } from './cart'
 import { languageFromPhone, renameCart } from './language'
 
 describe('the language a page starts in', () => {
@@ -42,7 +42,7 @@ describe('the cart after the language changed', () => {
     ({ item: code, item_name: name, price_incl_tax: 100, age_check: false, special_dish: 0, disabled: 0, item_image: null, course: null, course_label: null }) as MenuItem
 
   it('the dishes in the cart are named as the new menu names them, quantities and notes stay', () => {
-    const cart: Cart = { A: { item: item('A', '寿司'), qty: 2, note: 'わさび抜き' }, B: { item: item('B', '茶'), qty: 1, note: '' } }
+    const cart: Cart = setNote(addToCart(addToCart(addToCart({}, item('A', '寿司')), item('A', '寿司')), item('B', '茶')), 'A', 'わさび抜き')
     const renamed = renameCart(cart, [item('A', '寿司测试'), item('B', '茶')])
     expect(renamed.A.item.item_name).toBe('寿司测试')
     expect(renamed.A.qty).toBe(2)
@@ -51,7 +51,25 @@ describe('the cart after the language changed', () => {
   })
 
   it('a dish that the new menu does not have stays as it was', () => {
-    const cart: Cart = { A: { item: item('A', '寿司'), qty: 1, note: '' } }
+    const cart: Cart = addToCart({}, item('A', '寿司'))
     expect(renameCart(cart, [])).toEqual(cart)
+  })
+})
+
+describe('the cart with grades and toppings after the language changed', () => {
+  const item = (code: string, name: string): MenuItem =>
+    ({ item: code, item_name: name, price_incl_tax: 100, age_check: false, special_dish: 0, disabled: 0, item_image: null, course: null, course_label: null }) as MenuItem
+
+  it('the grade and the toppings are named as the dialog of their dish names them now', () => {
+    const big = { item: '寿司・大盛り', item_name: '寿司・大盛り', label: '大盛り', price_incl_tax: 110, age_check: false }
+    const cart = addToCart({}, item('寿司（上）', '寿司（上）'), [big], 2, '寿司')
+    const renamed = renameCart(cart, [item('寿司', '寿司测试')], {
+      '寿司（上）': { item_name: '寿司测试（上）' },
+      '寿司・大盛り': { item_name: '寿司测试・加大', label: '加大' },
+    })
+    const line = Object.values(renamed)[0]
+    expect(line.item.item_name).toBe('寿司测试（上）')
+    expect(line.addons[0]).toMatchObject({ item_name: '寿司测试・加大', label: '加大', price_incl_tax: 110 })
+    expect(line.qty).toBe(2)
   })
 })

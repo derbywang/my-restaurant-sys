@@ -1,8 +1,8 @@
 import { formatCurrency } from '@ury/core'
 import { t } from '../../i18n'
 import type { MenuItem, OrderingCapabilities } from '../../lib/api'
-
-type Cart = Record<string, { item: MenuItem; qty: number }>
+import { cartCountFor, type Cart } from '../../lib/cart'
+import { cardPrice } from '../../lib/options'
 
 interface MenuGridProps {
   menu: MenuItem[]
@@ -14,6 +14,12 @@ interface MenuGridProps {
   /** Tailwind classes for each card — controls touch-target size. */
   cardClassName: string
   imageClassName?: string
+}
+
+/** The price on a card: 「¥1,100」, or 「¥1,100〜」 when the card stands for a group of grades. */
+export function priceText(item: MenuItem): string {
+  const { amount, from } = cardPrice(item)
+  return from ? t('price.from', { price: formatCurrency(amount) }) : formatCurrency(amount)
 }
 
 /**
@@ -35,9 +41,9 @@ function MenuGrid({ menu, cart, capabilities, onAdd, gridClassName, cardClassNam
           )}
           <div className="flex flex-1 flex-col gap-1 p-3">
             <div className="font-medium">{item.item_name}</div>
-            <div className="text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
-            {cart[item.item] && (
-              <div className="mt-1 text-sm font-semibold text-primary">{t('cart.in_cart', { count: cart[item.item].qty })}</div>
+            <div className="text-muted-foreground tabular-nums">{priceText(item)}{t('price.incl_tax')}</div>
+            {cartCountFor(cart, item.item) > 0 && (
+              <div className="mt-1 text-sm font-semibold text-primary">{t('cart.in_cart', { count: cartCountFor(cart, item.item) })}</div>
             )}
           </div>
         </button>

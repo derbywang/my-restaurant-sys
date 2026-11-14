@@ -1,8 +1,8 @@
 import { t } from '../i18n'
-import type { MenuItem } from '../lib/api'
 
 interface AgeConfirmDialogProps {
-  item: MenuItem | null
+  /** What the guest is asked about (the name is shown above the question); null: nothing is asked. */
+  item: { item_name: string } | null
   onAnswer: (yes: boolean) => void | Promise<void>
 }
 

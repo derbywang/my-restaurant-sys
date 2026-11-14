@@ -1,7 +1,7 @@
 import { formatCurrency } from '@ury/core'
-import type { CartPreview, CustomerOrder, MenuItem, OrderingContext } from '../../lib/api'
+import type { CartPreview, CustomerOrder, OrderingContext } from '../../lib/api'
 import type { CartEntry } from '../../lib/cart'
-import CartNote from '../../components/CartNote'
+import CartLineRow from '../../components/CartLineRow'
 import SplitNotice from '../../components/SplitNotice'
 import CartTotals, { cartTotalText } from '../../components/CartTotals'
 import { t } from '../../i18n'
@@ -18,9 +18,9 @@ interface CartPanelProps {
   submitting: boolean
   billRequested: boolean
   payingOnline: boolean
-  onIncrement: (item: MenuItem) => void
-  onDecrement: (itemCode: string) => void
-  onNoteChange: (itemCode: string, note: string) => void
+  onIncrement: (key: string) => void
+  onDecrement: (key: string) => void
+  onNoteChange: (key: string, note: string) => void
   onSubmit: () => void
   onRequestBill: () => void
   onPayOnline: () => void
@@ -83,31 +83,15 @@ function CartPanel({
           ) : (
             <ul className="space-y-2 text-sm">
               {cartItems.map((entry) => (
-                <li key={entry.item.item}>
-<div className="flex items-center justify-between gap-2">
-                  <span className="flex-1">{entry.item.item_name}</span>
-                  <span className="flex items-center gap-2">
-                    <button
-                      onClick={() => onDecrement(entry.item.item)}
-                      className="h-7 w-7 rounded-full border text-sm leading-none"
-                      aria-label={`Remove one ${entry.item.item_name}`}
-                    >
-                      −
-                    </button>
-                    <span className="w-4 text-center">{entry.qty}</span>
-                    <button
-                      onClick={() => onIncrement(entry.item)}
-                      className="h-7 w-7 rounded-full border text-sm leading-none"
-                      aria-label={`Add one more ${entry.item.item_name}`}
-                    >
-                      +
-                    </button>
-                  </span>
-                </div>
-{context?.capabilities.item_notes_enabled && (
-<CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => onNoteChange(entry.item.item, value)} />
-)}
-</li>
+                <CartLineRow
+                  key={entry.key}
+                  entry={entry}
+                  notesEnabled={Boolean(context?.capabilities.item_notes_enabled)}
+                  onIncrement={onIncrement}
+                  onDecrement={onDecrement}
+                  onNote={onNoteChange}
+                  buttonClassName="h-7 w-7 rounded-full border text-sm leading-none"
+                />
               ))}
             </ul>
           )}

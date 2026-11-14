@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { clearStoredCart, loadCart, saveCart, type KeyValueStore } from './cart-store'
-import { addToCart, setNote, type Cart } from './cart'
+import { addToCart, lineKey, setNote, type Cart, type CartAddon } from './cart'
 import type { MenuItem } from './api'
 
 const dish = (item: string, price = 1100): MenuItem =>
@@ -81,5 +81,44 @@ describe('the cart kept for a reload', () => {
     expect(() => saveCart(broken, 's1', addToCart({}, menu[0]))).not.toThrow()
     expect(loadCart(broken, 's1', menu)).toEqual({})
     expect(() => clearStoredCart(broken)).not.toThrow()
+  })
+})
+
+
+describe('the cart with toppings and grades kept for a reload', () => {
+  const sushi = dish('寿司')
+  const up = dish('寿司（上）', 1815) // a grade: it has no card on the menu
+  const big: CartAddon = { item: '寿司・大盛り', item_name: '寿司・大盛り', label: '大盛り', price_incl_tax: 110, age_check: false }
+  const menu = [sushi, dish('ビール', 550)]
+  let store: KeyValueStore
+  beforeEach(() => {
+    store = memoryStore()
+  })
+
+  it('comes back with the grade, the toppings, the quantity and the note', () => {
+    const key = lineKey('寿司（上）', [big])
+    const cart = setNote(addToCart({}, up, [big], 2, '寿司'), key, 'わさび抜き')
+    saveCart(store, 's1', cart)
+    const restored = loadCart(store, 's1', menu)
+    expect(restored[key]).toMatchObject({ qty: 2, note: 'わさび抜き', card: '寿司', addons: [big] })
+    expect(restored[key].item).toMatchObject({ item: '寿司（上）', item_name: '寿司（上）', price_incl_tax: 1815 })
+  })
+
+  it('leaves out a line whose card is no longer on the menu', () => {
+    saveCart(store, 's1', addToCart({}, up, [big], 1, '寿司'))
+    expect(loadCart(store, 's1', [menu[1]])).toEqual({})
+  })
+
+  it('keeps the plain dishes of the old kind of store (no toppings, no card)', () => {
+    store.setItem('ury_order_cart', JSON.stringify({ session: 's1', lines: [{ item: '寿司', qty: 2, note: '' }] }))
+    expect(loadCart(store, 's1', menu)['寿司']).toMatchObject({ qty: 2, addons: [], card: '寿司' })
+  })
+
+  it('drops a line with toppings that are not what they should be', () => {
+    store.setItem(
+      'ury_order_cart',
+      JSON.stringify({ session: 's1', lines: [{ item: '寿司（上）', item_name: 'x', price_incl_tax: 1, card: '寿司', qty: 1, note: '', addons: [{ nope: 1 }] }] }),
+    )
+    expect(loadCart(store, 's1', menu)).toEqual({})
   })
 })

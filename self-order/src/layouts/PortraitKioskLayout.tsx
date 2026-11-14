@@ -1,4 +1,5 @@
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
+import ItemOptionsDialog from '../components/ItemOptionsDialog'
 import ClosedNotice from '../components/ClosedNotice'
 import BillSwitchNotice from '../components/BillSwitchNotice'
 import ErrorBanner from '../components/ErrorBanner'
@@ -8,7 +9,9 @@ import { formatCurrency } from '@ury/core'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui'
 import { useIdleReset } from '../hooks/useIdleReset'
 import { useOrderingSession } from '../hooks/useOrderingSession'
-import CartNote from '../components/CartNote'
+import CartLineRow from '../components/CartLineRow'
+import { priceText } from './shared/MenuGrid'
+import { cartCountFor } from '../lib/cart'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -51,7 +54,11 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     error,
     billRequested,
     payingOnline,
-    addToCart,
+    selectItem,
+    addLine,
+    optionsItem,
+    closeOptions,
+    incrementCart,
     decrementCart,
     setCartNote,
     submitCart,
@@ -141,6 +148,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
     <div className="flex min-h-screen flex-col pb-24">
       {closed && <ClosedNotice kind={closed} />}
       <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
+      <ItemOptionsDialog item={optionsItem} session={context?.session} language={language} capabilities={context?.capabilities} onAdd={addLine} onClose={closeOptions} />
       <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/95 px-6 py-4 backdrop-blur">
         <h1 className="text-2xl font-semibold">
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
@@ -238,9 +246,9 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
             <MenuCard
               key={item.item}
               item={item}
-              qtyInCart={cart[item.item]?.qty ?? 0}
+              qtyInCart={cartCountFor(cart, item.item)}
               showImage={context?.capabilities.show_item_images ?? false}
-              onAdd={() => addToCart(item)}
+              onAdd={() => selectItem(item)}
             />
           ))}
         </section>
@@ -252,31 +260,15 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
             <div className="max-h-[50vh] overflow-y-auto border-b p-4">
               <ul className="space-y-2 text-base">
                 {cartItems.map((entry) => (
-                  <li key={entry.item.item}>
-<div className="flex items-center justify-between">
-                    <span>{entry.item.item_name}</span>
-                    <span className="flex items-center gap-3">
-                      <button
-                        onClick={() => decrementCart(entry.item.item)}
-                        className="h-8 w-8 rounded-full border text-base leading-none"
-                        aria-label={`Remove one ${entry.item.item_name}`}
-                      >
-                        −
-                      </button>
-                      {entry.qty}
-                      <button
-                        onClick={() => addToCart(entry.item)}
-                        className="h-8 w-8 rounded-full border text-base leading-none"
-                        aria-label={`Add one more ${entry.item.item_name}`}
-                      >
-                        +
-                      </button>
-                    </span>
-                  </div>
-{context?.capabilities.item_notes_enabled && (
-<CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => setCartNote(entry.item.item, value)} />
-)}
-</li>
+                  <CartLineRow
+                    key={entry.key}
+                    entry={entry}
+                    notesEnabled={Boolean(context?.capabilities.item_notes_enabled)}
+                    onIncrement={incrementCart}
+                    onDecrement={decrementCart}
+                    onNote={setCartNote}
+                    buttonClassName="h-8 w-8 rounded-full border text-base leading-none"
+                  />
                 ))}
               </ul>
             </div>
@@ -348,7 +340,7 @@ function MenuCard({
       )}
       <div className="p-4">
         <div className="text-lg font-medium">{item.item_name}</div>
-        <div className="mt-1 text-base text-muted-foreground tabular-nums">{formatCurrency(item.price_incl_tax)}{t('price.incl_tax')}</div>
+        <div className="mt-1 text-base text-muted-foreground tabular-nums">{priceText(item)}{t('price.incl_tax')}</div>
         {qtyInCart > 0 && (
           <div className="mt-2 text-sm font-semibold text-primary">{t('cart.in_cart', { count: qtyInCart })}</div>
         )}

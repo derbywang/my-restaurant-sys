@@ -13,10 +13,12 @@
     "items": "{{count}} items",
     "place": "Place Order",
     "placing": "Placing order…",
-    "empty_hint": "Tap a menu item to add it to your cart."
+    "empty_hint": "Tap a menu item to add it to your cart.",
+    "addon_line": "+ {{label}}"
   },
   "price": {
-    "incl_tax": " (tax incl.)"
+    "incl_tax": " (tax incl.)",
+    "from": "from {{price}}"
   },
   "age": {
     "question": "Are you 20 or older?",
@@ -109,5 +111,17 @@
     "not_recognized_title": "This device is not registered",
     "not_set_title": "This device is not set up",
     "not_set_message": "Please ask the staff. (Staff: set this device up again with the set-up link.)"
+  },
+  "options": {
+    "grade_heading": "Choose one",
+    "addon_heading": "Toppings & extras (choose any)",
+    "quantity": "Quantity",
+    "quantity_less": "One less",
+    "quantity_more": "One more",
+    "subtotal": "Subtotal (tax incl.)",
+    "add_to_cart": "Add to cart",
+    "close": "Close",
+    "loading": "Loading…",
+    "failed": "Could not load. Please try again."
   }
 }

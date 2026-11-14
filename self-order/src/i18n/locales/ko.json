@@ -13,10 +13,12 @@
     "items": "{{count}}개",
     "place": "주문하기",
     "placing": "전송 중…",
-    "empty_hint": "메뉴의 상품을 누르면 장바구니에 담깁니다."
+    "empty_hint": "메뉴의 상품을 누르면 장바구니에 담깁니다.",
+    "addon_line": "＋{{label}}"
   },
   "price": {
-    "incl_tax": "(세금 포함)"
+    "incl_tax": "(세금 포함)",
+    "from": "{{price}}~"
   },
   "age": {
     "question": "20세 이상이십니까?",
@@ -109,5 +111,17 @@
     "not_recognized_title": "이 단말기는 등록되어 있지 않습니다",
     "not_set_title": "이 단말기는 설정되어 있지 않습니다",
     "not_set_message": "직원에게 말씀해 주세요. (직원분께: 설정용 링크로 이 단말기를 다시 설정해 주세요)"
+  },
+  "options": {
+    "grade_heading": "종류(하나 선택)",
+    "addon_heading": "토핑・추가(복수 선택 가능)",
+    "quantity": "수량",
+    "quantity_less": "수량 줄이기",
+    "quantity_more": "수량 늘리기",
+    "subtotal": "소계(세금 포함)",
+    "add_to_cart": "장바구니에 담기",
+    "close": "닫기",
+    "loading": "불러오는 중…",
+    "failed": "불러오지 못했습니다. 다시 시도해 주세요."
   }
 }

@@ -13,10 +13,12 @@
     "items": "{{count}}点",
     "place": "注文する",
     "placing": "送信中…",
-    "empty_hint": "メニューの商品をタップすると、カートに入ります。"
+    "empty_hint": "メニューの商品をタップすると、カートに入ります。",
+    "addon_line": "＋{{label}}"
   },
   "price": {
-    "incl_tax": "（税込）"
+    "incl_tax": "（税込）",
+    "from": "{{price}}〜"
   },
   "age": {
     "question": "20歳以上ですか？",
@@ -109,5 +111,17 @@
     "not_recognized_title": "この端末は登録されていません",
     "not_set_title": "この端末は設定されていません",
     "not_set_message": "スタッフにお声がけください。（スタッフの方：設定用のリンクでこの端末を設定し直してください）"
+  },
+  "options": {
+    "grade_heading": "種類（1つ選択）",
+    "addon_heading": "トッピング・追加（複数選択可）",
+    "quantity": "数量",
+    "quantity_less": "数量を減らす",
+    "quantity_more": "数量を増やす",
+    "subtotal": "小計（税込）",
+    "add_to_cart": "カートに入れる",
+    "close": "閉じる",
+    "loading": "読み込んでいます…",
+    "failed": "読み込めませんでした。もう一度お試しください。"
   }
 }

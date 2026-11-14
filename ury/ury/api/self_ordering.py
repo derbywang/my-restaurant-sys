@@ -36,6 +36,7 @@ from frappe.utils import add_to_date, get_datetime, now_datetime
 from frappe.utils.password import get_decrypted_password
 
 from ury.ury_pos.api import resolve_restaurant_menu
+from ury.ury.api import ordering_options
 from ury.ury.api.ordering_language import (
     allowed_languages,
     course_names,
@@ -577,22 +578,41 @@ def get_customer_menu(session):
     profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
 
     with _elevated():
-        menu = _customer_menu(profile, order_type)
-        prices = _prices_incl_tax([row["item"] for row in menu["items"]], profile, order_type)
-        age_check = _age_checked_items(profile, [row["item"] for row in menu["items"]])
+        full = _full_menu(profile, order_type)
+        menu = _customer_menu(profile, order_type, full=full)
+        model = ordering_options.build_model(
+            menu.get("name"), [row["item"] for row in full["items"]], [row["item"] for row in menu["items"]]
+        )
+        # the toppings have no card; of a group of variants only the base has one
+        cards = [row for row in menu["items"] if row["item"] not in model.addon_items]
+        toppings = sorted(model.orderable_addons())
+        asked = [row["item"] for row in cards] + toppings
+        prices = _prices_incl_tax(asked, profile, order_type)
+        age_check = _age_checked_items(profile, asked)
 
     # resolve_restaurant_menu() already returns a sanitized item list
     # (item/item_name/course/image) — no raw Item doc fields leak here. The guests are shown the price
     # with the tax (総額表示), worked out here; the price without tax is not sent. A dish that has no
     # price cannot be ordered, so it is not offered.
     items = []
-    for row in menu["items"]:
-        if row["item"] in prices:
-            items.append({
-                **{k: v for k, v in row.items() if k != "rate"},
-                "price_incl_tax": prices[row["item"]],
-                "age_check": row["item"] in age_check,
-            })
+    for row in cards:
+        code = row["item"]
+        if code not in prices:
+            continue
+        grades = [g for g in model.grades(code) if g in prices]
+        if model.has_group(code) and grades and grades[0] != code:
+            continue  # another grade of the group has the card
+        shown = {k: v for k, v in row.items() if k != "rate"}
+        group_prices = [prices[g] for g in grades] or [prices[code]]
+        shown.update(
+            {
+                "price_incl_tax": min(group_prices),
+                "price_from": len(set(group_prices)) > 1,
+                "age_check": code in age_check,
+                "has_options": len(grades) > 1 or any(t in prices for g in grades for t in model.addons.get(g, [])),
+            }
+        )
+        items.append(shown)
     # the names in the language of the session (the standard name where there is no translation)
     language = session_language(session, profile)
     with _elevated():
@@ -606,10 +626,16 @@ def get_customer_menu(session):
     return {**menu, "items": items, "age_confirmed": bool(session.get("age_confirmed")), "language": language}
 
 
-def _customer_menu(profile, order_type):
+def _full_menu(profile, order_type):
+    """The active menu of the branch (the dishes that are not switched off), with the dishes the guests are not shown.
+    Must run elevated."""
+    return resolve_restaurant_menu(branch=profile.branch, room=None, order_type=order_type, cashier=False)
+
+
+def _customer_menu(profile, order_type, full=None):
     """The menu the guests are shown: the active menu of the branch without the dishes that are not ticked
-    「セルフオーダー可」. Must run elevated."""
-    menu = resolve_restaurant_menu(branch=profile.branch, room=None, order_type=order_type, cashier=False)
+    「セルフオーダー可」. Must run elevated. `full` is the menu `_full_menu` gave, when the caller has it already."""
+    menu = full or _full_menu(profile, order_type)
     # the column is new: until a site is migrated every dish is allowed
     if frappe.db.has_column("URY Menu Item", "self_order_allowed"):
         refused = set(
@@ -663,73 +689,75 @@ def _prices_incl_tax(item_codes, profile, order_type):
 
 @frappe.whitelist(allow_guest=True)
 def get_customer_product(session, item_code):
+    """The dialog of a dish: its grades (when it has variants) and the toppings of each, with the price with the tax.
+
+    A variant and a topping are dishes of their own (`POS Item Variants`, `Item Add On` only link them). The grades
+    are the group of the dish (the dishes the guests are shown); a grade or topping without a price cannot be
+    ordered and is not offered. Nothing the client sends is a price."""
     session = _resolve_session(session)
     profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+    order_type = "Dine In" if session.table else "Take Away"
 
     with _elevated():
-        order_type = "Dine In" if session.table else "Take Away"
-        if item_code not in {row["item"] for row in _customer_menu(profile, order_type)["items"]}:
-            frappe.throw(_("Item not found"), frappe.DoesNotExistError)
-        item = frappe.db.get_value(
-            "Item", item_code,
-            ["item_code", "item_name", "description", "image"],
-            as_dict=True,
+        full = _full_menu(profile, order_type)
+        menu = _customer_menu(profile, order_type, full=full)
+        model = ordering_options.build_model(
+            menu.get("name"), [row["item"] for row in full["items"]], [row["item"] for row in menu["items"]]
         )
-        if not item:
+        if item_code not in model.visible or item_code in model.addon_items:
             frappe.throw(_("Item not found"), frappe.DoesNotExistError)
-
-        # Both `POS Item Variants` and `Item Add On` are child-table doctypes
-        # whose only field is a Link to another Item (the variant/add-on is
-        # itself a priced Item) — see ury/ury/doctype/{pos_item_variants,
-        # item_add_on}/*.json. Resolve each linked item's own price rather
-        # than trusting any client-supplied amount.
-        variants = _linked_item_options("POS Item Variants", item_code, invoice_price_list=None)
-        addons = _linked_item_options("Item Add On", item_code, invoice_price_list=None)
+        grade_codes = model.grades(item_code)
+        topping_codes = sorted({t for g in grade_codes for t in model.addons.get(g, [])})
+        prices = _prices_incl_tax(grade_codes + topping_codes, profile, order_type)
+        if item_code not in prices:
+            frappe.throw(_("Item not found"), frappe.DoesNotExistError)
+        age_check = _age_checked_items(profile, grade_codes + topping_codes)
+        rows = {
+            row.item_code: row
+            for row in frappe.get_all(
+                "Item", filters={"name": ["in", grade_codes + topping_codes]}, fields=["item_code", "item_name", "description", "image"]
+            )
+        }
 
     # the names in the language of the session; the description is not translated
     language = session_language(session, profile)
     with _elevated():
-        names = item_names([item.item_code] + [o["item_code"] for o in variants + addons], language)
-    for option in variants + addons:
-        option["item_name"] = names.get(option["item_code"], option["item_name"])
+        names = item_names(grade_codes + topping_codes, language)
 
+    def name_of(code):
+        return names.get(code) or rows[code].item_name
+
+    def option(code, owner=None):
+        found = {
+            "item_code": code,
+            "item_name": name_of(code),
+            "image": rows[code].image,
+            "price_incl_tax": prices[code],
+            "age_check": code in age_check,
+        }
+        if owner:
+            found["label"] = ordering_options.label_of(name_of(code), name_of(owner))
+        return found
+
+    def toppings_of(code):
+        return [option(t, owner=code) for t in model.addons.get(code, []) if t in prices]
+
+    grades = []
+    if model.has_group(item_code):
+        for code in grade_codes:
+            if code in prices:
+                grades.append({**option(code), "addons": toppings_of(code)})
+    item = rows[item_code]
     return {
         "item_code": item.item_code,
-        "item_name": names.get(item.item_code, item.item_name),
+        "item_name": name_of(item_code),
         "description": item.description if profile.show_item_descriptions else None,
         "image": item.image if profile.show_item_images else None,
-        "variants": variants,
-        "addons": addons,
+        "price_incl_tax": prices[item_code],
+        "age_check": item_code in age_check,
+        "variants": grades,
+        "addons": toppings_of(item_code),
     }
-
-
-def _linked_item_options(child_doctype, parent_item_code, invoice_price_list):
-    if not frappe.db.exists("DocType", child_doctype):
-        return []
-
-    rows = frappe.get_all(
-        child_doctype,
-        filters={"parenttype": "Item", "parent": parent_item_code},
-        fields=["item"],
-    )
-
-    options = []
-    for row in rows:
-        linked = frappe.db.get_value("Item", row.item, ["item_code", "item_name", "image"], as_dict=True)
-        if not linked:
-            continue
-        price = None
-        if invoice_price_list:
-            price = frappe.db.get_value(
-                "Item Price", {"item_code": linked.item_code, "price_list": invoice_price_list}, "price_list_rate"
-            )
-        options.append({
-            "item_code": linked.item_code,
-            "item_name": linked.item_name,
-            "image": linked.image,
-            "rate": price,
-        })
-    return options
 
 
 # ---------------------------------------------------------------------------
@@ -848,7 +876,13 @@ def _clean_items(session, profile, items, allow_empty=False):
         frappe.throw(_("Too many items in a single request"), frappe.ValidationError)
 
     with _elevated():
-        menu_names = {m.get("item") for m in _customer_menu(profile, "Dine In" if session.table else "Take Away")["items"]}
+        order_type = "Dine In" if session.table else "Take Away"
+        full = _full_menu(profile, order_type)
+        menu = _customer_menu(profile, order_type, full=full)
+        menu_names = {m.get("item") for m in menu["items"]}
+        # a topping has no card but is ordered with a dish the guests are shown
+        model = ordering_options.build_model(menu.get("name"), [r["item"] for r in full["items"]], menu_names)
+        menu_names |= model.orderable_addons()
 
     clean_items = []
     for raw in items:

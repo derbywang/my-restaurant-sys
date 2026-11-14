@@ -82,3 +82,17 @@
 ## 8. 不做的（这一版）
 - 加料的数量和主菜不同（例如「大盛り 只要 1 份」而主菜 2 份）；规格和加料的必选 / 最多选几个这类限制；加料之间的互斥。需要时再加。
 - 成组显示和已发送订单的数量联动（第 6 节）。
+
+## 9. 服务器部分（已实现 2026-11-15，`ury/ury/api/ordering_options.py`、`self_ordering.py`，测试 `ury.ury.api.test_self_order_options`）
+
+**`get_customer_menu`**：
+- 加料商品（任何一道菜的 `Item Add On` 里的商品）不出现在 `items` 里；规格组只出基本品（组里在菜单上排在最前面的，按 `URY Menu Item.idx`，不是按名字排序；基本品对顾客不可见时，下一个规格出卡片）。
+- 每张卡片新增：`has_options`（有规格，或有定了价的加料）、`price_from`（组里的价格不止一种）；`price_incl_tax` 是组里最低的含税价（堂食 / 外带按会话）。
+
+**`get_customer_product(session, item_code)`**（返回值）：
+- `item_code`、`item_name`、`description`、`image`、`price_incl_tax`、`age_check`；
+- `variants`：有规格时是组里每一个对顾客可见、有价格的规格 `{item_code, item_name, image, price_incl_tax, age_check, addons: [...]}`，没有规格是 `[]`；
+- `addons`：被点的这个商品自己的加料 `{item_code, item_name, label, image, price_incl_tax, age_check}`；`label` 是去掉「（译）菜名・」前缀的名字；没有价格的规格和加料不出现；
+- 加料商品和不在菜单里的商品打不开（`DoesNotExistError`）。名字按会话语言（`custom_translations`）。
+
+**`add_customer_items` / `preview_customer_cart`**：除了对顾客可见的菜，也放行**对顾客可见的菜的加料**（没有卡片也能点）；仍然是平铺的行，价格由服务器重新计算，酒类（含酒类加料）没有回答「はい」不能下单；仅对员工开放的规格（セルフオーダー ×）仍然被拒绝。

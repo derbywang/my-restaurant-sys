@@ -96,3 +96,13 @@
 - 加料商品和不在菜单里的商品打不开（`DoesNotExistError`）。名字按会话语言（`custom_translations`）。
 
 **`add_customer_items` / `preview_customer_cart`**：除了对顾客可见的菜，也放行**对顾客可见的菜的加料**（没有卡片也能点）；仍然是平铺的行，价格由服务器重新计算，酒类（含酒类加料）没有回答「はい」不能下单；仅对员工开放的规格（セルフオーダー ×）仍然被拒绝。
+
+## 10. 前端部分（已实现 2026-11-15，`self-order/src`）
+
+- **购物车**（`lib/cart.ts`）：一行 = 一个组合，键是商品代码（没有加料）或「商品+排序后的加料代码」；`addToCart(cart, item, addons, qty, card)`、`incrementCart`、`decrementCart`、`setNote` 都按键；`cartCountFor(cart, card)`（卡片上的「カート内：N」）；`toPayload` / `toPreviewPayload` 展开成平铺的行（主菜后面紧跟它的加料，数量等于主菜）；`hasAgeCheckedDish` 把加料也算上。
+- **对话框的纯函数**（`lib/options.ts`）：`gradesOf`、`initialGrade`、`carryOverAddons`（换规格后同名加料保持勾选）、`subtotal`、`needsAgeQuestion`、`cartMain`、`cartAddon`、`cardPrice`。
+- **保存的购物车**（`lib/cart-store.ts`）：带规格或加料的行连同对话框里的名称、价格一起存（它们不在菜单上），对应的卡片不在菜单上了就丢掉；旧格式的普通行照常恢复。
+- **语言切换**（`lib/language.ts` 的 `renameCart`）：购物车里的规格和加料从各自菜的对话框接口取新名称（取不到就保留原名）。
+- **界面**：`components/ItemOptionsDialog.tsx`（对话框，4 个布局共用）、`components/CartLineRow.tsx`（购物车的一行，加料缩进在主菜下面，一组 − / + 按钮）；`MenuGrid`、手机、平板、横屏机、竖屏机的卡片点击改成 `selectItem`（有选项的弹对话框，其余一键加入）；卡片价格 `priceText`（「¥1,100〜」）。
+- **年龄确认**：`askAgeThen` 统一处理，对话框里规格或加料有酒类时，按「カートに入れる」才问，回答「いいえ」什么都不加入，回答「はい」后本次点餐不再问。
+- 测试：`cart.spec.ts`、`cart-store.spec.ts`、`options.spec.ts`、`language.spec.ts`（`cd self-order && npx vitest run`，154 项）；对话框本身（React 组件）没有自动测试，要浏览器验证。

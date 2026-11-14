@@ -2,12 +2,15 @@ import { Input } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
 import { t } from '../i18n';
 import type { POSOpeningPayment } from '../lib/pos-opening-api';
+import { paymentModeLabel } from '../lib/payment-change';
 
 interface POSOpeningPaymentTableProps {
   payments: POSOpeningPayment[];
   onChange: (payments: POSOpeningPayment[]) => void;
   readOnly?: boolean;
   disabled?: boolean;
+  /** The type of each payment mode by name: the cash mode is shown as 「現金」, whatever it is called on the site. */
+  modeTypes?: Record<string, string>;
 }
 
 const POSOpeningPaymentTable = ({
@@ -15,6 +18,7 @@ const POSOpeningPaymentTable = ({
   onChange,
   readOnly = false,
   disabled = false,
+  modeTypes = {},
 }: POSOpeningPaymentTableProps) => {
   const handleAmountChange = (mode: string, value: string) => {
     const parsed = value === '' ? 0 : parseFloat(value);
@@ -53,7 +57,7 @@ const POSOpeningPaymentTable = ({
             {payments.map((payment) => (
               <tr key={payment.mode_of_payment}>
                 <td className="px-4 py-3 text-gray-900">
-                  {payment.mode_of_payment}
+                  {paymentModeLabel(payment.mode_of_payment, modeTypes, t('payment.cash'))}
                 </td>
                 <td className="px-4 py-3">
                   <Input

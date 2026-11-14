@@ -4,6 +4,8 @@ import { Input } from '@ury/ui';
 import { formatCurrency } from '@ury/core';
 import { cn } from '@ury/ui';
 import { t } from '../i18n';
+import { usePOSStore } from '../store/pos-store';
+import { paymentModeLabel } from '../lib/payment-change';
 
 interface ClosingPaymentTableProps {
   rows: ClosingPaymentSummary[];
@@ -17,6 +19,8 @@ const ClosingPaymentTable: React.FC<ClosingPaymentTableProps> = ({
   touchedModes,
   onChange,
 }) => {
+  const paymentModeTypes = usePOSStore((state) => state.paymentModeTypes);
+
   const handleClosingAmountChange = (modeOfPayment: string, value: string) => {
     const parsed = parseFloat(value);
     // Clamp to non-negative in JS -- the HTML `min="0"` attribute alone does
@@ -98,7 +102,7 @@ const ClosingPaymentTable: React.FC<ClosingPaymentTableProps> = ({
                 )}
               >
                 <td className="py-3 px-4 text-gray-900 font-medium">
-                  {row.mode_of_payment}
+                  {paymentModeLabel(row.mode_of_payment, paymentModeTypes, t('payment.cash'))}
                 </td>
                 <td className="py-3 px-4 text-right text-gray-700">
                   {formatCurrency(row.opening_amount)}

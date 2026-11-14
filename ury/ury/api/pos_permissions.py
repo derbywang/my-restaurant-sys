@@ -52,6 +52,35 @@ def can_reduce_sent_items(pos_profile):
 	return bool(frappe.db.get_value("POS Profile", pos_profile, "remove_items"))
 
 
+@frappe.whitelist()
+def get_shift_state():
+	"""Is the register of the user's shop open? A waiter works on the shift the cashier opened: she has none of her own.
+
+	The question ERPNext asks when an order is saved: an open, submitted POS Opening Entry of the POS Profile, whoever
+	opened it. Read-only (a GET is rolled back; nothing is written here)."""
+	profiles = _profiles_of_branch()
+	entry = None
+	if profiles:
+		entry = frappe.db.get_value(
+			"POS Opening Entry",
+			{"pos_profile": ["in", profiles], "status": "Open", "docstatus": 1},
+			["name", "user"],
+			order_by="period_start_date desc",
+			as_dict=True,
+		)
+	return {"open": bool(entry), "opened_by": entry.user if entry else None}
+
+
+def _profiles_of_branch():
+	from ury.ury_pos.api import getBranch
+
+	try:
+		branch = getBranch()
+	except frappe.ValidationError:
+		return []
+	return frappe.get_all("POS Profile", filters={"branch": branch}, pluck="name") if branch else []
+
+
 def _profile_of_user():
 	"""The POS Profile of the user's branch (what `get_captain_context` also uses); None when there is none."""
 	from ury.ury_pos.api import getBranch

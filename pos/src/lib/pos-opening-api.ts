@@ -25,6 +25,8 @@ export interface POSOpeningAllowedProfile {
 export interface POSOpeningPaymentMode {
   mode_of_payment: string;
   opening_amount?: number;
+  /** The type of the Mode of Payment (Cash, Bank, ...): the cash mode is shown as 「現金」. */
+  type?: string | null;
 }
 
 export interface POSOpeningMultiCashierFlags {

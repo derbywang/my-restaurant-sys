@@ -11,6 +11,7 @@ import {
   POSOpeningPayment,
 } from '../lib/pos-opening-api';
 import { t } from '../i18n';
+import { modeTypesOf } from '../lib/shift-gate';
 import POSOpeningPaymentTable from './POSOpeningPaymentTable';
 
 type OpeningBlockingState =
@@ -345,6 +346,7 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
 
               <POSOpeningPaymentTable
                 payments={balances}
+                modeTypes={modeTypesOf(context?.payment_modes ?? [])}
                 onChange={(next) => {
                   setBalances(next);
                   setZeroBalanceConfirmed(false);

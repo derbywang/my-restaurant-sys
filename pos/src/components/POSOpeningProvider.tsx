@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Spinner } from '@ury/ui';
 import {
   checkPOSOpening,
   parseFrappeError,
@@ -7,7 +8,9 @@ import {
 } from '../lib/pos-opening-api';
 import { getChecklist } from '../lib/checklist-api';
 import { usePOSStore } from '../store/pos-store';
-import { useRootStore } from '../store/root-store';
+import { useRootStore, type RootState } from '../store/root-store';
+import { isWaiterOnly } from '../lib/pos-permissions';
+import WaiterShiftGate from './WaiterShiftGate';
 import { User } from '../store/slices/auth-slice';
 import POSOpeningDialog from './POSOpeningDialog';
 import POSOpeningScreen from './POSOpeningScreen';
@@ -54,7 +57,7 @@ function getHttpStatus(error: unknown): number | undefined {
   return undefined;
 }
 
-const POSOpeningProvider = ({ children }: POSOpeningProviderProps) => {
+const PersonalShiftProvider = ({ children }: POSOpeningProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [blockingState, setBlockingState] = useState<OpeningBlockingState | null>(null);
   const [blockingMessage, setBlockingMessage] = useState<string>('');
@@ -306,6 +309,35 @@ const POSOpeningProvider = ({ children }: POSOpeningProviderProps) => {
       )}
     </>
   );
+};
+
+/** How long the POS waits for the permissions before it falls back to the register's own opening screen. */
+const PERMISSIONS_WAIT_MS = 8000;
+
+/**
+ * The cashier opens her own shift (the screen below); a waiter has none and works on the shift of the shop's register
+ * (`WaiterShiftGate`). The permissions decide, never a role name; until they are known neither screen is shown.
+ */
+const POSOpeningProvider = ({ children }: POSOpeningProviderProps) => {
+  const permissions = useRootStore((state: RootState) => state.permissions);
+  const [gaveUp, setGaveUp] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setGaveUp(true), PERMISSIONS_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!permissions && !gaveUp) {
+    return (
+      <div className="min-h-screen">
+        <Spinner message={t('common.checking_pos_status')} />
+      </div>
+    );
+  }
+  if (permissions && isWaiterOnly(permissions)) {
+    return <WaiterShiftGate>{children}</WaiterShiftGate>;
+  }
+  return <PersonalShiftProvider>{children}</PersonalShiftProvider>;
 };
 
 export default POSOpeningProvider;

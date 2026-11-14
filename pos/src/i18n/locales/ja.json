@@ -563,7 +563,10 @@
     "logout_unsent_title": "まだ送信していない注文があります",
     "logout_unsent_message": "追加または取り消した料理は、まだ厨房に送られていません。このままログアウトすると、その内容は失われます。",
     "logout_keep_working": "作業を続ける",
-    "logout_anyway": "このままログアウト"
+    "logout_anyway": "このままログアウト",
+    "shift_closed_title": "まだレジが開いていません",
+    "shift_closed_message": "レジ担当者がレジ開けをするまで、しばらくお待ちください。",
+    "shift_closed_recheck": "再確認"
   },
   "dashboard": {
     "just_now": "たった今",

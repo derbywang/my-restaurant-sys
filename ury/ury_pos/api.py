@@ -1325,8 +1325,13 @@ def get_pos_opening_screen_data() -> dict:
     if pos_profile_name:
         try:
             pos_profile_doc = frappe.get_doc("POS Profile", pos_profile_name)
+            # the type tells the screen which mode is the cash (shown as the word of the interface, not as "Cash")
             payment_modes = [
-                {"mode_of_payment": mop.mode_of_payment, "opening_amount": 0.0}
+                {
+                    "mode_of_payment": mop.mode_of_payment,
+                    "opening_amount": 0.0,
+                    "type": frappe.db.get_value("Mode of Payment", mop.mode_of_payment, "type"),
+                }
                 for mop in pos_profile_doc.payments
             ]
         except Exception:

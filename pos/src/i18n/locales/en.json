@@ -563,7 +563,10 @@
     "logout_unsent_title": "Dishes not sent yet",
     "logout_unsent_message": "Dishes you added or took back are not sent to the kitchen yet. If you log out now, they are lost.",
     "logout_keep_working": "Keep working",
-    "logout_anyway": "Log out anyway"
+    "logout_anyway": "Log out anyway",
+    "shift_closed_title": "The register is not open yet",
+    "shift_closed_message": "Please wait until the cashier opens the register.",
+    "shift_closed_recheck": "Check again"
   },
   "dashboard": {
     "just_now": "just now",

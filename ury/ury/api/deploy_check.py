@@ -277,8 +277,14 @@ def _check_self_ordering_profiles():
 	found = []
 	for name in _profiles():
 		profile = frappe.get_doc("URY Self Ordering Profile", name)
-		if not (profile.public_url or "").strip():
+		public_url = (profile.public_url or "").strip()
+		if not public_url:
 			found.append((FAIL, f"{name}: the public address (public_url) is not set"))
+		elif not public_url.lower().startswith("https://"):
+			# smst.app is on the HSTS preload list: browsers open it with https only, a QR code written with http://
+			# would not open. (The development and test sites keep their http addresses; set the real one on the
+			# site that goes into service.)
+			found.append((FAIL, f"{name}: the address in the QR codes ({public_url}) must start with https://"))
 		if profile.enable_qr_table_ordering:
 			ok, why = _sample_token_verifies(name)
 			if not ok:

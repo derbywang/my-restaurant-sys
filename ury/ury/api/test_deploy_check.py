@@ -221,8 +221,27 @@ class TestDevicesAndProfile(Rollback, DeviceCase):
 	def test_a_profile_without_a_public_address_fails(self):
 		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "")
 		self.assertTrue(mentions(levels(deploy_check._check_self_ordering_profiles), "public address", deploy_check.FAIL))
-		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "http://ury.example")
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "https://order.example.jp")
 		self.assertFalse(mentions(levels(deploy_check._check_self_ordering_profiles), "public address"))
+
+	def test_a_public_address_that_is_not_https_fails(self):
+		"""The domain of the shop (smst.app) is on the HSTS preload list: browsers open it with https only, so a QR code
+		written with http:// would not open. The development and test sites keep their http addresses; this check is for
+		the site that goes into service."""
+		for address in ("http://order.smst.app", "http://ury.localhost:8000"):
+			frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", address)
+			self.assertTrue(
+				mentions(levels(deploy_check._check_self_ordering_profiles), "https", deploy_check.FAIL), address
+			)
+
+	def test_an_https_public_address_passes(self):
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "https://order.smst.app")
+		self.assertFalse(mentions(levels(deploy_check._check_self_ordering_profiles), "https"))
+
+	def test_an_address_that_is_not_set_is_not_reported_twice(self):
+		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "")
+		found = levels(deploy_check._check_self_ordering_profiles)
+		self.assertFalse(mentions(found, "https"))
 
 	def test_a_token_made_with_the_secret_is_accepted(self):
 		frappe.db.set_value("URY Self Ordering Profile", PROFILE, "public_url", "http://ury.example")

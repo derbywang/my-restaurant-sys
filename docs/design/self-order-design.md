@@ -682,7 +682,7 @@
 
 | # | 事项 | 做法 / 验证 |
 |---|---|---|
-| 1 | **域名先定** | 选定公网域名（例如 `order.<店的域名>`）。二维码里写的就是它，改域名要重新印、重新贴。Self Ordering Profile 的 `public_url` 填它（3.9）。**验证**：在局域网地址上打开 Desk 打印二维码页，印出来的链接仍是公网域名 |
+| 1 | **域名先定** | **已定（2026-11-15）：`smst.app`（Cloudflare 购买），点餐网址 `https://order.smst.app`，`.app` 只能用 https，见 `launch-plan.md` 2.8。**选定公网域名（例如 `order.<店的域名>`）。二维码里写的就是它，改域名要重新印、重新贴。Self Ordering Profile 的 `public_url` 填它（3.9）。**验证**：在局域网地址上打开 Desk 打印二维码页，印出来的链接仍是公网域名 |
 | 2 | **Tunnel 指向哪里** | 指向店里的 nginx（一个入口，不要直接指到 gunicorn 或 9000 端口）。cloudflared 作为系统服务运行并自动重启；监控它是否在线 |
 | 3 | **站点识别** | Frappe 按请求的 Host 头选择站点。要么站点名就是公网域名，要么在 Tunnel / nginx 里把 Host（或 frappe_docker 的 `FRAPPE_SITE_NAME_HEADER`）设成站点名。**验证**：用手机流量扫一张二维码，能打开 `/order/` |
 | 4 | **只开放需要的路径** | 在 Cloudflare 上写白名单规则（WAF 自定义规则：路径不在白名单就拦截）。白名单：`/order` 和 `/order/*`、`/assets/*`、顾客需要的商品图片所在的文件路径、`/api/method/ury.ury.api.self_ordering.*`（所有 allow_guest 接口）。其余一律拦截：`/app`、`/pos`、`/ury`、`/mosaic`、`/login`、`/api/resource/*`、`/api/method/` 下的其他方法。白名单要在测试时用顾客页面实际走一遍，看浏览器里有哪些请求，漏了就补，多了就删 |

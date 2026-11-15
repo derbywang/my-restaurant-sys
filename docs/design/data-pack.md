@@ -48,13 +48,15 @@
 
 **种类（食品 / 酒类 / 非食品）**决定税率，并复用设置向导的规则（`ury/setup/jp_tax.py` 的 `menu_group_for_kind`）：食品店内 10%、外带 8%，酒类和非食品都是 10%；酒类还会在自助点餐里问年龄。**厨房**对应 URY Production Unit，按 Item Group 路由（生产单位的 `item_groups`）。导入器的做法（待做时再确认）：每个（种类，厨房）一个叶子分类，挂在种类的父分类下（税率由父分类决定），再把它加进厨房的 `item_groups`。
 
-## 4. 命令（要做）
+## 4. 命令（已做 2026-11-15）
 
-    bench --site <站点> execute ury.setup.datapack.plan   --kwargs '{"folder": "<目录>"}'   # 只读：会新建 / 更新 / 不变的列表，以及"表里没有的"
-    bench --site <站点> execute ury.setup.datapack.apply  --kwargs '{"folder": "<目录>"}'   # 先备份，确认后写入
-    bench --site <站点> execute ury.setup.datapack.export --kwargs '{"folder": "<目录>"}'   # 从排练站点导出设备等
+    bench --site <排练站点> ury-datapack-export 三友寿司 <ordering.json>          # 导出 Profile 和设备
+    bench --site <站点> ury-datapack <excel> --ordering <json> --ask-qr-secret      # 只读：每一步的计划，所有错误一起列出
+    bench --site <站点> ury-datapack <excel> --ordering <json> --ask-qr-secret --apply   # 确认 → 备份 → 写入 → 提交一次 → deploy_check
 
-目录里有 Excel 文件、`images/`（可选）、JSON。`plan` 不写数据（不是"先执行再回滚"）。`apply` 之前先 `bench backup`，并按"改站点数据要先列清单"的规则让店主确认。
+代码：`ury/commands.py`（薄）+ `ury/setup/datapack/shell.py`（`plan_pack` / `apply_pack` / `run_command`，有测试 `ury.setup.test_datapack_shell`）。**完整的操作顺序、二维码密钥的取用和保管、密码文件的分发、出错对照表见 `docs/deploy/site-import.md`。**
+
+步骤和顺序：站点设置 → 菜单 → 桌子 → Profile 和设备 → 账号（**最后**：密码文件只在其他步骤都成功之后才生成）。计划阶段把"同一个包里要新建的桌子和商品分类"算作已存在（设备的固定桌子可以指向这次才建的桌子）。有一个错误就整体不写，不备份；写入中途出错，数据库全部撤回，不留密码文件。`apply` 之前自动 `bench backup`（不含文件），按"改站点数据要先确认"的规则问你。二维码密钥只能用 `--ask-qr-secret`（输入不显示）或 `--qr-secret-file`（权限必须 600，至少 32 个字符），**命令没有把值写在命令行里的选项**（会进 shell 历史）；新 Profile 不给密钥是错误，要明确 `--new-qr-secret` 才会自己生成。
 
 ## 5. 规则
 
@@ -102,7 +104,7 @@
 2. 菜单导入（含分类、厨房、中韩英名称、可选图片；重复导入不产生重复）（**已做** 2026-11-15，`ury/setup/datapack/importer.py` 的 `plan_menu` / `apply_menu`，测试 `ury.setup.test_datapack_menu`；规格和加料见下一步）。
 2b. 规格和トッピング的导入（**已做** 2026-11-15：模板加了「規格」「トッピング・追加」两页，导入器 `_expand` / `_links`；设计见 `self-order-options.md`、本文第 10 节）。
 3. 房间和桌子（**已做** 2026-11-15：`importer.py` 的 `plan_tables` / `apply_tables`，测试 `ury.setup.test_datapack_tables`）。规则：名字是键（桌子名全站唯一，别的分店已有同名桌子或同名房间 → 报错）；已有的桌子只对齐「ルーム、席数、テイクアウト用」，使用中、自助点餐开关、布局位置不动；新桌子形状默认 Square；表里没有的房间和桌子保留并在 `extra` 里列出，不删除。
-4. 账号（**导入部分已做** 2026-11-15：`importer.py` 的 `plan_staff` / `apply_staff`，测试 `ury.setup.test_datapack_staff`）。角色对应：店長 → URY Manager，レジ担当 → URY Cashier，ホール → URY Captain，厨房 → URY Kitchen（一人一个角色）。新账号：语言（空 = ja）、不发欢迎邮件、写进分店的用户表（全部）和 POS Profile 的适用用户（店长、收银、服务员，厨房不进）；每个新账号一个随机初始密码（14 位，去掉易混淆字符），写到只有所有者能读的文件（权限 600，不覆盖已有文件，出错时删除）。已有的账号：只补缺的位置、改语言，**不改密码、不改角色**；已有账号的角色和表里不同、或账号已停用 → 报错，由人决定；表里没有的账号保留并在 `extra` 里列出。**还没做：** 「首次登录强制改密码」（第 6 节的评估，做之前要再确认，它影响全站所有账号）和命令行入口（第 6 步的外壳）。
+4. 账号（**导入部分已做** 2026-11-15：`importer.py` 的 `plan_staff` / `apply_staff`，测试 `ury.setup.test_datapack_staff`）。角色对应：店長 → URY Manager，レジ担当 → URY Cashier，ホール → URY Captain，厨房 → URY Kitchen（一人一个角色）。新账号：语言（空 = ja）、不发欢迎邮件、写进分店的用户表（全部）和 POS Profile 的适用用户（店长、收银、服务员，厨房不进）；每个新账号一个随机初始密码（14 位，去掉易混淆字符），写到只有所有者能读的文件（权限 600，不覆盖已有文件，出错时删除）。已有的账号：只补缺的位置、改语言，**不改密码、不改角色**；已有账号的角色和表里不同、或账号已停用 → 报错，由人决定；表里没有的账号保留并在 `extra` 里列出。「首次登录强制改密码」已评估，决定不做（第 6 节）；命令行入口见第 4 节。
 5. Self Ordering Profile 和设备（导出 / 导入，不含密钥）（**已做** 2026-11-15：`ury/setup/datapack/ordering.py`，测试 `ury.setup.test_datapack_ordering`）。
    - **导出**（排练站点）`export_ordering(profile)` → `write_export(path, data)`：文件里有 Profile 的设置、语言、年龄确认的商品分类，和每台设备的 id、类型、布局、固定桌子、**凭据哈希**（排练站点上设置好的平板，到正式站点不用重新登记）。**不含**二维码密钥、原始凭据、`last_reported_at`。文件权限 600，不覆盖已有文件，按机密处理（不进 git）。
    - **导入**（正式站点）`plan_ordering` / `apply_ordering(data, public_url=, local_url=, qr_signing_secret=)`：
@@ -111,8 +113,8 @@
      - 设备用 `device_id` 当键；已有设备的凭据哈希和文件不同 → 报错（说明有人在站点上重新发过凭据，由人决定）；已有设备其余项对齐文件，哈希不动；文件里没有的设备保留并列在 `extra`。
      - 前提：先导入桌子和菜单；固定桌子、餐厅、POS Profile、默认顾客、语言、商品分类必须已在站点上，缺了就报错并写明。
      - 一个错误就整体不写；重复导入什么都不变。
-   - 命令行入口在第 6 步。
-6. 站点设置和 `plan` / `apply` 的外壳。
+   - 命令行入口见第 4 节（第 6 步，已做）。
+6. 站点设置和 `plan` / `apply` 的外壳（**已做** 2026-11-15：`shell.py`、`ury/commands.py`，手顺 `docs/deploy/site-import.md`）。站点设置：`language = ja`、`time_zone = Asia/Tokyo`、`country = Japan`、`default_currency = JPY`、`login_with_email_link = 0`，幂等，计划里列出和现在不同的项。
 
 每一步先写测试（红 → 绿），会写数据的测试先在临时站点上跑，结果干净再上 `ury-test.localhost`；`apply` 的集成测试用示例数据，在事务内跑。
 

@@ -13,6 +13,7 @@ the sheets say is changed; nothing is deleted. The part for the menu comes first
 accounts, profile and devices follow."""
 
 import os
+import secrets
 from dataclasses import dataclass, field
 
 import frappe
@@ -39,6 +40,7 @@ class Result:
 	actions: list = field(default_factory=list)
 	errors: list = field(default_factory=list)
 	extra: list = field(default_factory=list)
+	passwords: dict = field(default_factory=dict)  # the initial passwords of the accounts made (apply_staff only)
 
 	def add(self, verb, doctype, name, detail=""):
 		self.actions.append(Action(verb, doctype, name, detail))
@@ -574,6 +576,166 @@ class _TablesImport(_Import):
 		extra = [t for t in frappe.get_all("URY Table", filters={"branch": branch}, pluck="name", order_by="name") if t not in listed_tables]
 		extra += [r for r in frappe.get_all("URY Room", filters={"branch": branch}, pluck="name", order_by="name") if r not in set(rooms)]
 		self.result.extra = extra
+
+
+STAFF_ROLES = {"店長": "URY Manager", "レジ担当": "URY Cashier", "ホール": "URY Captain", "厨房": "URY Kitchen"}
+# who may open the register of the profile: those who take the money or the orders (the kitchen screen is not the register)
+PROFILE_ROLES = {"URY Manager", "URY Cashier", "URY Captain"}
+_PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRTUVWXYZ2346789"
+
+
+def plan_staff(data):
+	return _StaffImport(data, None, dry=True).run()
+
+
+def apply_staff(data, password_file):
+	"""Make the accounts. The initial passwords of the NEW accounts go to `password_file` (made here, readable by its owner
+	only, never overwritten) and to `result.passwords`; an account that exists keeps its password."""
+	plan = _StaffImport(data, None, dry=True).run()
+	if plan.errors:
+		return plan
+	run = _StaffImport(data, None, dry=False, password_file=password_file)
+	result = run.run()
+	return result
+
+
+class _StaffImport(_Import):
+	"""The staff accounts. The email is the key. A new account gets the role of the sheet, the language, a row in the
+	branch's user table (all of them) and in the register profile's users (not the kitchen). An account that exists is only
+	put in the places it lacks and given the language; its password and its roles are not touched (a different role is an
+	error: somebody decides). Nothing is deleted."""
+
+	def __init__(self, data, folder, dry, password_file=None):
+		super().__init__(data, folder, dry)
+		self.password_file = password_file
+
+	def run(self):
+		if not self._check_shop():
+			return self.result
+		people = [row.values for row in self.data.get("staff", [])]
+		for person in people:
+			person["_role"] = STAFF_ROLES[person["role"]]
+		self._check(people)
+		if self.result.errors:
+			return self.result
+		new = [p for p in people if not frappe.db.exists("User", p["email"])]
+		handle = None
+		if new and not self.dry:
+			handle = self._open_file()
+			if handle is None:
+				return self.result
+		try:
+			for person in people:
+				self._account(person)
+			if handle is not None:
+				self._write_file(handle, new)
+		except BaseException:
+			if handle is not None:
+				handle.close()
+				os.remove(self.password_file)
+			raise
+		if handle is not None:
+			handle.close()
+		self._extra(people)
+		return self.result
+
+	def _check(self, people):
+		for person in people:
+			email, role = person["email"], person["_role"]
+			if not frappe.db.exists("User", email):
+				continue
+			if not frappe.db.get_value("User", email, "enabled"):
+				self.error(f"アカウント「{email}」は停止中です。取り込みでは有効にしません。先に画面で確認してください。")
+				continue
+			held = set(
+				frappe.get_all("Has Role", filters={"parenttype": "User", "parent": email, "role": ("like", "URY %")}, pluck="role")
+			)
+			others = sorted(held - {role})
+			if others:
+				self.error(
+					f"アカウント「{email}」はすでに「{'」「'.join(others)}」の役割を持っています（シートの役割は{person['role']}＝{role}）。"
+					"役割は取り込みでは変えません。画面で確認してください。"
+				)
+
+	def _open_file(self):
+		if not self.password_file:
+			self.error("パスワードを書き出すファイルの場所が指定されていません。")
+			return None
+		try:
+			descriptor = os.open(self.password_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+		except FileExistsError:
+			self.error(f"パスワードのファイル「{self.password_file}」がすでにあります。上書きしません（別の場所を指定してください）。")
+			return None
+		return os.fdopen(descriptor, "w", encoding="utf-8")
+
+	def _write_file(self, handle, new):
+		handle.write("# 初期パスワード（1人1つ。初回ログインのあとに本人が変更します）。店主だけが読めるファイルです。配ったら削除してください。\n")
+		for person in new:
+			handle.write(f"{person['email']}\t{person['name']}\t{person['role']}\t{self.result.passwords[person['email']]}\n")
+		handle.flush()
+
+	def _account(self, person):
+		email = person["email"]
+		if not frappe.db.exists("User", email):
+			self.result.add("create", "User", email, f"{person['role']}（{person['_role']}）")
+			if not self.dry:
+				self._create_user(person)
+		else:
+			self._update_user(person)
+		self._places(person)
+
+	def _create_user(self, person):
+		from frappe.utils.password import update_password
+
+		password = "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(14))
+		frappe.get_doc(
+			{
+				"doctype": "User", "email": person["email"], "first_name": person["name"], "language": person.get("language") or "ja",
+				"enabled": 1, "send_welcome_email": 0, "roles": [{"role": person["_role"]}],
+			}
+		).insert(ignore_permissions=True)
+		update_password(person["email"], password)
+		self.result.passwords[person["email"]] = password
+
+	def _update_user(self, person):
+		email = person["email"]
+		wanted = person.get("language") or "ja"
+		held = set(frappe.get_all("Has Role", filters={"parenttype": "User", "parent": email, "role": person["_role"]}, pluck="role"))
+		changed = []
+		if frappe.db.get_value("User", email, "language") != wanted:
+			changed.append("language")
+		if person["_role"] not in held:
+			changed.append("role")
+		self.result.add("update" if changed else "same", "User", email, "、".join(changed))
+		if changed and not self.dry:
+			doc = frappe.get_doc("User", email)
+			doc.language = wanted
+			if "role" in changed:
+				doc.append("roles", {"role": person["_role"]})
+			doc.save(ignore_permissions=True)
+
+	def _places(self, person):
+		email, role = person["email"], person["_role"]
+		branch = self.shop["branch"]
+		in_branch = frappe.db.exists("URY User", {"parenttype": "Branch", "parent": branch, "user": email})
+		self.result.add("same" if in_branch else "update", "Branch", f"{branch}: {email}")
+		if not in_branch and not self.dry:
+			doc = frappe.get_doc("Branch", branch)
+			doc.append("user", {"user": email})
+			doc.save(ignore_permissions=True)
+		if role in PROFILE_ROLES:
+			profile = self.profile["name"]
+			in_profile = frappe.db.exists("POS Profile User", {"parent": profile, "user": email})
+			self.result.add("same" if in_profile else "update", "POS Profile", f"{profile}: {email}")
+			if not in_profile and not self.dry:
+				doc = frappe.get_doc("POS Profile", profile)
+				doc.append("applicable_for_users", {"user": email, "default": 1})
+				doc.save(ignore_permissions=True)
+
+	def _extra(self, people):
+		listed = {p["email"] for p in people}
+		holders = set(frappe.get_all("Has Role", filters={"parenttype": "User", "role": ("like", "URY %")}, pluck="parent", distinct=True))
+		self.result.extra = sorted(holders - listed - set(frappe.STANDARD_USERS))
 
 
 def _differs(current, wanted):

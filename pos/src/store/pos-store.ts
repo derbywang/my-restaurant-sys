@@ -4,6 +4,7 @@ import { setCurrency } from '@ury/core';
 import { getRestaurantMenu, getAggregatorMenu, MenuItem as APIMenuItem } from '../lib/menu-api';
 import { PosProfileCombined, getCombinedPosProfile } from '../lib/pos-profile-api';
 import { getMenuCourses } from '../lib/menu-course-api';
+import { fetchFresh } from '../lib/fresh-cache';
 import { getCustomerGroups, getCustomerTerritories, getCustomerRecord } from '../lib/customer-api';
 import {
   customerAfterOrderTypeChange,
@@ -517,15 +518,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   fetchCategories: async () => {
     try {
-      const cached = sessionStorage.getItem('menuCategories');
-      if (cached) {
-        const categories = JSON.parse(cached);
-        set({ categories });
-        return;
-      }
-
-      const courses = await getMenuCourses();
-      sessionStorage.setItem('menuCategories', JSON.stringify(courses));
+      // the server's list wins; the copy in the tab is only for when the server cannot be reached
+      const courses = await fetchFresh('menuCategories', getMenuCourses);
       set({ categories: courses });
     } catch (error) {
       set({ error: 'Failed to load menu categories' });

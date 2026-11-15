@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { usePOSStore } from '../store/pos-store';
 import { useRootStore } from '../store/root-store';
 import { cn } from '@ury/ui';
-import { Button } from '@ury/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ury/ui';
 import TableSelectionDialog from './TableSelectionDialog';
 import { DEFAULT_ORDER_TYPE, DINE_IN, ORDER_TYPES , type OrderType} from '../data/order-types';
 import { HandPlatter } from 'lucide-react';
@@ -15,7 +15,7 @@ interface OrderTypeSelectProps {
 }
 
 const OrderTypeSelect = ({ disabled }: OrderTypeSelectProps) => {
-  const { selectedOrderType, setSelectedOrderType, selectedTable, tableOrder, posProfile, isUpdatingOrder } = usePOSStore();
+  const { selectedOrderType, setSelectedOrderType, selectedTable, tableOrder, posProfile, isUpdatingOrder, pendingDraft, addPendingDraftToTable, cancelPendingDraft } = usePOSStore();
   const { user } = useRootStore();
   const [showTableDialog, setShowTableDialog] = useState(false);
 
@@ -106,6 +106,22 @@ const OrderTypeSelect = ({ disabled }: OrderTypeSelectProps) => {
       {showTableDialog && (
         <TableSelectionDialog onClose={handleTableDialogClose} />
       )}
+
+      {/* the table chosen already has an order and the cashier had typed in something not confirmed: they decide, nothing is dropped */}
+      <Dialog open={pendingDraft !== null} onOpenChange={() => undefined}>
+        <DialogContent className="max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle>{t('tables.draft_title')}</DialogTitle>
+            <DialogDescription>
+              {t('tables.draft_message', { table: pendingDraft?.table ?? '', count: pendingDraft?.items.reduce((n, i) => n + i.quantity, 0) ?? 0 })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={cancelPendingDraft}>{t('tables.draft_cancel')}</Button>
+            <Button onClick={addPendingDraftToTable}>{t('tables.draft_add')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

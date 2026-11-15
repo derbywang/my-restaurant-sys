@@ -147,6 +147,10 @@ interface POSState {
   customerGroups: string[];
   territories: string[];
   tableOrder: TableOrder | null;
+  /** What the cashier had typed in, not confirmed, when a table that already has an order was chosen: held until they say what to do. */
+  pendingDraft: PendingDraft | null;
+  /** The order type before the present one (where the draft goes back to when the table choice is cancelled). */
+  previousOrderType: OrderType | null;
   isInitializing: boolean;
   orderComment: string;
   originalCartHash: string;
@@ -177,7 +181,9 @@ interface POSStore extends POSState {
   setSelectedCategory: (category: string) => void;
   setSearchQuery: (query: string) => void;
   setSelectedCustomer: (customer: Customer | null) => void;
-  setSelectedTable: (table: string | null, room: string | null, doNotLoadOrder?: boolean) => void;
+  setSelectedTable: (table: string | null, room: string | null, doNotLoadOrder?: boolean, carryDraft?: boolean) => void;
+  addPendingDraftToTable: () => void;
+  cancelPendingDraft: () => void;
   setSelectedOrderType: (type: OrderType) => void;
   setQuickFilter: (filter: 'all' | 'special') => void;
   setSelectedItem: (item: MenuItem | null) => void;
@@ -193,7 +199,7 @@ interface POSStore extends POSState {
   validateQuantity: (quantity: number) => boolean;
   getItemPrice: (item: OrderItem) => number;
   getItemQuantityFromCart: (item: MenuItem) => number;
-  loadTableOrder: (table: string) => Promise<void>;
+  loadTableOrder: (table: string, carryDraft?: boolean) => Promise<void>;
   clearTableOrder: () => void;
   isMenuInteractionDisabled: () => boolean;
   isOrderInteractionDisabled: () => boolean;
@@ -229,6 +235,13 @@ interface POSStore extends POSState {
    */
   updateItemComment: (uniqueId: string, comment: string) => void;
   setShowVoluntaryClosing: (show: boolean) => void;
+}
+
+/** The lines of an order that is not confirmed yet, held while the cashier chooses what to do with a table that has an order. */
+export interface PendingDraft {
+  items: OrderItem[];
+  customer: Customer | null;
+  table: string;
 }
 
 export const generateUniqueId = (item: OrderItem): string => {
@@ -353,6 +366,8 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   territories: [],
   currency: '',
   tableOrder: null,
+  pendingDraft: null,
+  previousOrderType: null,
   isInitializing: true,
   showVoluntaryClosing: false,
 
@@ -613,11 +628,11 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   setSelectedCategory: (category) => set({ selectedCategory: category }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedCustomer: (customer) => set({ selectedCustomer: customer }),
-  setSelectedTable: (table: string | null, room: string | null, doNotLoadOrder: boolean = false) => {
+  setSelectedTable: (table: string | null, room: string | null, doNotLoadOrder: boolean = false, carryDraft: boolean = false) => {
     set({ selectedTable: table, selectedRoom: room });
     if (table ) {
       if (!doNotLoadOrder) 
-        get().loadTableOrder(table);
+        get().loadTableOrder(table, carryDraft);
     } else {
       get().clearTableOrder();
     }
@@ -645,8 +660,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         selectedOrderType: type,
       });
     } else {
+      // What is typed in but not confirmed (no order exists yet) goes with the cashier to the other type; an order that
+      // exists is the order of its type and table, and the aggregators' menu has its own prices.
+      const keepDraft = !isUpdatingOrder && type !== 'Aggregators' && selectedOrderType !== 'Aggregators';
       set({ 
-        activeOrders: [],
+        ...(keepDraft ? {} : { activeOrders: [] }),
+        previousOrderType: type === selectedOrderType ? get().previousOrderType : selectedOrderType,
         selectedOrderType: type,
         isUpdatingOrder: false,
         orderId: null,
@@ -771,7 +790,10 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     return cartItem?.quantity || 0;
   },
 
-  loadTableOrder: async (table: string) => {
+  loadTableOrder: async (table: string, carryDraft: boolean = false) => {
+    // the lines typed in but not confirmed (only when the caller asks, and only when no order is being edited)
+    const draft = carryDraft && !get().isUpdatingOrder ? get().activeOrders : [];
+    const draftCustomer = get().selectedCustomer;
     try {
       set({ orderLoading: true, error: null });
       const response = await getTableOrder(table);
@@ -816,17 +838,19 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           noOfPax: order.no_of_pax || 1,
           lastModifiedTime: order.modified || null,
           orderComment: order.custom_comments || '',
+          pendingDraft: draft.length > 0 ? { items: draft, customer: draftCustomer, table } : null,
         });
       } else {
         set({
           tableOrder: null,
-          activeOrders: [],
-          selectedCustomer: freshOrderCustomer(get().defaultCustomer, get().selectedOrderType),
+          activeOrders: draft,
+          selectedCustomer: draft.length > 0 ? draftCustomer : freshOrderCustomer(get().defaultCustomer, get().selectedOrderType),
           isUpdatingOrder: false,
           orderId: null,
           noOfPax: 1,
           lastModifiedTime: null,
           orderComment: '',
+          pendingDraft: null,
         });
       }
     } catch (error) {
@@ -846,9 +870,38 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
   },
 
+  addPendingDraftToTable: () => {
+    const { pendingDraft, activeOrders } = get();
+    if (!pendingDraft) return;
+    // the table's own lines come first (the same dish becomes one line); the lines added now have not been sent to the kitchen
+    const added = pendingDraft.items.map((item) => ({ ...item, sentQuantity: 0 }));
+    set({ activeOrders: mergeCartLines([...activeOrders, ...added]), pendingDraft: null });
+  },
+
+  cancelPendingDraft: () => {
+    const { pendingDraft, previousOrderType } = get();
+    if (!pendingDraft) return;
+    set({
+      selectedTable: null,
+      selectedRoom: null,
+      tableOrder: null,
+      isUpdatingOrder: false,
+      orderId: null,
+      activeOrders: pendingDraft.items,
+      selectedCustomer: pendingDraft.customer,
+      selectedOrderType: previousOrderType && previousOrderType !== 'Dine In' ? previousOrderType : 'Take Away',
+      noOfPax: 1,
+      lastModifiedTime: null,
+      orderComment: '',
+      pendingDraft: null,
+    });
+    get().fetchMenuItems();
+  },
+
   clearTableOrder: () => {
     set({
       tableOrder: null,
+      pendingDraft: null,
       activeOrders: [],
       selectedCustomer: freshOrderCustomer(get().defaultCustomer, get().selectedOrderType),
       isUpdatingOrder: false,

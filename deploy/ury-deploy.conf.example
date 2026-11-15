@@ -24,6 +24,8 @@ KEEP_LOG_DAYS=7
 MIN_AVAILABLE_MB=1000        # available memory below this
 MAX_SWAP_USED_MB=1000        # swap in use above this
 MAX_DISK_PERCENT=80
+SSD_DEVICE=/dev/nvme0           # the drive smartctl reads (`lsblk -d`: nvme0n1 -> /dev/nvme0, sda -> /dev/sda); empty = not checked
+MAX_SSD_USED_PERCENT=80      # the life of the SSD used, in percent
 MAX_BACKUP_AGE_HOURS=26
 SLOW_SECONDS=2               # an order that took longer is counted as slow
 ALERT_REPEAT_HOURS=6         # the same alert is not mailed again before this

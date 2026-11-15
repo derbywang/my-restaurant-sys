@@ -99,9 +99,10 @@
 
 `deploy/health.sh`：
 
-**每小时（`record`）** 在 `/var/log/ury/health-<日期>.log` 里记一段，保留 7 天：
+**每小时（`record`）** 在 `/var/log/ury/health-<日期>.log` 里记一段（内存、交换区、负载、磁盘占用、SSD 的寿命和累计写入量、下单耗时、各容器内存），保留 7 天：
 
     == 2026-12-14 19:05:01 available_mb=3120 swap_used_mb=40 load=0.82 0.64 0.51 disk_percent=4
+    ssd: used_percent=3 written=632_GB health=PASSED
     orders_last_hour: count=38 slow=0 p95=0.412s max=1.203s
       frappe_docker-backend-1 612MiB / 1.758GiB
       frappe_docker-db-1 1.102GiB / 1.758GiB
@@ -117,6 +118,8 @@
 | 最近一次成功的备份 | 超过 26 小时 | 备份过期 |
 | 容器 | 有不在运行的（`configurator` 除外，它只跑一次） | 有服务没有在运行 |
 | Tunnel | `cloudflared` 不在运行 | Tunnel 不在线 |
+| SSD 寿命已用（`smartctl` 的 `Percentage Used`；SATA 的 SSD 取"剩余寿命"属性换算） | 超过 80% | SSD 寿命将尽 |
+| SSD 自检（`smartctl -H`） | 不是 `PASSED` | SSD 自检不通过 |
 
 **每天 08:00（`daily`）** 一封日报：现在的内存、交换区、磁盘、备份多久之前、有没有停掉的服务、昨天可用内存最低的那一小时、`deploy_check` 的 FAIL 行。**没事也发**：哪天早上**没收到**，就是服务器或它的邮件出了问题，这是唯一能发现"整台机器死了"的办法（它自己发不出求救）。
 
@@ -169,6 +172,7 @@ scheduler 是否在跑、Error Log、未执行的补丁，都由 `deploy_check` 
 | 5 | 页面打开 | 手工：平板和手机打开菜单 | 店内 2 秒内，手机流量 3 秒内（第一次打开除外） |
 | 6 | **长时间运行内存是否持续增长** | 每天同一时刻（例如 15:05，店里闲的时候）各容器的内存，连看 4 天 | 4 天里**每个容器的增长不超过 20%**，可用内存没有一天比一天低。有持续增长：是哪个容器（多半是 `backend` 或 worker），告诉我 |
 | 7 | **备份时有没有卡顿** | 一次**在营业时间**手工跑 `backup.sh`，同时在收银台下单 | 下单仍在 3 秒内；`health` 那一小时没有提醒。（正常备份在 03:30，这一项是确认"白天临时要备份也行"） |
+| 7b | 磁盘（SSD，影响较小） | `ssd:` 一行的 `used_percent` 和 `written`；`vmstat` 的 `wa` | SSD 自检 `PASSED`、寿命已用低于 80%；4 天的写入量记下来（换算成一年，确认离 SSD 的写入寿命还远）；高峰时 `wa` 基本是 0 |
 | 8 | CPU 和温度 | `load`（log 里）；`sensors` | 负载长期不超过 CPU 的核心数；温度不到厂商的上限、没有降频 |
 | 9 | 容器有没有被杀 | 邮件「有服务没有在运行」；`dc ps` 的运行时长；`sudo dmesg | grep -i "killed process"` | 4 天里 0 次 |
 | 10 | 重启后的恢复 | `server-setup.md` 第 6 节 | 3 分钟内全部服务恢复，不用人管 |
@@ -195,7 +199,7 @@ scheduler 是否在跑、Error Log、未执行的补丁，都由 `deploy_check` 
 |---|---|---|
 | 可用内存偏低，响应正常 | 把不在用的站点从入口和 `SITES` 里拿掉（12/19 之后排练站点本来就不用了）；`INNODB_BUFFER_POOL` 从 1G 降到 768M | 数据库缓存变小，数据量大了之后变慢 |
 | 可用内存低，交换区在涨 | `queue-long` 和 `queue-short` 合成一个 worker（省约 300 MB）；`GUNICORN_WORKERS` 保持 2，**不要减到 1**（一个慢请求会卡住所有人） | 后台任务排队变长（打印、KOT 稍慢） |
-| 响应慢但内存够 | 看是不是硬盘（机械硬盘，`vmstat` 的 `wa` 高）或 CPU（`load` 高）。硬盘慢：换 SSD | 换 SSD 约 ¥6,000～10,000，要重装或克隆 |
+| 响应慢但内存够 | 这台是 **SSD，磁盘的影响较小**：先看 CPU（`load` 长期高于核心数；老一代的双核 i5 可能是瓶颈）和有没有在用交换区（`vmstat` 的 `si` / `so`）。磁盘只在两种情况下要看：`vmstat` 的 `wa` 持续很高，或 SSD 快写满 / 寿命将尽（监控会提醒） | CPU 不够只能换机器（方案 C） |
 | 以上都不行 | **加内存或换机器**，见 `launch-plan.md` 12/18 检查点的备选方案 | 见那里 |
 
 ---

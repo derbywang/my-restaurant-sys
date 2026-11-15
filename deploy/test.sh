@@ -45,6 +45,14 @@ cat > "$T/bin/systemctl" <<'S'
 #!/usr/bin/env bash
 [ -z "${TUNNEL_DOWN:-}" ]
 S
+cat > "$T/bin/smartctl" <<'S'
+#!/usr/bin/env bash
+case "${FAKE_SSD:-nvme}" in
+	nvme) printf 'SMART overall-health self-assessment test result: PASSED\nPercentage Used:                    %s%%\nData Units Written:                 1,234,567 [632 GB]\n' "${SSD_USED:-3}" ;;
+	sata) printf 'SMART overall-health self-assessment test result: %s\nID# ATTRIBUTE_NAME FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE\n177 Wear_Leveling_Count 0x0013 094 094 000 Pre-fail Always - 61\n241 Total_LBAs_Written 0x0032 099 099 000 Old_age Always - 2000000000\n' "${SSD_HEALTH:-PASSED}" ;;
+	silent) echo "nothing useful" ;;
+esac
+S
 chmod +x "$T/bin/"*
 echo "the-passphrase-of-the-password-manager" > "$T/passphrase"
 meminfo() { printf 'MemTotal: 8000000 kB\nMemAvailable: %d kB\nSwapTotal: 4194304 kB\nSwapFree: %d kB\n' $(($1 * 1024)) $(((4096 - $2) * 1024)) > "$T/meminfo"; }
@@ -69,6 +77,8 @@ MAX_DISK_PERCENT=101
 MAX_BACKUP_AGE_HOURS=26
 SLOW_SECONDS=2
 ALERT_REPEAT_HOURS=6
+SSD_DEVICE=/dev/fake
+MAX_SSD_USED_PERCENT=80
 S
 export PATH="$T/bin:$PATH" URY_DEPLOY_CONF="$T/conf" FAKE_CONTAINER="$C" FAKE_R2="$T/r2" FAKE_MAIL="$T/mail" FAKE_LOG="$T/calls" MEMINFO="$T/meminfo"
 fails=0
@@ -114,6 +124,16 @@ reset; now_stamp; FAKE_PS='backend running\ndb exited\nconfigurator exited\n' "$
 ok "health: a stopped service -> a mail that names it (the configurator is meant to have ended)" 'grep -q "db(exited)" "$T/mail" && ! grep -q "configurator" "$T/mail"'
 reset; now_stamp; TUNNEL_DOWN=1 "$here/health.sh" record > "$T/out" 2>&1
 ok "health: the tunnel is down -> a mail" 'grep -q "Tunnel" "$T/mail"'
+reset; now_stamp; "$here/health.sh" record > "$T/out" 2>&1
+ok "health: the SSD of an NVMe drive is in the log (life used, written, self test), no mail" 'grep -q "ssd: used_percent=3 written=632_GB health=PASSED" "$T"/log/health-*.log && [ ! -s "$T/mail" ]'
+reset; now_stamp; FAKE_SSD=sata "$here/health.sh" record > "$T/out" 2>&1
+ok "health: a SATA SSD: the life used comes from the attribute of the life left" 'grep -q "ssd: used_percent=6 written=1024_GB health=PASSED" "$T"/log/health-*.log'
+reset; now_stamp; SSD_USED=85 "$here/health.sh" record > "$T/out" 2>&1
+ok "health: an SSD near its end -> a mail" 'grep -q "SSD 寿命将尽" "$T/mail" && grep -q "85%" "$T/mail"'
+reset; now_stamp; FAKE_SSD=sata SSD_HEALTH=FAILED "$here/health.sh" record > "$T/out" 2>&1
+ok "health: the self test of the SSD fails -> a mail" 'grep -q "SSD 自检不通过" "$T/mail"'
+reset; now_stamp; FAKE_SSD=silent "$here/health.sh" record > "$T/out" 2>&1; code=$?
+ok "health: a drive that says nothing is not an alert" '[ $code = 0 ] && grep -q "ssd: used_percent=? written=? health=?" "$T"/log/health-*.log && [ ! -s "$T/mail" ]'
 reset; now_stamp; "$here/health.sh" daily > "$T/out" 2>&1
 ok "health: the daily mail is sent when all is well, with the result of deploy_check" 'grep -q "每日报告" "$T/mail" && grep -q "0 failed" "$T/mail"'
 touch -d '9 days ago' "$T/log/health-2026-01-01.log"; "$here/health.sh" record > "$T/out" 2>&1

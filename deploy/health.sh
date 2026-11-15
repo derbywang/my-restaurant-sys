@@ -25,6 +25,22 @@ backup_age_hours() {
 stopped_services() {
 	dc ps -a --format '{{.Service}} {{.State}}' | awk '$1 != "configurator" && $2 != "running" {printf "%s(%s) ", $1, $2}'
 }
+# the SSD (smartctl): "used% written health". NVMe says "Percentage Used"; a SATA SSD has an attribute whose normalized
+# value is the life LEFT (which one depends on the maker). "?" when the drive does not say.
+ssd() {
+	local out used written health
+	[ -n "${SSD_DEVICE:-}" ] && command -v smartctl >/dev/null || { echo "? ? ?"; return; }
+	out=$(smartctl -H -A "$SSD_DEVICE" 2>/dev/null || true)
+	used=$(echo "$out" | sed -n 's/^Percentage Used: *\([0-9]*\)%.*/\1/p' | head -1)
+	if [ -z "$used" ]; then
+		used=$(echo "$out" | awk '$2 ~ /^(Wear_Leveling_Count|Media_Wearout_Indicator|Percent_Lifetime_Remain|SSD_Life_Left|Remaining_Lifetime_Perc)$/ {print 100 - $4; exit}')
+	fi
+	written=$(echo "$out" | sed -n 's/^Data Units Written: .*\[\(.*\)\]/\1/p' | head -1 | tr ' ' '_')
+	[ -n "$written" ] || written=$(echo "$out" | awk '$2 == "Total_LBAs_Written" {printf "%.0f_GB", $10 * 512 / 1e9; exit}')
+	health=$(echo "$out" | sed -n 's/.*\(overall-health self-assessment test result\|SMART Health Status\): *\([A-Za-z]*\).*/\2/p' | head -1)
+	echo "${used:-?} ${written:-?} ${health:-?}"
+}
+
 # the orders of the last hour in nginx's log: "count slow p95 max" (seconds)
 order_times() {
 	dc logs --since 1h --no-log-prefix frontend 2>/dev/null |
@@ -52,6 +68,12 @@ checks() {
 	[ "$d" -le "$MAX_DISK_PERCENT" ] || alert disk "磁盘空间不足" "磁盘已用 ${d}%（超过 ${MAX_DISK_PERCENT}%）。"
 	[ "$b" -le "$MAX_BACKUP_AGE_HOURS" ] || alert backup "备份过期" "最近一次成功的备份是 ${b} 小时前（超过 ${MAX_BACKUP_AGE_HOURS} 小时）。"
 	[ -z "$stopped" ] || alert services "有服务没有在运行" "没有在运行的服务：${stopped}"
+	local ssd_state ssd_used ssd_health
+	ssd_state=$(ssd); ssd_used=${ssd_state%% *}; ssd_health=${ssd_state##* }
+	if [ "$ssd_used" != "?" ] && [ "$ssd_used" -gt "${MAX_SSD_USED_PERCENT:-80}" ]; then
+		alert ssd "SSD 寿命将尽" "SSD 的寿命已用 ${ssd_used}%（超过 ${MAX_SSD_USED_PERCENT:-80}%）。请安排更换硬盘；换之前确认备份是好的。"
+	fi
+	case "$ssd_health" in "?" | PASSED | OK) ;; *) alert ssd-health "SSD 自检不通过" "smartctl 报告硬盘健康状态是 ${ssd_health}。硬盘可能要坏了：马上确认备份，准备更换。" ;; esac
 	systemctl is-active --quiet cloudflared || alert tunnel "Tunnel 不在线" "cloudflared 没有在运行，顾客的手机扫码打不开点餐页（店内平板不受影响）。"
 }
 
@@ -60,6 +82,7 @@ record() {
 	t=$(order_times)
 	{
 		echo "== $(now) available_mb=$(available_mb) swap_used_mb=$(swap_used_mb) load=$(cut -d' ' -f1-3 /proc/loadavg) disk_percent=$(disk_percent)"
+		echo "ssd: $(ssd | awk '{print "used_percent=" $1 " written=" $2 " health=" $3}')"
 		echo "orders_last_hour: count=$(echo "$t" | cut -d' ' -f1) slow=$(echo "$t" | cut -d' ' -f2) p95=$(echo "$t" | cut -d' ' -f3)s max=$(echo "$t" | cut -d' ' -f4)s"
 		docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sed 's/^/  /'
 	} >> "$LOG"
@@ -74,6 +97,7 @@ daily() {
 	fails=$(bench_site "$ACTIVE_SITE" execute ury.ury.api.deploy_check.run 2>&1 | grep -E '^FAIL|failed, ' || true)
 	notify "每日报告" "现在：可用内存 $(available_mb) MB，交换区已用 $(swap_used_mb) MB，磁盘 $(disk_percent)%，最近一次备份 $(backup_age_hours) 小时前。
 没有在运行的服务：$(stopped_services)（空 = 全部在运行）
+SSD：$(ssd | awk '{print "寿命已用 " $1 "%，累计写入 " $2 "，自检 " $3}')
 昨天可用内存最低的一小时：${worst:-没有记录}
 deploy_check（${ACTIVE_SITE}）：
 ${fails}"

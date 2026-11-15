@@ -8,7 +8,7 @@
 
 顺序：本文（服务器 → 镜像 → 站点 → nginx → Tunnel）→ `site-import.md`（导入数据）→ `operations.md`（备份、监控、更新、最小配置验证、切换）。
 
-**服务器**：一台闲置的笔记本电脑，Intel CPU、内存 8 GB、硬盘 1 TB，Ubuntu Server 24.04 LTS。试营业期间它就是正式服务器，同时用来验证"8 GB 够不够"（`operations.md` 第 5 节，12/18 出结论）。
+**服务器**：一台闲置的笔记本电脑（现在是 Windows 11 Pro；Intel Core i5、内存 8 GB、SSD 1 TB），抹掉后装 Ubuntu Server 24.04 LTS（1.0 节）。试营业期间它就是正式服务器，同时用来验证"8 GB 够不够"（`operations.md` 第 5 节，12/18 出结论）。
 
 ---
 
@@ -37,6 +37,78 @@
 
 ## 1. 服务器准备（笔记本，Ubuntu Server 24.04）
 
+### 1.0 笔记本装 Ubuntu 前的确认【待服务器】
+
+这台笔记本现在是 Windows 11 Pro（Intel Core i5、内存 8 GB、SSD）。**装 Ubuntu 会把整块硬盘抹掉，Windows 和里面的所有文件都没有了，不能恢复。** 按顺序做，每做完一项打勾。
+
+**① 先把里面的东西留好（在 Windows 里）**
+
+- [ ] 看一遍「文档」「桌面」「下载」「图片」和 D 盘（如果有），要留的文件拷到 U 盘或别的电脑。浏览器里保存的密码、书签也算。
+- [ ] 记下这台电脑的**品牌和型号**（机身底部的标签，或「设置 > 系统 > 系统信息」），以及 CPU 的完整型号（同一页的「处理器」，例如 `Intel(R) Core(TM) i5-8250U`）。发给我：我用它查内存能不能加、电池充电上限怎么设。
+- [ ] Windows 的许可证：品牌笔记本的 Windows 11 许可证一般存在主板里，以后重装 Windows 会自动激活，不用记密钥。（以后不打算装回 Windows 的话，这一条可以不管。）
+
+**② BitLocker（硬盘加密）**
+
+Windows 11 Pro 可能开着 BitLocker。我们要抹掉整块硬盘，所以**不需要解密**；但改 BIOS 设置后 Windows 可能要求输入恢复密钥才能再进去，所以**在改 BIOS 之前**先做完 ①。
+- [ ] 看一下状态：「设置 > 隐私和安全性 > 设备加密」或「控制面板 > BitLocker 驱动器加密」。
+- [ ] 如果开着，而且你还想在装 Ubuntu 之前再进 Windows 几次：先在那一页点「关闭 BitLocker」等它解密完，或者把恢复密钥存到别处（那一页的「备份恢复密钥」）。
+
+**③ 做启动 U 盘（在 Windows 里，不熟悉的人照着做）**
+
+要准备：一个 **8 GB 以上的 U 盘**（里面的东西会全部被删掉）。
+
+1. 用浏览器打开 `https://ubuntu.com/download/server`，点绿色的按钮下载 **Ubuntu Server 24.04 LTS**。得到一个大约 3 GB 的文件，名字像 `ubuntu-24.04.x-live-server-amd64.iso`，在「下载」文件夹里。
+2. 打开 `https://rufus.ie`，往下找到「下载」，点最上面那个 `rufus-4.x.exe`（不带 "p" 或 "arm" 的那个）。它不用安装，下载完直接双击运行；Windows 问「是否允许此应用更改设备」时点「是」。
+3. 插上 U 盘。Rufus 窗口里：
+   - 「设备」：选你的 U 盘（**看清楚容量和名字，别选成别的盘**）；
+   - 「引导类型选择」：点右边的「选择」，选第 1 步下载的 `.iso` 文件；
+   - 「分区类型」：`GPT`；「目标系统类型」：`UEFI (非 CSM)`；
+   - 其余不动，点「开始」。问用哪种模式写入时选「以 ISO 镜像模式写入（推荐）」；提示 U 盘数据会被清除时点「确定」。
+4. 等进度条走完显示「准备就绪」（约 5～10 分钟），点「关闭」。在任务栏右下角点「安全删除硬件」后拔出 U 盘。
+
+**④ BIOS 里要看的设置**
+
+关机。按电源键后**立刻连续按** BIOS 键进入设置。各品牌不同：Lenovo 多是 `F1` 或 `F2`（或机身侧面的小孔按钮），Dell `F2`，HP `F10`（或先 `Esc`），ASUS `F2`，富士通 `F2`，NEC `F2`，东芝 / Dynabook `F2`，Panasonic `F2`。进不去的话，在 Windows 里：「设置 > 系统 > 恢复 > 高级启动 > 立即重新启动 > 疑难解答 > 高级选项 > UEFI 固件设置」。
+
+BIOS 的菜单每个品牌不一样，名字只是大致的；找不到就拍张照片发我。
+
+| 看什么 | 一般在哪 / 叫什么 | 要怎样 |
+|---|---|---|
+| **内存** | Main / Information / System Information | 记下显示的总量（应为 8 GB 左右），以及有没有写插槽（`DIMM 1` / `DIMM 2`、`Slot`）：两个插槽里空一个，就能加内存。拍照发我 |
+| **CPU 虚拟化** | Advanced / Security / Configuration 里的 `Intel Virtualization Technology`（`VT-x`） | **Docker 不需要它**（Docker 用的是容器，不是虚拟机），开着关着都可以；建议设为 Enabled，不影响别的 |
+| **安全启动（Secure Boot）** | Security / Boot 里的 `Secure Boot` | **保持 Enabled 即可**：Ubuntu 24.04 支持安全启动。只有在 U 盘启动不了、提示 "Security Boot Fail / Verification failed" 时，才把它改成 Disabled 再试 |
+| **启动方式** | Boot 里的 `UEFI / Legacy`、`CSM` | 用 **UEFI**（关闭 Legacy / CSM），和 ③ 里 U 盘的设置一致 |
+| **断电后自动开机** | Power / Advanced / Config 里的 `AC Recovery`、`Power On AC`、`Restore on AC Power Loss`、`AC Power Recovery` | 有的话设成开机（`Power On` / `Always On`）。**很多笔记本没有这一项**，没有就记下"没有"，见 1.2 的说明 |
+| **电池充电上限** | Power / Config 里的 `Battery Charge Threshold`、`Conservation Mode`、`Battery Care`、`ECO 充电` | 有的话设成 60%～80%。没有也没关系，装完 Ubuntu 再看能不能设（1.2） |
+| **硬盘模式** | Advanced / Storage 里的 `SATA Mode` / `Intel RST` / `VMD` | 如果是 `Intel RST` / `RAID` / `VMD` 而安装时**看不到硬盘**，改成 `AHCI`（这是 Intel 笔记本装 Linux 最常见的坑） |
+
+改完选「Save & Exit」（多是 `F10`）。
+
+**⑤ 从 U 盘安装**
+
+1. 关机，插上 U 盘和**网线**。按电源键后立刻连续按**启动菜单键**（Lenovo `F12`，Dell `F12`，HP `F9`，ASUS `Esc`，富士通 `F12`，NEC `F12`，Dynabook `F12`），在列表里选 U 盘（名字里有 `UEFI:` 和 U 盘的牌子）。
+2. 出现黑底的菜单，选 `Try or Install Ubuntu Server`，回车。等 1～2 分钟。
+3. 安装程序是英文的，用方向键、Tab 和回车操作。一路这样选：
+
+   | 画面 | 选什么 |
+   |---|---|
+   | Language | `English` |
+   | Keyboard | 这台电脑的键盘：日语键盘选 `Japanese`，不确定就用 "Identify keyboard" |
+   | Type of installation | `Ubuntu Server`（不是 minimized） |
+   | Network | 网线那一行应该已经拿到 `192.168.x.y` 的地址。**记下这个地址**。直接 Done |
+   | Proxy / Mirror | 不填，Done |
+   | Storage | `Use an entire disk`，选那块 SSD；**不要勾 LVM 加密**（"Encrypt the LVM group"：勾了每次开机都要有人输密码，断电后就起不来）。下一页 **把 `ubuntu-lv` 的大小改成最大**（默认只用一半：选 `ubuntu-lv` > Edit > Size 填它显示的最大值），然后 Done > Continue（这一步之后硬盘就被抹掉了） |
+   | Profile | Your name：随意；server name：`ury-server`；username：`ury`；密码：新生成一个强密码，**存进密码管理器** |
+   | Ubuntu Pro | `Skip for now` |
+   | SSH | 勾 `Install OpenSSH server` |
+   | Featured snaps | **什么都不选**（不要选里面的 docker：我们用 Docker 官方的版本，1.5） |
+
+4. 等它装完，出现 `Reboot Now`，回车；提示拔 U 盘时拔掉再回车。
+5. 重启后出现 `ury-server login:`，用 `ury` 和密码登录，输入 `ip a` 看地址，`free -h` 看内存（应为 7.x Gi），`lsblk` 看硬盘。
+6. 之后可以不用这台电脑的键盘了：在你自己的电脑上 `ssh ury@<第 3 步记下的地址>`。把 `lscpu | head -20`、`free -h`、`lsblk -d -o NAME,SIZE,ROTA,MODEL`、`sudo dmidecode -t memory | grep -E "Size|Locator|Type:|Speed"` 的输出发我。
+
+**装不上的常见情况**：启动菜单里没有 U 盘 → BIOS 里把 USB Boot 打开，或换一个 USB 口（用 USB 2.0 的口）；`Verification failed` → 关 Secure Boot；Storage 画面里没有硬盘 → ④ 的硬盘模式改 `AHCI`；网络那一行没有地址 → 网线没插好，或先继续装，之后再配。
+
 ### 1.1 安装系统【待服务器】
 
 - Ubuntu Server 24.04 LTS，最小安装，勾选 OpenSSH server；整盘使用；用户名例如 `ury`。
@@ -58,10 +130,10 @@
 | **断电后自动开机** | BIOS 里找 "AC Recovery / Power On AC / Restore on AC Power Loss" 设为开机。**很多笔记本没有这一项**：没有的话，有电池时短时间断电不受影响；长时间断电后要有人按电源键（写进故障预案） | 夜里跳闸后第二天早上服务器要在 |
 | **散热和摆放** | 放在通风、不会被碰到和泼到水的地方（不是厨房），垫高让底部进风；**建议开着盖**（很多机型从键盘面散热），屏幕会自己关；不要放在抽屉或柜子里 | 24 小时运行，过热会降频或关机 |
 | **UPS（建议）** | 小型 UPS（约 ¥8,000～15,000，【估计】）接**路由器和光猫**；笔记本有电池时自己不需要 | 断电时笔记本靠电池还活着，但路由器没电，平板一样连不上 |
-| **硬盘** | `sudo apt install smartmontools && sudo smartctl -a /dev/sda`（或 `nvme0`）看一次健康状态；是机械硬盘的话数据库会慢，告诉我 | 闲置的旧机器，硬盘可能老化 |
+| **硬盘（SSD）** | `sudo apt install smartmontools && sudo smartctl -a /dev/nvme0`（SATA 的 SSD 是 `/dev/sda`；`lsblk -d` 看是哪个）看一次：`SMART overall-health` 是 `PASSED`，`Percentage Used`（寿命已用）是多少。把设备名填进 `/etc/ury/deploy.conf` 的 `SSD_DEVICE`，监控每小时记录、超过 80% 或自检不通过时发邮件（`operations.md` 第 3 节） | 闲置的旧机器，SSD 可能已经用了不少；SSD 坏之前往往没有征兆，所以看寿命和备份 |
 | **温度** | `sudo apt install lm-sensors && sensors`，高峰时看一眼（`operations.md` 第 5 节的记录里有负载） | 确认散热够 |
 
-CPU 型号确认后补一行（`lscpu | head -20` 的输出发我）：镜像是 `linux/amd64`，近十年的 Intel CPU 都可以。
+CPU 是 Intel Core i5（具体型号待告知，1.0 节 ⑤ 第 6 步的输出发我）：镜像是 `linux/amd64`，任何一代 Core i5 都可以；代数影响的是速度（`operations.md` 第 5 节会量出来）。
 
 ### 1.3 交换区（8 GB 内存必须有）【待服务器】
 
@@ -89,7 +161,7 @@ CPU 型号确认后补一行（`lscpu | head -20` 的输出发我）：镜像是
     # Docker 官方源（https://docs.docker.com/engine/install/ubuntu/ 的步骤），然后：
     sudo usermod -aG docker ury            # 重新登录生效
     sudo systemctl enable docker           # 开机自启；容器的 restart 策略是 unless-stopped，开机后自己起来
-    sudo apt install -y git rclone msmtp msmtp-mta openssl
+    sudo apt install -y git rclone msmtp msmtp-mta openssl smartmontools
     docker compose version                 # v2
 
 ---

@@ -1,0 +1,84 @@
+# The shop's server on top of frappe_docker (docs/deploy/server-setup.md). Used with:
+#   compose.yaml, overrides/compose.mariadb.yaml, overrides/compose.redis.yaml, and this file.
+# What it adds: the memory limits for an 8 GB machine, our nginx template, the two entrances (the site in service on
+# port 80, the other site on port 8081), ports published on the shop's network and on the server itself only.
+#
+# The limits are ESTIMATES made before the server existed; they are measured during the rehearsal
+# (docs/deploy/operations.md, "最小配置的验证") and corrected here.
+
+x-nginx: &nginx
+  image: ${CUSTOM_IMAGE}:${CUSTOM_TAG}
+  pull_policy: ${PULL_POLICY:-never}
+  restart: ${RESTART_POLICY:-unless-stopped}
+  platform: linux/amd64
+  command:
+    - nginx-entrypoint.sh
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - ${URY_DEPLOY_DIR:-/opt/ury/app/deploy}/nginx-template.conf:/templates/nginx/frappe.conf.template:ro
+  depends_on:
+    - backend
+    - websocket
+  mem_limit: 128m
+
+x-nginx-environment: &nginx_environment
+  BACKEND: backend:8000
+  SOCKETIO: websocket:9000
+  NGINX_LISTEN_PORT: 8080
+  UPSTREAM_REAL_IP_ADDRESS: ${UPSTREAM_REAL_IP_ADDRESS:-127.0.0.1}
+  UPSTREAM_REAL_IP_HEADER: ${UPSTREAM_REAL_IP_HEADER:-X-Forwarded-For}
+  UPSTREAM_REAL_IP_RECURSIVE: ${UPSTREAM_REAL_IP_RECURSIVE:-off}
+  PROXY_READ_TIMEOUT: ${PROXY_READ_TIMEOUT:-120}
+  CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-50m}
+
+services:
+  # the site in service: tablets and registers (http://ury.lan) and the customers' phones (the tunnel, from the host)
+  frontend:
+    <<: *nginx
+    environment:
+      <<: *nginx_environment
+      FRAPPE_SITE_NAME_HEADER: ${ACTIVE_SITE:?set ACTIVE_SITE in .env}
+    ports:
+      - "${LAN_IP:?set LAN_IP in .env}:80:8080"
+      - "127.0.0.1:80:8080"
+
+  # the other site (the shop's site before 12/19, the rehearsal site after): the shop's network only, never the tunnel
+  frontend-staging:
+    <<: *nginx
+    environment:
+      <<: *nginx_environment
+      FRAPPE_SITE_NAME_HEADER: ${STAGING_SITE:?set STAGING_SITE in .env}
+    ports:
+      - "${LAN_IP}:8081:8080"
+
+  backend:
+    mem_limit: 1800m
+
+  websocket:
+    mem_limit: 256m
+
+  queue-short:
+    mem_limit: 700m
+
+  queue-long:
+    mem_limit: 700m
+
+  scheduler:
+    mem_limit: 400m
+
+  db:
+    mem_limit: 1800m
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-snapshot-isolation=OFF
+      - --innodb-buffer-pool-size=${INNODB_BUFFER_POOL:-1G}
+      - --max-connections=100
+
+  redis-cache:
+    mem_limit: 300m
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+
+  redis-queue:
+    mem_limit: 300m

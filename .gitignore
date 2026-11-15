@@ -23,3 +23,18 @@ build
 *.pem
 override.crt
 digital-certificate.txt
+
+# The repository is public: nothing of a real site or server goes in (docs/deploy/server-setup.md, section 0)
+.env
+.env.*
+deploy/.env
+deploy.conf
+*.sql.gz
+*-site_config_backup.json
+*.tar.enc
+initial-passwords-*.txt
+qr-secret*.txt
+ordering*.json
+backup-passphrase
+msmtprc
+rclone.conf

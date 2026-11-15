@@ -1,0 +1,29 @@
+# Copy to /etc/ury/deploy.conf on the server (owner root, chmod 600). NEVER commit the real file.
+# Read by deploy/backup.sh, deploy/health.sh and deploy/update.sh.
+
+COMPOSE_DIR=/opt/ury/frappe_docker           # where frappe_docker and its .env are
+COMPOSE_FILES="-f compose.yaml -f overrides/compose.mariadb.yaml -f overrides/compose.redis.yaml -f /opt/ury/app/deploy/compose.ury.yaml"
+SITES="rehearsal.smst.internal shop.smst.internal"   # the sites to back up and to check
+ACTIVE_SITE=rehearsal.smst.internal          # the one in service (deploy_check runs on it)
+
+# --- mail (msmtp is set up in /etc/msmtprc; docs/deploy/operations.md)
+MAIL_TO=owner@example.com
+MAIL_FROM=ury-server@example.com
+SERVER_NAME=sanyu-server
+
+# --- backups
+BACKUP_DIR=/var/backups/ury                  # encrypted sets on this machine
+BACKUP_PASSPHRASE_FILE=/etc/ury/backup-passphrase   # chmod 600; the same value is in the password manager
+RCLONE_REMOTE=r2:ury-backups                 # the rclone remote (Cloudflare R2) and the bucket
+KEEP_LOCAL_DAYS=14
+KEEP_REMOTE_DAYS=90
+
+# --- health: when a mail is sent
+LOG_DIR=/var/log/ury
+KEEP_LOG_DAYS=7
+MIN_AVAILABLE_MB=1000        # available memory below this
+MAX_SWAP_USED_MB=1000        # swap in use above this
+MAX_DISK_PERCENT=80
+MAX_BACKUP_AGE_HOURS=26
+SLOW_SECONDS=2               # an order that took longer is counted as slow
+ALERT_REPEAT_HOURS=6         # the same alert is not mailed again before this

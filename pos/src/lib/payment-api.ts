@@ -1,4 +1,5 @@
 import { call } from '@ury/core';
+import { fetchFresh } from './fresh-cache';
 
 interface PaymentMode {
   mode_of_payment: string;
@@ -11,19 +12,23 @@ interface PaymentModeResponse {
   message: PaymentMode[];
 }
 
-async function loadPaymentModes(): Promise<PaymentMode[]> {
-  const cached = sessionStorage.getItem('payment_mode_list');
-  if (cached) {
-    return JSON.parse(cached);
+let inFlight: Promise<PaymentMode[]> | null = null;
+
+/** The modes the server has now (the copy kept in the tab only when it cannot be reached); asked for together, one request. */
+function loadPaymentModes(): Promise<PaymentMode[]> {
+  if (!inFlight) {
+    inFlight = (async () => {
+      try {
+        return await fetchFresh('payment_mode_list', async () => {
+          const response = await call.get<PaymentModeResponse>("ury.ury_pos.api.getModeOfPayment");
+          return response.message;
+        });
+      } finally {
+        inFlight = null;
+      }
+    })();
   }
-  try {
-    const response = await call.get<PaymentModeResponse>("ury.ury_pos.api.getModeOfPayment");
-    sessionStorage.setItem('payment_mode_list', JSON.stringify(response.message));
-    return response.message;
-  } catch (error) {
-    console.error('Failed to fetch payment modes:', error);
-    throw error;
-  }
+  return inFlight;
 }
 
 export const getPaymentModes = async (): Promise<string[]> =>

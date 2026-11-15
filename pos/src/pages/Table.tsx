@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Layout, Square } from 'lucide-react';
 import { usePOSStore } from '../store/pos-store';
 import { useRootStore } from '../store/root-store';
-import { getRooms, getTables, getTableCount, getVacantTablesForBranch, mergeTablesBatch, unmergeTables, type Room, type Table } from '../lib/table-api';
+import { getTables, getVacantTablesForBranch, mergeTablesBatch, unmergeTables, type Room, type Table } from '../lib/table-api';
+import { loadRoomCounts, loadRooms } from '../lib/rooms';
 import { getMergeGroupMembers, formatMergedTableLabelFromGroup, getTableRenderGroups, sortTablesByMergeGroups } from '../lib/table-utils';
 import { Spinner } from '@ury/ui';
 import { Button } from '@ury/ui';
@@ -63,11 +64,6 @@ const TableView = () => {
     currentCaptain: string;
   } | null>(null);
 
-  const persistRoomCounts = useCallback((counts: Record<string, number>) => {
-    if (!branch) return;
-    sessionStorage.setItem(`ury_room_counts_${branch}`, JSON.stringify(counts));
-  }, [branch]);
-
   useEffect(() => {
     async function fetchRooms() {
       if (!branch) return;
@@ -75,19 +71,9 @@ const TableView = () => {
       setError(null);
 
       try {
-        const sessionKey = `ury_rooms_${branch}`;
-        const cachedRooms = sessionStorage.getItem(sessionKey);
-
-        if (cachedRooms) {
-          const parsedRooms = JSON.parse(cachedRooms) as Room[];
-          setRooms(parsedRooms);
-          setSelectedRoom((prev) => prev ?? (parsedRooms[0]?.name ?? null));
-        } else {
-          const fetchedRooms = await getRooms(branch);
-          setRooms(fetchedRooms);
-          setSelectedRoom((prev) => prev ?? (fetchedRooms[0]?.name ?? null));
-          sessionStorage.setItem(sessionKey, JSON.stringify(fetchedRooms));
-        }
+        const fetchedRooms = await loadRooms(branch);
+        setRooms(fetchedRooms);
+        setSelectedRoom((prev) => prev ?? (fetchedRooms[0]?.name ?? null));
       } catch (e) {
         console.error(e);
         setError('Failed to load rooms');
@@ -101,43 +87,16 @@ const TableView = () => {
 
   useEffect(() => {
     if (!branch || rooms.length === 0) return;
-    const cacheKey = `ury_room_counts_${branch}`;
-    const cachedCounts = sessionStorage.getItem(cacheKey);
-    let shouldFetch = true;
-
-    if (cachedCounts) {
-      try {
-        const parsedCounts = JSON.parse(cachedCounts) as Record<string, number>;
-        setRoomCounts(parsedCounts);
-        const hasAllRooms = rooms.every((room) => typeof parsedCounts[room.name] === 'number');
-        if (hasAllRooms) {
-          shouldFetch = false;
-        }
-      } catch {
-        sessionStorage.removeItem(cacheKey);
-      }
-    }
-
-    if (!shouldFetch) return;
-
-    async function fetchRoomCounts() {
-      try {
-        const counts = await Promise.all(
-          rooms.map((room) => getTableCount(room.name, room.branch))
-        );
-        const nextCounts = rooms.reduce((acc, room, index) => {
-          acc[room.name] = counts[index];
-          return acc;
-        }, {} as Record<string, number>);
-        setRoomCounts(nextCounts);
-        persistRoomCounts(nextCounts);
-      } catch (error) {
-        console.error('Failed to load room counts', error);
-      }
-    }
-
-    fetchRoomCounts();
-  }, [branch, rooms, persistRoomCounts]);
+    let cancelled = false;
+    loadRoomCounts(branch, rooms)
+      .then((counts) => {
+        if (!cancelled) setRoomCounts(counts);
+      })
+      .catch((error) => console.error('Failed to load room counts', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [branch, rooms]);
 
   const loadTables = useCallback(
     async (roomName: string, options?: { useCache?: boolean; silent?: boolean }) => {

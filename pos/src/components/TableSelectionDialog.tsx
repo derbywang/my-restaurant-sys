@@ -4,7 +4,8 @@ import { usePOSStore } from '../store/pos-store';
 import { Dialog, DialogContent } from '@ury/ui';
 import { Button } from '@ury/ui';
 import { cn } from '@ury/ui';
-import { getRooms, getTables, Room, Table } from '../lib/table-api';
+import { getTables, Room, Table } from '../lib/table-api';
+import { loadRooms } from '../lib/rooms';
 import { Badge } from '@ury/ui';
 import { Spinner } from '@ury/ui';
 import { TableShapeIcon } from './TableShapeIcon';
@@ -37,25 +38,11 @@ const TableSelectionDialog: React.FC<Props> = ({ onClose }) => {
       setError(null);
 
       try {
-        // Try to get rooms from session storage first
-        const sessionKey = `ury_rooms_${posProfile.branch}`;
-        const cachedRooms = sessionStorage.getItem(sessionKey);
-        
-        if (cachedRooms) {
-          const parsedRooms = JSON.parse(cachedRooms) as Room[];
-          setRooms(parsedRooms);
-          if (parsedRooms.length > 0) {
-            setSelectedRoom(parsedRooms[0].name);
-          }
-        } else {
-          // If not in session storage, fetch from API
-          const fetchedRooms = await getRooms(posProfile.branch);
-          setRooms(fetchedRooms);
-          if (fetchedRooms.length > 0) {
-            setSelectedRoom(fetchedRooms[0].name);
-          }
-          // Store in session storage
-          sessionStorage.setItem(sessionKey, JSON.stringify(fetchedRooms));
+        // the server's list (the copy kept in the tab is only for when the server cannot be reached)
+        const fetchedRooms = await loadRooms(posProfile.branch);
+        setRooms(fetchedRooms);
+        if (fetchedRooms.length > 0) {
+          setSelectedRoom(fetchedRooms[0].name);
         }
       } catch (e) {
         setError(t('errors.failed_load_rooms') || 'Failed to load rooms');

@@ -41,6 +41,7 @@ class Result:
 	errors: list = field(default_factory=list)
 	extra: list = field(default_factory=list)
 	passwords: dict = field(default_factory=dict)  # the initial passwords of the accounts made (apply_staff only)
+	notes: list = field(default_factory=list)  # what the owner should know after the import (not errors)
 
 	def add(self, verb, doctype, name, detail=""):
 		self.actions.append(Action(verb, doctype, name, detail))

@@ -103,7 +103,15 @@
 2b. 规格和トッピング的导入（**已做** 2026-11-15：模板加了「規格」「トッピング・追加」两页，导入器 `_expand` / `_links`；设计见 `self-order-options.md`、本文第 10 节）。
 3. 房间和桌子（**已做** 2026-11-15：`importer.py` 的 `plan_tables` / `apply_tables`，测试 `ury.setup.test_datapack_tables`）。规则：名字是键（桌子名全站唯一，别的分店已有同名桌子或同名房间 → 报错）；已有的桌子只对齐「ルーム、席数、テイクアウト用」，使用中、自助点餐开关、布局位置不动；新桌子形状默认 Square；表里没有的房间和桌子保留并在 `extra` 里列出，不删除。
 4. 账号（**导入部分已做** 2026-11-15：`importer.py` 的 `plan_staff` / `apply_staff`，测试 `ury.setup.test_datapack_staff`）。角色对应：店長 → URY Manager，レジ担当 → URY Cashier，ホール → URY Captain，厨房 → URY Kitchen（一人一个角色）。新账号：语言（空 = ja）、不发欢迎邮件、写进分店的用户表（全部）和 POS Profile 的适用用户（店长、收银、服务员，厨房不进）；每个新账号一个随机初始密码（14 位，去掉易混淆字符），写到只有所有者能读的文件（权限 600，不覆盖已有文件，出错时删除）。已有的账号：只补缺的位置、改语言，**不改密码、不改角色**；已有账号的角色和表里不同、或账号已停用 → 报错，由人决定；表里没有的账号保留并在 `extra` 里列出。**还没做：** 「首次登录强制改密码」（第 6 节的评估，做之前要再确认，它影响全站所有账号）和命令行入口（第 6 步的外壳）。
-5. Self Ordering Profile 和设备（导出 / 导入，不含密钥）。
+5. Self Ordering Profile 和设备（导出 / 导入，不含密钥）（**已做** 2026-11-15：`ury/setup/datapack/ordering.py`，测试 `ury.setup.test_datapack_ordering`）。
+   - **导出**（排练站点）`export_ordering(profile)` → `write_export(path, data)`：文件里有 Profile 的设置、语言、年龄确认的商品分类，和每台设备的 id、类型、布局、固定桌子、**凭据哈希**（排练站点上设置好的平板，到正式站点不用重新登记）。**不含**二维码密钥、原始凭据、`last_reported_at`。文件权限 600，不覆盖已有文件，按机密处理（不进 git）。
+   - **导入**（正式站点）`plan_ordering` / `apply_ordering(data, public_url=, local_url=, qr_signing_secret=)`：
+     - **二维码密钥单独给**：二维码里是「Profile 名｜桌名｜签名」，签名用密钥算。12/4 在排练站点印的二维码，要在正式站点读得出，密钥必须相同。新 Profile 没给密钥就自己生成一个，结果里写明「和排练站点不同，印好的二维码读不了」；已有 Profile 的密钥和给的不同 → 报错（不改）。
+     - **网址属于站点**：新 Profile 用文件里的 `public_url` / `local_url`（可用参数覆盖）；已有的 Profile 永远不从文件改网址（正式站点是 `https://order.smst.app`，不能被排练站点的值盖掉）。
+     - 设备用 `device_id` 当键；已有设备的凭据哈希和文件不同 → 报错（说明有人在站点上重新发过凭据，由人决定）；已有设备其余项对齐文件，哈希不动；文件里没有的设备保留并列在 `extra`。
+     - 前提：先导入桌子和菜单；固定桌子、餐厅、POS Profile、默认顾客、语言、商品分类必须已在站点上，缺了就报错并写明。
+     - 一个错误就整体不写；重复导入什么都不变。
+   - 命令行入口在第 6 步。
 6. 站点设置和 `plan` / `apply` 的外壳。
 
 每一步先写测试（红 → 绿），会写数据的测试先在临时站点上跑，结果干净再上 `ury-test.localhost`；`apply` 的集成测试用示例数据，在事务内跑。

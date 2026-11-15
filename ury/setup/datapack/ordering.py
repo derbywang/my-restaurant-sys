@@ -81,8 +81,10 @@ def read_export(path):
 # ---------------------------------------------------------------------------------------------------- the import
 
 
-def plan_ordering(data, public_url=None, local_url=None, qr_signing_secret=None):
-	return _OrderingImport(data, dry=True, public_url=public_url, local_url=local_url, secret=qr_signing_secret).run()
+def plan_ordering(data, public_url=None, local_url=None, qr_signing_secret=None, pending=()):
+	"""`pending`: {(doctype, name)} that the same pack makes before this step (the tables, the item groups); the plan of the
+	whole pack reads before anything is written, so it counts them as there."""
+	return _OrderingImport(data, dry=True, public_url=public_url, local_url=local_url, secret=qr_signing_secret, pending=pending).run()
 
 
 def apply_ordering(data, public_url=None, local_url=None, qr_signing_secret=None):
@@ -94,8 +96,9 @@ def apply_ordering(data, public_url=None, local_url=None, qr_signing_secret=None
 
 
 class _OrderingImport(_Import):
-	def __init__(self, data, dry, public_url, local_url, secret):
+	def __init__(self, data, dry, public_url, local_url, secret, pending=()):
 		super().__init__(data, None, dry)
+		self.pending = set(pending)
 		self.given = {"public_url": public_url, "local_url": local_url}
 		self.secret = secret
 		self.profile = data["profile"]
@@ -140,7 +143,7 @@ class _OrderingImport(_Import):
 			if not frappe.db.exists("Language", language):
 				self.error(f"言語「{language}」がこのサイトにありません。")
 		for group in p.get("age_check_item_groups") or []:
-			if not frappe.db.exists("Item Group", group):
+			if not self._there("Item Group", group):
 				self.error(f"年齢確認の商品分類「{group}」がこのサイトにありません。")
 		if self.exists and self.secret is not None:
 			current = get_decrypted_password(PROFILE_DOCTYPE, name, "qr_signing_secret", raise_exception=False)
@@ -149,6 +152,9 @@ class _OrderingImport(_Import):
 					f"二次元コードの秘密鍵が、サイトの「{name}」のものと違います。違う鍵で入れ替えると、印刷した二次元コードが読めなくなるので、取り込みでは変えません。"
 				)
 		self._check_devices(branch)
+
+	def _there(self, doctype, name):
+		return (doctype, name) in self.pending or frappe.db.exists(doctype, name)
 
 	def _check_devices(self, branch):
 		meta = frappe.get_meta(DEVICE_DOCTYPE)
@@ -167,6 +173,8 @@ class _OrderingImport(_Import):
 			table = d.get("fixed_table")
 			if table:
 				table_branch = frappe.db.get_value("URY Table", table, "branch") if frappe.db.exists("URY Table", table) else None
+				if ("URY Table", table) in self.pending:
+					table_branch = branch  # the pack makes it (for this shop's branch) before the devices
 				if table_branch != branch:
 					self.error(f"端末「{device_id}」の固定テーブル「{table}」がこのサイトにない、または分店「{branch}」のものではありません。先にテーブルを取り込んでください。")
 			site = frappe.db.get_value(DEVICE_DOCTYPE, {"device_id": device_id}, ["name", "credential_hash", "ordering_profile"], as_dict=True)

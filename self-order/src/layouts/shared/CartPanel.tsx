@@ -4,6 +4,7 @@ import type { CartEntry } from '../../lib/cart'
 import CartLineRow from '../../components/CartLineRow'
 import SplitNotice from '../../components/SplitNotice'
 import CartTotals, { cartTotalText } from '../../components/CartTotals'
+import { cartCountText } from '../../lib/cart-text'
 import { t } from '../../i18n'
 import { mergeOrderLines } from '../../lib/order-lines'
 
@@ -101,7 +102,7 @@ function CartPanel({
       <div className="border-t pt-3">
         <div className="mb-3 flex items-center justify-between text-sm font-semibold">
           <span>
-            {t('cart.items', { count: cartCount })}
+            {cartCountText(cartCount)}
           </span>
           <span className="tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
         </div>

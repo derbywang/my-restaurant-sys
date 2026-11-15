@@ -1,4 +1,5 @@
 import { formatCurrency } from '@ury/core'
+import { useState } from 'react'
 import { t } from '../i18n'
 import type { CartEntry } from '../lib/cart'
 import CartNote from './CartNote'
@@ -18,6 +19,9 @@ interface CartLineRowProps {
  * are as many as the dish, so there is one pair of buttons for the whole line.
  */
 function CartLineRow({ entry, notesEnabled, onIncrement, onDecrement, onNote, buttonClassName }: CartLineRowProps) {
+  // the note box is folded until the guest asks for it (a box under every line made the cart as high as the menu); a note
+  // that is already written stays in view
+  const [noteOpen, setNoteOpen] = useState(false)
   return (
     <li>
       <div className="flex items-center justify-between gap-2">
@@ -42,7 +46,14 @@ function CartLineRow({ entry, notesEnabled, onIncrement, onDecrement, onNote, bu
           ))}
         </ul>
       )}
-      {notesEnabled && <CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => onNote(entry.key, value)} />}
+      {notesEnabled && (noteOpen || entry.note !== '') && (
+        <CartNote itemName={entry.item.item_name} value={entry.note} onChange={(value) => onNote(entry.key, value)} />
+      )}
+      {notesEnabled && !noteOpen && entry.note === '' && (
+        <button type="button" onClick={() => setNoteOpen(true)} className="mt-0.5 text-xs text-primary underline">
+          {t('cart.note_add')}
+        </button>
+      )}
     </li>
   )
 }

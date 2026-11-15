@@ -13,6 +13,7 @@ import CartLineRow from '../components/CartLineRow'
 import { priceText } from './shared/MenuGrid'
 import { cartCountFor } from '../lib/cart'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
+import { cartCountText } from '../lib/cart-text'
 import { t } from '../i18n'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { mergeOrderLines } from '../lib/order-lines'
@@ -285,7 +286,7 @@ function PortraitKioskLayout({ initialContext }: LayoutProps) {
               aria-expanded={cartExpanded}
             >
               <span className="text-base font-semibold">
-                {t('cart.items', { count: cartCount })}
+                {cartCountText(cartCount)}
               </span>
               <span className="text-base font-semibold tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
             </button>

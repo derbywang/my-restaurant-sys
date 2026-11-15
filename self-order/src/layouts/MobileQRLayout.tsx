@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ItemOptionsDialog from '../components/ItemOptionsDialog'
 import ClosedNotice from '../components/ClosedNotice'
@@ -11,6 +12,7 @@ import { priceText } from './shared/MenuGrid'
 import { cartCountFor } from '../lib/cart'
 import CartTotals, { cartTotalText } from '../components/CartTotals'
 import { t } from '../i18n'
+import { cartCountText } from '../lib/cart-text'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { mergeOrderLines } from '../lib/order-lines'
 import type { OrderingContext } from '../lib/api'
@@ -57,6 +59,9 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     changeLanguage,
   } = useOrderingSession(initialContext)
 
+  // the cart is one bar at the bottom (the count, the total, the order button); the lines open on a tap and scroll inside
+  const [cartOpen, setCartOpen] = useState(false)
+
   function handleStartOver() {
     if (window.confirm(t('confirm.start_over'))) {
       resetSession()
@@ -85,19 +90,19 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
   const isPickup = context?.source === 'QR Pickup'
 
   return (
-    <div className="min-h-screen pb-28">
+    <div className="min-h-screen pb-36">
       {closed && <ClosedNotice kind={closed} />}
       <AgeConfirmDialog item={ageQuestion} onAnswer={answerAge} />
       <ItemOptionsDialog item={optionsItem} session={context?.session} language={language} capabilities={context?.capabilities} onAdd={addLine} onClose={closeOptions} />
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-lg font-semibold">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background/95 px-3 py-3 backdrop-blur">
+        <h1 className="min-w-0 truncate whitespace-nowrap text-base font-semibold">
           {isPickup ? t('header.pickup') : context?.table ? t('header.table', { table: context.table }) : t('header.order')}
         </h1>
-        <div className="flex items-center gap-3">
-          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="md" />
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} variant="menu" />
           <button
             onClick={handleStartOver}
-            className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground"
+            className="whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-medium text-muted-foreground"
           >
             {t('header.start_over')}
           </button>
@@ -183,25 +188,39 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
       </section>
 
       {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 border-t bg-background p-4">
-          <ul className="mb-2 max-h-32 space-y-1 overflow-y-auto text-sm">
-            {cartItems.map((entry) => (
-              <CartLineRow
-                key={entry.key}
-                entry={entry}
-                notesEnabled={Boolean(context?.capabilities.item_notes_enabled)}
-                onIncrement={incrementCart}
-                onDecrement={decrementCart}
-                onNote={setCartNote}
-                buttonClassName="h-6 w-6 rounded-full border text-xs leading-none"
-              />
-            ))}
-          </ul>
-          <div className="mb-2 flex items-center justify-between text-sm font-semibold">
-            <span>{t('cart.items', { count: cartCount })}</span>
+        <div className="fixed inset-x-0 bottom-0 border-t bg-background px-4 pb-3 pt-2">
+          {cartOpen && (
+            <div className="mb-2 max-h-[45vh] overflow-y-auto border-b pb-2">
+              <ul className="space-y-2 text-sm">
+                {cartItems.map((entry) => (
+                  <CartLineRow
+                    key={entry.key}
+                    entry={entry}
+                    notesEnabled={Boolean(context?.capabilities.item_notes_enabled)}
+                    onIncrement={incrementCart}
+                    onDecrement={decrementCart}
+                    onNote={setCartNote}
+                    buttonClassName="h-7 w-7 rounded-full border text-sm leading-none"
+                  />
+                ))}
+              </ul>
+              <div className="mt-2">
+                <CartTotals preview={cartPreview} failed={previewFailed} />
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setCartOpen((open) => !open)}
+            aria-expanded={cartOpen}
+            className="mb-2 flex w-full items-center justify-between gap-2 text-sm font-semibold"
+          >
+            <span className="whitespace-nowrap">{cartCountText(cartCount)}</span>
             <span className="tabular-nums">{cartTotalText(cartTotal, previewFailed)}</span>
-          </div>
-          <CartTotals preview={cartPreview} failed={previewFailed} />
+            <span className="whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium text-primary">
+              {cartOpen ? t('cart.hide') : t('cart.view')}
+            </span>
+          </button>
           <button
             onClick={submitCart}
             disabled={submitting}

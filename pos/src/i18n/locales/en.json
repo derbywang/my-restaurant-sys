@@ -470,6 +470,8 @@
     "addons": "Add-ons",
     "loading_addons": "Loading add-ons...",
     "no_addons": "No add ons",
+    "toppings_only": "Add the toppings only",
+    "toppings_only_hint": "For a dish that is already ordered: only the toppings are added, not another dish.",
     "total": "Total",
     "update_order": "Update Order",
     "add_to_order": "Add to Order"

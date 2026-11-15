@@ -84,9 +84,16 @@ def resolve_restaurant_menu(branch, room=None, order_type=None, cashier=False):
         order_by="item_name asc"
     )
 
+    # A topping (an item that another item lists in "Item Add On") has no card on the register: the dialog of its dish
+    # offers it, and needs its name and price, so it stays in the list marked.
+    addon_codes = set(
+        frappe.get_all("Item Add On", filters={"parenttype": "Item"}, pluck="item")
+    )
+
     menu_items_with_image = [
         {
             "item": item.item,
+            "is_addon": 1 if item.item in addon_codes else 0,
             "item_name": _(item.item_name) if item.item_name else item.item_name,
             "rate": item.rate,
             "special_dish": item.special_dish,

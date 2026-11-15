@@ -1,3 +1,4 @@
+import { shownCategories, shownItems } from '../../lib/menu-display';
 import { useEffect, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { usePOSStore } from '../../store/pos-store';
@@ -41,7 +42,7 @@ const CaptainMenu: React.FC<CaptainMenuProps> = ({ canAddItems }) => {
 
   const filteredItems = useMemo(() => {
     const term = searchQuery.toLowerCase();
-    return menuItems.filter((item) => {
+    return shownItems(menuItems).filter((item) => {
       const matchesCategory = !selectedCategory || item.course === selectedCategory;
       const matchesSearch =
         !searchQuery ||
@@ -83,7 +84,7 @@ const CaptainMenu: React.FC<CaptainMenuProps> = ({ canAddItems }) => {
           >
             {t('common.all')}
           </button>
-          {categories.map((category) => (
+          {shownCategories(categories, menuItems).map((category) => (
             <button
               key={category.name}
               onClick={() => setSelectedCategory(category.name)}

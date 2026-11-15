@@ -1,4 +1,5 @@
 //Not currently used, will update later
+import { shownItems } from '../lib/menu-display';
 import { useState, useEffect, useRef } from 'react';
 import { Search, Command, X } from 'lucide-react';
 import { usePOSStore } from '../store/pos-store';
@@ -14,7 +15,7 @@ const Spotlight = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const { menuItems, setSelectedItem } = usePOSStore();
 
-  const filteredItems = menuItems.filter(item =>
+  const filteredItems = shownItems(menuItems).filter(item =>
     item.name.toLowerCase().includes(query.toLowerCase()) ||
     item.category?.toLowerCase().includes(query.toLowerCase())
   ).slice(0, 10);

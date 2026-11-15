@@ -470,6 +470,8 @@
     "addons": "加料",
     "loading_addons": "正在加载加料...",
     "no_addons": "无加料",
+    "toppings_only": "只追加加料",
+    "toppings_only_hint": "用于已点的菜后来才要加料：只加加料，不再加这道菜。",
     "total": "合计",
     "update_order": "更新订单",
     "add_to_order": "加入订单"

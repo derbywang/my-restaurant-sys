@@ -470,6 +470,8 @@
     "addons": "추가 옵션",
     "loading_addons": "추가 옵션 불러오는 중...",
     "no_addons": "추가 옵션 없음",
+    "toppings_only": "토핑만 추가",
+    "toppings_only_hint": "이미 주문한 요리에 토핑만 추가할 때 사용합니다（요리는 추가되지 않습니다）.",
     "total": "합계",
     "update_order": "주문 수정",
     "add_to_order": "주문에 추가"

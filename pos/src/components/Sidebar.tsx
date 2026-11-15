@@ -1,3 +1,4 @@
+import { shownCategories, shownItems } from '../lib/menu-display';
 import { Grid3X3 } from 'lucide-react';
 import { CategoryIcon } from '../lib/category-icons';
 import { usePOSStore } from '../store/pos-store';
@@ -16,12 +17,12 @@ const Sidebar = ({ disabled }: SidebarProps) => {
 
   // Count items per category
   const getCategoryCount = (category: string) => {
-    const count = menuItems.filter(item => item.course === category).length;
+    const count = shownItems(menuItems).filter(item => item.course === category).length;
     return count;
   };
 
   const getAllItemsCount = () => {
-    const count = menuItems.length;
+    const count = shownItems(menuItems).length;
     return count;
   };
 
@@ -64,7 +65,7 @@ const Sidebar = ({ disabled }: SidebarProps) => {
 
           {/* Category Items */}
           <div className="space-y-1">
-            {categories.map((category) => {
+            {shownCategories(categories, menuItems).map((category) => {
               const count = getCategoryCount(category.name);
               const isActive = selectedCategory === category.name;
               return (

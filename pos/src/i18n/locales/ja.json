@@ -470,6 +470,8 @@
     "addons": "トッピング・追加オプション",
     "loading_addons": "追加オプションを読み込み中...",
     "no_addons": "追加オプションはありません",
+    "toppings_only": "トッピングだけを追加する",
+    "toppings_only_hint": "すでに注文した料理に、あとからトッピングだけ足すときに使います（料理は追加されません）。",
     "total": "合計",
     "update_order": "注文を更新",
     "add_to_order": "注文に追加"

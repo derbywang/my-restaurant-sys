@@ -7,6 +7,7 @@ import { formatCurrency } from '@ury/core';
 import { Button, Dialog, DialogContent, Input } from '@ury/ui';
 import { db } from '@ury/core';
 import { t } from '../i18n';
+import { canAddChoice, choiceTotal, linesToAdd } from '../lib/product-lines';
 
 interface Variant {
   id: string;
@@ -118,6 +119,8 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
   const [selectedAddons, setSelectedAddons] = useState<Array<{ id: string; name: string; price: number }>>(initialAddons);
   const [quantity, setQuantity] = useState<string>(editMode ? initialQuantity?.toString() || '0' : '0');
   const [comments, setComments] = useState<string>(itemToReplace?.comment || '');
+  // the dish is already ordered and the guest only wants a topping on it: add the topping, not another dish
+  const [toppingsOnly, setToppingsOnly] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   // editing a line that was already sent: not below what was sent, unless the user may take dishes back
   const mayTakeBack = useRootStore((state) => Boolean(state.permissions?.reduce_sent_items));
@@ -209,8 +212,7 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
   // Always get price from menuItems for the main item
   const basePrice = selectedItem?.price ? Number(selectedItem.price) : 0;
   const numericQuantity = quantity === '' ? 0 : parseFloat(quantity);
-  const addonsTotal = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
-  const total = (basePrice + addonsTotal) * numericQuantity;
+  const total = choiceTotal(basePrice, selectedAddons, numericQuantity, toppingsOnly);
 
   const handleQuantityChange = (value: string) => {
     // Only allow valid numbers and one decimal point
@@ -241,8 +243,8 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
 
   const handleAddToOrder = () => {
     const numericQuantity = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
-    if (isNaN(numericQuantity) || numericQuantity <= 0) {
-      return; // Don't add to order if quantity is 0 or invalid
+    if (!canAddChoice(numericQuantity, selectedAddons, toppingsOnly)) {
+      return; // Don't add to order if quantity is 0 or invalid, or no topping when only toppings are added
     }
     if (numericQuantity < quantityFloor) {
       setQuantity(String(quantityFloor)); // a sent dish cannot be taken back here
@@ -254,41 +256,11 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
       removeFromOrder(itemToReplace.uniqueId);
     }
 
-    // Add main item as a cart line
-    const trimmedComment = comments.trim();
-    const orderItem: OrderItem = {
-      ...selectedItem,
-      quantity: numericQuantity,
-      price: basePrice,
-      comment: trimmedComment || undefined
-    };
-    addToOrder(orderItem);
-
-    // Add each selected add-on as a separate cart line
-    selectedAddons.forEach(addon => {
-      // Find the full menu item details for the add-on
-      const menuAddon = menuItems.find(item => item.item === addon.id);
-      const addonOrderItem: OrderItem = menuAddon
-        ? {
-            ...menuAddon,
-            quantity: numericQuantity,
-            price: addon.price
-          }
-        : {
-            id: addon.id,
-            name: addon.name,
-            price: addon.price,
-            quantity: numericQuantity,
-            image: null,
-            item: addon.id,
-            item_name: addon.name,
-            course: '',
-            description: '',
-            special_dish: 0 as 0 | 1,
-            tax_rate: 0
-          } as OrderItem;
-      addToOrder(addonOrderItem);
-    });
+    // the dish as a cart line, then each selected add-on as a line of its own (only the add-ons for "toppings only")
+    linesToAdd(
+      { selectedItem, basePrice, quantity: numericQuantity, comment: comments, addons: selectedAddons, toppingsOnly },
+      menuItems
+    ).forEach((line) => addToOrder(line));
 
     handleClose();
   };
@@ -475,6 +447,20 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
                     </button>
                   ))}
                 </div>
+                {!editMode && (
+                  <label className="mt-4 flex items-start gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={toppingsOnly}
+                      onChange={(event) => setToppingsOnly(event.target.checked)}
+                    />
+                    <span>
+                      {t('product_dialog.toppings_only')}
+                      <span className="block text-xs text-gray-500">{t('product_dialog.toppings_only_hint')}</span>
+                    </span>
+                  </label>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center text-gray-400 text-sm">{t('product_dialog.no_addons')}</div>
@@ -490,7 +476,7 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
               onClick={handleAddToOrder}
               className="w-full mt-4"
               size="lg"
-              disabled={numericQuantity === 0}
+              disabled={!canAddChoice(numericQuantity, selectedAddons, toppingsOnly)}
             >
               {editMode || existingCartItem ? t('product_dialog.update_order') : t('product_dialog.add_to_order')}
             </Button>

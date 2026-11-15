@@ -38,6 +38,8 @@ export interface MenuItem extends Omit<APIMenuItem, 'rate' | 'item_image'> {
   quantity?: number;
   description?: string;
   special_dish?: 1 | 0;
+  /** A topping of another dish: no card of its own, but the dialog of the dish needs its name and price. */
+  is_addon?: boolean | 0 | 1;
   category?: string;
   variants?: Array<{ id: string; name: string; price: number }>;
   addons?: Array<{ id: string; name: string; price: number; category: 'sides' | 'drinks' | 'desserts' }>;
@@ -479,6 +481,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         course_label: item.course_label || item.course,
         description: item.description || '',
         special_dish: item.special_dish || 0,
+        is_addon: item.is_addon ? 1 : 0,
         tax_rate: 0,
       }));
 

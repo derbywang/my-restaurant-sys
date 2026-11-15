@@ -4,6 +4,7 @@ import MenuCard from './MenuCard';
 import { Spinner } from '@ury/ui';
 import { cn } from '@ury/ui';
 import { t } from '../i18n';
+import { shownItems } from '../lib/menu-display';
 
 interface MenuListProps {
   onItemClick: (item: any) => void;
@@ -27,7 +28,7 @@ const MenuList: React.FC<MenuListProps> = ({ onItemClick }) => {
   }, [fetchMenuItems]);
 
   const filteredItems = useMemo(() => {
-    return menuItems.filter(item => {
+    return shownItems(menuItems).filter(item => {
       const searchTerm = searchQuery.toLowerCase();
       const matchesCategory = !selectedCategory || item.course === selectedCategory;
       const matchesSearch = !searchQuery || 

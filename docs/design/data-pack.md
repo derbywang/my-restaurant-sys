@@ -69,7 +69,7 @@
 
 - 表里**不写密码**。导入器给每个账号生成一次性初始密码（随机，每人不同），写进服务器上**只有店主能读**的文件（权限 600，不进 git，不进备份之外的地方），店主发给店员。
 - 店员（Website User，没有 Desk）**第一次登录后自己改密码**：`/update-password`（需要旧密码），`/me` 页有入口（`report-permissions.md` 已实测）；步骤写进 `staff-training-points.md`。
-- **"首次登录强制改密码"的评估**：Frappe 没有"第一次登录就强制"的开关，只有 System Settings 的 `force_user_to_reset_password`（"N 天没改密码就要在登录时改"，全站统一）和用户的 `last_password_reset_date`（`frappe/auth.py` 的 `force_user_to_reset_password`）。做法：数据包创建账号后把 `last_password_reset_date` 设成很早的日期，并把 `force_user_to_reset_password` 设成一个大的天数（例如 365）。结果：每个新账号第一次登录会被带到改密码页，改完之后一年内不再被要求（以后每年改一次，附带效果）。注意：① 账号创建时 Frappe 会把 `last_password_reset_date` 设成今天，所以要在设初始密码**之后**再改；② 影响所有人（店主和已有账号一年后都会被要求改密码，Administrator 等标准账号除外）；③ 要用真实登录（HTTP）测试 Website User 的流程。**结论：值得做，约 0.25 天，放在账号那一步，做之前再确认。**
+- **"首次登录强制改密码"的评估**：Frappe 没有"第一次登录就强制"的开关，只有 System Settings 的 `force_user_to_reset_password`（"N 天没改密码就要在登录时改"，全站统一）和用户的 `last_password_reset_date`（`frappe/auth.py` 的 `force_user_to_reset_password`）。做法：数据包创建账号后把 `last_password_reset_date` 设成很早的日期，并把 `force_user_to_reset_password` 设成一个大的天数（例如 365）。结果：每个新账号第一次登录会被带到改密码页，改完之后一年内不再被要求（以后每年改一次，附带效果）。注意：① 账号创建时 Frappe 会把 `last_password_reset_date` 设成今天，所以要在设初始密码**之后**再改；② 影响所有人（店主和已有账号一年后都会被要求改密码，Administrator 等标准账号除外）；③ 要用真实登录（HTTP）测试 Website User 的流程。**结论（2026-11-15）：已评估，决定不做。** 理由：`force_user_to_reset_password` 是全站统一的天数，设了之后每年全员（含店主和以后新增的账号）都要被迫改一次密码，对门店太麻烦；店员人数少，由店主发初始密码、培训要求第一次登录后在 `/update-password` 自己改（培训材料的「第一天要做的事」第 1 条，`staff-training-points.md`），已经够用。风险（有人不改、一直用店主知道的初始密码）靠培训和店主的抽查承担；之后如果发现有人没改，再回来评估。
 
 ## 7. 其他店的数据迁移（2026-11-15）
 

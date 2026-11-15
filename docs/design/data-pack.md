@@ -101,7 +101,7 @@
 1. 模板和读取器（**已做** 2026-11-15）。
 2. 菜单导入（含分类、厨房、中韩英名称、可选图片；重复导入不产生重复）（**已做** 2026-11-15，`ury/setup/datapack/importer.py` 的 `plan_menu` / `apply_menu`，测试 `ury.setup.test_datapack_menu`；规格和加料见下一步）。
 2b. 规格和トッピング的导入（**已做** 2026-11-15：模板加了「規格」「トッピング・追加」两页，导入器 `_expand` / `_links`；设计见 `self-order-options.md`、本文第 10 节）。
-3. 房间和桌子。
+3. 房间和桌子（**已做** 2026-11-15：`importer.py` 的 `plan_tables` / `apply_tables`，测试 `ury.setup.test_datapack_tables`）。规则：名字是键（桌子名全站唯一，别的分店已有同名桌子或同名房间 → 报错）；已有的桌子只对齐「ルーム、席数、テイクアウト用」，使用中、自助点餐开关、布局位置不动；新桌子形状默认 Square；表里没有的房间和桌子保留并在 `extra` 里列出，不删除。
 4. 账号（初始密码文件、语言、分店用户表、POS Profile 适用用户；强制改密码）。
 5. Self Ordering Profile 和设备（导出 / 导入，不含密钥）。
 6. 站点设置和 `plan` / `apply` 的外壳。

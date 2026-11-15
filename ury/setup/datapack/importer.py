@@ -60,7 +60,9 @@ def apply_menu(data, folder=None):
 	return plan
 
 
-class _MenuImport:
+class _Import:
+	"""What the parts of the import share: the data, the result, and the check of the 「店舗」 sheet."""
+
 	def __init__(self, data, folder, dry):
 		self.data = data
 		self.folder = folder
@@ -68,6 +70,48 @@ class _MenuImport:
 		self.result = Result()
 		self.shop = None
 		self.profile = None
+
+	def error(self, text):
+		self.result.errors.append(text)
+
+	def _check_shop(self):
+		from ury.setup.jp_tax import is_japan_site
+
+		rows = self.data.get("shop", [])
+		if len(rows) != 1:
+			self.error("シート「店舗」には、分店名・レストラン名・メニュー名を1行だけ書いてください。")
+			return False
+		self.shop = rows[0].values
+		branch, restaurant = self.shop["branch"], self.shop["restaurant"]
+		if not is_japan_site():
+			self.error("この取り込みは日本の店（会社の国が日本、通貨が円）のサイトでだけ使えます。")
+			return False
+		if not frappe.db.exists("Branch", branch):
+			self.error(f"分店「{branch}」がサイトにありません。先にセットアップウィザードで登録してください（分店名は同じ綴りで）。")
+			return False
+		restaurant_branch = (
+			frappe.db.get_value("URY Restaurant", restaurant, "branch") if frappe.db.exists("URY Restaurant", restaurant) else None
+		)
+		if not restaurant_branch:
+			self.error(f"レストラン「{restaurant}」がサイトにありません。先にセットアップウィザードで登録してください。")
+			return False
+		if restaurant_branch != branch:
+			self.error(f"レストラン「{restaurant}」は分店「{restaurant_branch}」のもので、「店舗」シートの分店「{branch}」と違います。")
+			return False
+		self.profile = frappe.db.get_value("POS Profile", {"branch": branch, "disabled": 0}, ["name", "warehouse"], as_dict=True)
+		if not self.profile:
+			self.error(f"分店「{branch}」の POS Profile がありません。先にセットアップウィザードを完了してください。")
+			return False
+		missing = [kind for kind in schema.KINDS if not frappe.db.exists("Item Group", kind)]
+		if missing and getattr(self, "dishes", None):
+			self.error("商品分類「" + "」「".join(missing) + "」がありません。日本の税の設定（セットアップウィザード）が終わっていません。")
+			return False
+		return True
+
+
+class _MenuImport(_Import):
+	def __init__(self, data, folder, dry):
+		super().__init__(data, folder, dry)
 		self.errors_of_the_sheets = []
 		self.variant_groups = {}  # base dish -> [the base, its variants]
 		self.addon_links = {}  # a dish (a base or a variant) -> [the names of its toppings]
@@ -89,9 +133,6 @@ class _MenuImport:
 		self._links()
 		self._restaurant()
 		return self.result
-
-	def error(self, text):
-		self.result.errors.append(text)
 
 	# ------------------------------------------------------------------------------------------------ the dishes
 
@@ -164,40 +205,6 @@ class _MenuImport:
 		return members + list(made.values())
 
 	# ------------------------------------------------------------------------------------------------ the shop
-
-	def _check_shop(self):
-		from ury.setup.jp_tax import is_japan_site
-
-		rows = self.data.get("shop", [])
-		if len(rows) != 1:
-			self.error("シート「店舗」には、分店名・レストラン名・メニュー名を1行だけ書いてください。")
-			return False
-		self.shop = rows[0].values
-		branch, restaurant = self.shop["branch"], self.shop["restaurant"]
-		if not is_japan_site():
-			self.error("この取り込みは日本の店（会社の国が日本、通貨が円）のサイトでだけ使えます。")
-			return False
-		if not frappe.db.exists("Branch", branch):
-			self.error(f"分店「{branch}」がサイトにありません。先にセットアップウィザードで登録してください（分店名は同じ綴りで）。")
-			return False
-		restaurant_branch = (
-			frappe.db.get_value("URY Restaurant", restaurant, "branch") if frappe.db.exists("URY Restaurant", restaurant) else None
-		)
-		if not restaurant_branch:
-			self.error(f"レストラン「{restaurant}」がサイトにありません。先にセットアップウィザードで登録してください。")
-			return False
-		if restaurant_branch != branch:
-			self.error(f"レストラン「{restaurant}」は分店「{restaurant_branch}」のもので、「店舗」シートの分店「{branch}」と違います。")
-			return False
-		self.profile = frappe.db.get_value("POS Profile", {"branch": branch, "disabled": 0}, ["name", "warehouse"], as_dict=True)
-		if not self.profile:
-			self.error(f"分店「{branch}」の POS Profile がありません。先にセットアップウィザードを完了してください。")
-			return False
-		missing = [kind for kind in schema.KINDS if not frappe.db.exists("Item Group", kind)]
-		if missing and self.dishes:
-			self.error("商品分類「" + "」「".join(missing) + "」がありません。日本の税の設定（セットアップウィザード）が終わっていません。")
-			return False
-		return True
 
 	# ------------------------------------------------------------------------------------------------ images
 
@@ -485,6 +492,88 @@ class _MenuImport:
 		self.result.add("same" if current == menu else "update", "URY Restaurant", restaurant, f"メニュー: {menu}")
 		if current != menu and not self.dry:
 			frappe.db.set_value("URY Restaurant", restaurant, "active_menu", menu)
+
+
+def plan_tables(data):
+	return _TablesImport(data, None, dry=True).run()
+
+
+def apply_tables(data):
+	plan = _TablesImport(data, None, dry=True).run()
+	if plan.errors:
+		return plan
+	_TablesImport(data, None, dry=False).run()
+	return plan
+
+
+class _TablesImport(_Import):
+	"""The rooms and the tables. The names are the keys (the QR codes and the tablets point at the table names): a table
+	that the site has is only brought in line with the sheet in its room, its seats and its take-away mark; its state
+	(in use, self ordering open, the place on the layout) is not touched. Nothing is deleted."""
+
+	def run(self):
+		if not self._check_shop():
+			return self.result
+		branch, restaurant = self.shop["branch"], self.shop["restaurant"]
+		rooms = [row.values["name"] for row in self.data.get("rooms", [])]
+		tables = [row.values for row in self.data.get("tables", [])]
+		self._check(branch, rooms, tables)
+		if self.result.errors:
+			return self.result
+		for name in rooms:
+			self._room(name, branch)
+		for values in tables:
+			self._table(values, branch, restaurant)
+		self._extra(branch, rooms, tables)
+		return self.result
+
+	def _check(self, branch, rooms, tables):
+		for name in rooms:
+			other = frappe.db.get_value("URY Room", name, "branch") if frappe.db.exists("URY Room", name) else None
+			if other and other != branch:
+				self.error(f"ルーム「{name}」は別の分店「{other}」のものです（このパックの分店は「{branch}」）。ルームの名前を変えてください。")
+		for values in tables:
+			name, room = values["name"], values["room"]
+			if frappe.db.exists("URY Table", name):
+				other = frappe.db.get_value("URY Table", name, "branch")
+				if other != branch:
+					self.error(f"テーブル「{name}」は別の分店「{other}」のものです（このパックの分店は「{branch}」）。テーブルの名前を変えてください。")
+			if room not in rooms and not frappe.db.exists("URY Room", {"name": room, "branch": branch}):
+				self.error(f"テーブル「{name}」のルーム「{room}」が、「ルーム」シートにもサイトにもありません。")
+
+	def _room(self, name, branch):
+		if frappe.db.exists("URY Room", name):
+			self.result.add("same", "URY Room", name)
+			return
+		self.result.add("create", "URY Room", name)
+		if not self.dry:
+			frappe.get_doc({"doctype": "URY Room", "name": name, "branch": branch}).insert(ignore_permissions=True)
+
+	def _table(self, values, branch, restaurant):
+		name = values["name"]
+		wanted = {
+			"restaurant_room": values["room"],
+			"no_of_seats": values.get("seats") or 0,
+			"is_take_away": 1 if values.get("take_away") else 0,
+		}
+		if not frappe.db.exists("URY Table", name):
+			self.result.add("create", "URY Table", name, values["room"])
+			if not self.dry:
+				frappe.get_doc(
+					{"doctype": "URY Table", "name": name, "restaurant": restaurant, "branch": branch, "table_shape": "Square", **wanted}
+				).insert(ignore_permissions=True)
+			return
+		current = frappe.db.get_value("URY Table", name, list(wanted), as_dict=True)
+		changed = [k for k, v in wanted.items() if _differs(current.get(k), v)]
+		self.result.add("update" if changed else "same", "URY Table", name, "、".join(changed))
+		if changed and not self.dry:
+			frappe.db.set_value("URY Table", name, {k: wanted[k] for k in changed})
+
+	def _extra(self, branch, rooms, tables):
+		listed_tables = {v["name"] for v in tables}
+		extra = [t for t in frappe.get_all("URY Table", filters={"branch": branch}, pluck="name", order_by="name") if t not in listed_tables]
+		extra += [r for r in frappe.get_all("URY Room", filters={"branch": branch}, pluck="name", order_by="name") if r not in set(rooms)]
+		self.result.extra = extra
 
 
 def _differs(current, wanted):

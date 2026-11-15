@@ -159,6 +159,23 @@ def _check_export():
 	return found
 
 
+def _check_waiter_sees_no_sales():
+	"""A waiter sees the open orders of their branch, not the paid invoices (ury/ury/api/invoice_visibility.py)."""
+	from ury.ury.api import invoice_visibility
+
+	found = []
+	for user in _staff_users(("URY Captain",)):
+		if invoice_visibility.may_see_sales(user):  # also a cashier or an admin: they settle bills, so they see the sales
+			continue
+		invoice = frappe.new_doc("POS Invoice")
+		invoice.docstatus = 1
+		if frappe.has_permission("POS Invoice", "read", doc=invoice, user=user):
+			found.append((FAIL, f"{user} can read a paid POS Invoice (the sales are open to them)"))
+		elif not invoice_visibility.pos_invoice_query_conditions(user):
+			found.append((FAIL, f"{user}: lists of POS Invoice are not limited to the open orders"))
+	return found
+
+
 def _check_pos_invoice_permissions():
 	cancel = _roles_with("POS Invoice", "cancel")
 	found = []
@@ -648,6 +665,7 @@ CHECKS = (
 	("who reads the reports", _check_report_settings),
 	("export permission of the staff", _check_export),
 	("POS Invoice permissions", _check_pos_invoice_permissions),
+	("sales hidden from the waiter", _check_waiter_sees_no_sales),
 	("staff without Desk", _check_staff_without_desk),
 	("language of the staff", _check_staff_language),
 	("URY KOT permissions", _check_ury_kot_permissions),

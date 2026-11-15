@@ -141,6 +141,16 @@ class TestAccountsAndPermissions(Rollback, URYTestCase):
 		).db_insert()
 		self.assertTrue(mentions(levels(deploy_check._check_export), "ToDo", deploy_check.FAIL))
 
+	def test_a_waiter_who_could_see_the_paid_invoices_fails(self):
+		from unittest.mock import patch
+
+		self.assertEqual(levels(deploy_check._check_waiter_sees_no_sales), [])
+		# without the two hooks of invoice_visibility the waiter's reach is the permission tables' alone
+		with patch("ury.ury.api.invoice_visibility.pos_invoice_has_permission", return_value=None):
+			self.assertTrue(mentions(levels(deploy_check._check_waiter_sees_no_sales), CAPTAIN, deploy_check.FAIL))
+		with patch("ury.ury.api.invoice_visibility.pos_invoice_query_conditions", return_value=""):
+			self.assertTrue(mentions(levels(deploy_check._check_waiter_sees_no_sales), CAPTAIN, deploy_check.FAIL))
+
 	def test_the_captain_who_can_cancel_a_pos_invoice_fails(self):
 		self.assertEqual(levels(deploy_check._check_pos_invoice_permissions), [])
 		name = frappe.db.get_value("Custom DocPerm", {"parent": "POS Invoice", "role": "URY Captain", "permlevel": 0})

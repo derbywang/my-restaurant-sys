@@ -1,6 +1,6 @@
 # 报表和营业数据的权限（2026-11-08）
 
-- 状态：最小版已实现（只禁止服务员和收银员越权）；完整版见末尾「还没做」。
+- 状态：最小版（11/8）和完整版（11/16：服务员只看得到未结账的订单）都已实现。
 - 相关：`launch-plan.md`（排期、`deploy_check`）、`ui-todo.md`。
 - 原则：**判断一律来自 DocType 权限，不写死角色名**。
 
@@ -58,6 +58,15 @@
 - **只有 URY Manager、URY Admin、System Manager 对 URY Report Settings 有 `read`**（查 DocPerm 和 Custom DocPerm，出现其他角色就列出来）。
 - **URY Captain、URY Cashier 在任何 DocType 上都没有 `export`**（有效权限：Custom DocPerm 有就看 Custom，没有看标准 DocPerm；和守门测试同一个算法，出现就列出 DocType）。
 
-## 还没做（完整版）
-- 服务员对 POS Invoice 本来就有读权限（点单要用），可以通过通用接口自己汇总销售额；要靠按分店 / 按本人限制才能堵上。
-- 管理端用户页：新建、编辑按钮已按 `frappe.client.has_permission`（User 的 create / write）显示；店长现在两个都没有，所以看得到用户列表，看不到新建和编辑。
+## 完整版：服务员只看得到未结账的订单（2026-11-16 已做）
+
+- 问题：服务员对 POS Invoice 要有读权限（点单用），通过通用接口（`frappe.client.get_list`、`get_count`、报表视图、`frappe.client.get`）也能自己汇总营业额。
+- 做法（`ury/ury/api/invoice_visibility.py`，两个钩子在 `hooks.py`）：**不能收款的人**（对 POS Invoice 没有 `submit`，按 DocType 权限判断，不写角色名）只看得到 **docstatus 0（还没结账）且属于自己分店** 的 POS Invoice；能收款的人（收银员、店长、管理员）全部看得到。列表和统计走 `permission_query_conditions`，单张走 `has_permission`（只限制"看"：read、select、print、email、report、export、share；写还是按权限表）。
+- 不受影响：服务器自己的查询（`get_all`、`ignore_permissions`、顾客自助点餐的游客流程）；服务员点单、加菜、打印账单、桌子一览（这些都是未结账的订单）。
+- 付款后订单变成 docstatus 1，服务员就看不到了（桌子这时已空出来，画面上没有它）。
+- `deploy_check` 的 `sales hidden from the waiter`：对每个只有服务员权限（不能收款）的账号，用一张未保存的已提交 POS Invoice 试 `read`，能读就是 FAIL；列表条件为空也是 FAIL。既是收银员又有服务员角色的账号不算（他们本来就能看）。
+- 测试 `ury.ury.api.test_invoice_visibility`（10 项：列表、汇总、打开和打印已付款的单、未结账的单照常、别的分店、同分店、收银员 / 店长 / 管理员、服务器自己的查询、按权限而不是角色名）。
+- **注意**：改了 `hooks.py` 里的这两个钩子要重启 web 服务；测试里用 `frappe.get_all` 看全部数据，用 `frappe.get_list` + `as_user` 看某人看得到的。
+
+## 还没做
+- 管理端用户页：新建、编辑按钮已按 `frappe.client.has_permission`（User 的 create / write）显示；店长现在两个都没有，所以看得到用户列表，看不到新建和编辑。要不要让店长在管理画面里建账号（现在由数据包导入）还没定。

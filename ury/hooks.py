@@ -158,7 +158,15 @@ before_uninstall = "ury.uninstall.uninstall"
 # has_permission = {
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
 # }
-has_permission = {"User": "ury.user_security.user_has_permission"}
+has_permission = {
+    "User": "ury.user_security.user_has_permission",
+    "POS Invoice": "ury.ury.api.invoice_visibility.pos_invoice_has_permission",
+}
+
+# a waiter sees the open orders of their branch, not the sales (ury/ury/api/invoice_visibility.py)
+permission_query_conditions = {
+    "POS Invoice": "ury.ury.api.invoice_visibility.pos_invoice_query_conditions",
+}
 
 # DocType Class
 # ---------------

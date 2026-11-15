@@ -7,6 +7,9 @@ import {
   friendlyError,
   isWaiterOnly,
   showsWaiterScreenLink,
+  showsRegisterLink,
+  leaveForRegister,
+  REGISTER_URL,
   normalizePermissions,
 } from './pos-permissions';
 
@@ -118,5 +121,46 @@ describe('the dashboard page', () => {
 
   it('is a no when the answer lacks the key (an old server)', () => {
     expect(normalizePermissions({ take_orders: true, settle_payment: true }).view_dashboard).toBe(false);
+  });
+});
+
+describe('the way back to the register from the waiter screen', () => {
+  const waiter = { ...NO_PERMISSIONS, take_orders: true, print_bill: true };
+
+  it('is offered to who may take the money, not to a waiter, not before the permissions are known', () => {
+    expect(showsRegisterLink(normalizePermissions(CASHIER))).toBe(true);
+    expect(showsRegisterLink(waiter)).toBe(false);
+    expect(showsRegisterLink(NO_PERMISSIONS)).toBe(false);
+    expect(showsRegisterLink(null)).toBe(false);
+  });
+
+  it('goes to the register screen at once when nothing waits to be sent', () => {
+    const went: string[] = [];
+    let asked = 0;
+    leaveForRegister({ hasUnsent: false, ask: () => asked++, go: (url) => went.push(url) });
+    expect(went).toEqual([REGISTER_URL]);
+    expect(asked).toBe(0);
+    expect(REGISTER_URL).toBe('/pos/pos');
+  });
+
+  it('asks first when dishes were not sent yet (leaving throws them away)', () => {
+    const went: string[] = [];
+    let asked = 0;
+    leaveForRegister({ hasUnsent: true, ask: () => asked++, go: (url) => went.push(url) });
+    expect(went).toEqual([]);
+    expect(asked).toBe(1);
+  });
+});
+
+describe('the words of the way back', () => {
+  it('are there in the four languages of the staff', async () => {
+    for (const language of ['ja', 'en', 'zh', 'ko']) {
+      const messages = (await import(`../i18n/locales/${language}.json`)).default;
+      for (const key of ['back_to_register', 'register_unsent_message', 'register_anyway']) {
+        expect(messages.captain[key], `${language} captain.${key}`).toBeTruthy();
+      }
+    }
+    const ja = (await import('../i18n/locales/ja.json')).default;
+    expect(ja.captain.back_to_register).toBe('レジに戻る');
   });
 });

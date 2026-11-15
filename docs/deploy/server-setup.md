@@ -302,6 +302,8 @@ CPU 是 Intel Core i5（具体型号待告知，1.0 节 ⑤ 第 6 步的输出�
 - 安装 ury 时 `after_install` 分步执行，哪一步出错会写明（`ury/install.py`）。
 - 两个站点的 `encryption_key` **各不相同**（`sites/<站点>/site_config.json`），它是解开站点里所有加密值（二维码密钥等）的钥匙：**随备份成套保管**，不单独拷来拷去（`launch-plan.md` 2.6）。
 
+**排练站点的公司名带「（練習）」（2026-11-16 确认）**：12/1 建排练站点、走设置向导时，公司名填「三友寿司（練習）」（正式站点填正式的公司名）。这样画面、小票和报表上一眼能看出是练习用的，不会把 `http://ury.lan:8081`（切换后的排练站点）当成真的账。**分店名、餐厅名、Profile 名两个站点必须相同**（数据包和二维码按这些名字找），只有公司名不同。【待服务器：公司名在哪些画面和小票上显示，建好后看一遍】
+
 ### 3.2 站点级设置【已读代码】
 
     dc exec backend bench --site rehearsal.smst.internal set-config allow_tests 0     # deploy_check 的 allow_tests 一项

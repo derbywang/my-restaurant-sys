@@ -580,6 +580,9 @@
     "logout_unsent_message": "Dishes you added or took back are not sent to the kitchen yet. If you log out now, they are lost.",
     "logout_keep_working": "Keep working",
     "logout_anyway": "Log out anyway",
+    "back_to_register": "Back to the register",
+    "register_unsent_message": "The dishes you added or took off have not been sent to the kitchen yet. If you go back to the register now, they are lost.",
+    "register_anyway": "Go back anyway",
     "shift_closed_title": "The register is not open yet",
     "shift_closed_message": "Please wait until the cashier opens the register.",
     "shift_closed_recheck": "Check again"

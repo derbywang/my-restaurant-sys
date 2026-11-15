@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogOut, User } from 'lucide-react';
+import { ChevronDown, LogOut, Store, User } from 'lucide-react';
 import { Button, showToast } from '@ury/ui';
 import { logout } from '@ury/core';
 import { t } from '../../i18n';
 import { useRootStore } from '../../store/root-store';
 import type { RootState } from '../../store/root-store';
 import { logoutToLogin } from '../../lib/staff-logout';
+import { leaveForRegister, REGISTER_URL, showsRegisterLink } from '../../lib/pos-permissions';
 
 interface CaptainUserMenuProps {
   /** Dishes on the screen that were not sent yet: logging out throws them away, so the waiter is asked first. */
   hasUnsent?: boolean;
 }
 
-/** The waiter's account: the name, the account and the logout (several waiters share one tablet). */
+/** The waiter's account: the name, the account, the way back to the register (for who may take the money) and the logout. */
 const CaptainUserMenu = ({ hasUnsent = false }: CaptainUserMenuProps) => {
   const user = useRootStore((state: RootState) => state.user);
   const [open, setOpen] = useState(false);
-  const [asking, setAsking] = useState(false);
+  const permissions = useRootStore((state: RootState) => state.permissions);
+  const [asking, setAsking] = useState<'logout' | 'register' | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,8 +41,18 @@ const CaptainUserMenu = ({ hasUnsent = false }: CaptainUserMenuProps) => {
 
   const onLogout = () => {
     setOpen(false);
-    if (hasUnsent) setAsking(true);
+    if (hasUnsent) setAsking('logout');
     else void leave();
+  };
+
+  // a full page load (this menu is also shown outside the router, on the waiter's "no shift yet" screen)
+  const toRegister = (url: string = REGISTER_URL) => {
+    window.location.href = url;
+  };
+
+  const onRegister = () => {
+    setOpen(false);
+    leaveForRegister({ hasUnsent, ask: () => setAsking('register'), go: toRegister });
   };
 
   return (
@@ -57,6 +69,16 @@ const CaptainUserMenu = ({ hasUnsent = false }: CaptainUserMenuProps) => {
             <p className="break-all text-sm text-gray-500">{user?.name || ''}</p>
           </div>
           <div className="py-2">
+            {showsRegisterLink(permissions) && (
+              <Button
+                variant="ghost"
+                className="flex w-full items-center justify-start px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                onClick={onRegister}
+              >
+                <Store className="me-3 h-4 w-4" />
+                {t('captain.back_to_register')}
+              </Button>
+            )}
             <Button
               variant="ghost"
               className="flex w-full items-center justify-start px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -73,13 +95,15 @@ const CaptainUserMenu = ({ hasUnsent = false }: CaptainUserMenuProps) => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
           <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl" role="alertdialog">
             <h2 className="mb-2 text-lg font-semibold text-gray-900">{t('captain.logout_unsent_title')}</h2>
-            <p className="mb-6 text-sm text-gray-600">{t('captain.logout_unsent_message')}</p>
+            <p className="mb-6 text-sm text-gray-600">
+              {t(asking === 'register' ? 'captain.register_unsent_message' : 'captain.logout_unsent_message')}
+            </p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setAsking(false)}>
+              <Button variant="outline" onClick={() => setAsking(null)}>
                 {t('captain.logout_keep_working')}
               </Button>
-              <Button variant="destructive" onClick={() => void leave()}>
-                {t('captain.logout_anyway')}
+              <Button variant="destructive" onClick={() => (asking === 'register' ? toRegister() : void leave())}>
+                {t(asking === 'register' ? 'captain.register_anyway' : 'captain.logout_anyway')}
               </Button>
             </div>
           </div>

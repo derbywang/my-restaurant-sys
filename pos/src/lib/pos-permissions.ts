@@ -68,6 +68,20 @@ export function showsWaiterScreenLink(permissions: PosPermissions | null): boole
   return Boolean(permissions?.take_orders) && !isWaiterOnly(permissions);
 }
 
+/** The register screen (the router's base is /pos, the register is its /pos). */
+export const REGISTER_URL = '/pos/pos';
+
+/** The waiter screen offers the way back to the register to who may take the money (a cashier, a manager). */
+export function showsRegisterLink(permissions: PosPermissions | null): boolean {
+  return Boolean(permissions?.settle_payment);
+}
+
+/** Back to the register: at once, or after asking when dishes on the screen were not sent yet (leaving throws them away). */
+export function leaveForRegister(options: { hasUnsent: boolean; ask: () => void; go: (url: string) => void }): void {
+  if (options.hasUnsent) options.ask();
+  else options.go(REGISTER_URL);
+}
+
 /** The discount box: the user may give discounts and the POS Profile has discounts switched on. */
 export function canShowDiscount(
   permissions: PosPermissions | null,

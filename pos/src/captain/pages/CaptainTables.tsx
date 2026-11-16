@@ -11,6 +11,7 @@ import { t } from '../../i18n';
 import ServiceRequestBanner from '../../components/ServiceRequestBanner';
 import SoundToggle from '../../components/SoundToggle';
 import { cardState } from '../../lib/service-requests';
+import { useAnswerCalls } from '../../lib/use-answer-calls';
 import { useServiceRequestStore } from '../../store/service-request-store';
 import { getRooms, getTables, type Room, type Table } from '../../lib/table-api';
 import { getMergeGroupMembers, sortTablesByMergeGroups } from '../../lib/table-utils';
@@ -145,6 +146,7 @@ export default function CaptainTables() {
   // the calls for the bill of the branch (kept fresh by the listener of the app) and the tables they come from
   const billCalls = useServiceRequestStore((state) => state.requests);
   const billCallsNow = useServiceRequestStore((state) => state.now);
+  const answerCalls = useAnswerCalls();
   const tablesVersion = useServiceRequestStore((state) => state.tablesVersion);
   useEffect(() => {
     if (tablesVersion === 0) return;
@@ -270,6 +272,8 @@ export default function CaptainTables() {
                   ownerName={ownership === 'mine' ? undefined : ownerName}
                   mergePartners={mergePartners}
                   billCall={cardState(billCalls, table.name, billCallsNow)}
+                  staffCall={cardState(billCalls, table.name, billCallsNow, 'Assistance')}
+                  onAnswerCall={() => void answerCalls(table.name)}
                   waitingBills={waitingBills.get(table.name) ?? null}
                   onTap={() => handleTableTap(table)}
                   selfOrderSlot={

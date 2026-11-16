@@ -61,9 +61,14 @@ export interface CardState {
   late: boolean;
 }
 
-/** What the card of `table` shows for its bill call; null when there is none. One still Open makes the card not quiet. */
-export function cardState(requests: ServiceRequest[], table: string, now: number): CardState | null {
-  const mine = requests.filter((r) => r.table === table && r.type === 'Bill');
+/** What the card of `table` shows for its call of `type` (bill, or staff); null when there is none. One still Open makes the card not quiet. */
+export function cardState(
+  requests: ServiceRequest[],
+  table: string,
+  now: number,
+  type: ServiceRequest['type'] = 'Bill'
+): CardState | null {
+  const mine = requests.filter((r) => r.table === table && r.type === type);
   if (mine.length === 0) return null;
   const seconds = Math.max(...mine.map((r) => waitedSeconds(r, now)));
   return {
@@ -73,16 +78,16 @@ export function cardState(requests: ServiceRequest[], table: string, now: number
   };
 }
 
-/** The Open bill calls (what the banner shows), the longest waiting first. */
+/** The Open calls, bill and staff (what the banner shows), the longest waiting first. */
 export function bannerRequests(requests: ServiceRequest[], now: number): ServiceRequest[] {
   return requests
-    .filter((r) => r.type === 'Bill' && r.status === 'Open')
+    .filter((r) => r.status === 'Open')
     .sort((a, b) => waitedSeconds(b, now) - waitedSeconds(a, now));
 }
 
 /** The Open requests nobody has been rung for yet. */
 export function requestsToRingFor(requests: ServiceRequest[], heard: Set<string>): ServiceRequest[] {
-  return requests.filter((r) => r.type === 'Bill' && r.status === 'Open' && !heard.has(r.name));
+  return requests.filter((r) => r.status === 'Open' && !heard.has(r.name));
 }
 
 export async function getServiceRequests(): Promise<ServiceRequest[]> {
@@ -93,4 +98,32 @@ export async function getServiceRequests(): Promise<ServiceRequest[]> {
 /** A member of staff opened the order of `table`. */
 export async function acknowledgeTable(table: string): Promise<void> {
   await call.post('ury.ury.api.service_requests.acknowledge_requests_of_table', { table });
+}
+
+/** The names of the calls of `type` at `table`: what 「対応済み」 resolves. */
+export function callNames(requests: ServiceRequest[], table: string, type: ServiceRequest['type']): string[] {
+  return requests.filter((r) => r.table === table && r.type === type).map((r) => r.name);
+}
+
+/** A member of staff went to the table that called (「対応済み」). */
+export async function resolveAssistance(request: string): Promise<void> {
+  await call.post('ury.ury.api.service_requests.resolve_assistance', { request });
+}
+
+/** 「対応済み」: resolve the calls, then read the list again (even after a failure: the answer may have gone through). Returns the failure, if any. */
+export async function answerStaffCalls(
+  names: string[],
+  resolve: (name: string) => Promise<void> = resolveAssistance,
+  refresh: () => void
+): Promise<Error | null> {
+  let failure: Error | null = null;
+  for (const name of names) {
+    try {
+      await resolve(name);
+    } catch (error) {
+      failure = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  refresh();
+  return failure;
 }

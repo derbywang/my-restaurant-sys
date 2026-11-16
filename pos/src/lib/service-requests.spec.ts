@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LATE_AFTER_SECONDS,
   bannerRequests,
+  callNames,
   cardState,
   normalizeRequests,
   requestsToRingFor,
@@ -129,5 +130,63 @@ describe('requestsToRingFor', () => {
   it('does not ring for the requests that are there at the first load when told to stay quiet about them', () => {
     const list = normalizeRequests({ message: [row({ name: 'A' })] }, FETCHED);
     expect(requestsToRingFor(list, new Set(['A']))).toEqual([]);
+  });
+});
+
+describe('the calls for the staff (「呼び出し」)', () => {
+  const call = (over: Record<string, unknown> = {}) => row({ name: 'SR-A', request_type: 'Assistance', invoice: '', ...over });
+  const asks = (rows: Record<string, unknown>[]) => normalizeRequests({ message: rows }, FETCHED);
+
+  it('the card of a table shows its staff call apart from its bill call', () => {
+    const requests = asks([call({ waited_seconds: 200 }), row({ name: 'SR-B', waited_seconds: 30 })]);
+    expect(cardState(requests, 'T-01', FETCHED, 'Assistance')).toEqual({ quiet: false, minutes: 3, late: true });
+    expect(cardState(requests, 'T-01', FETCHED)).toEqual({ quiet: false, minutes: 0, late: false });
+  });
+
+  it('a table with a staff call and no bill call has no bill state, and the other way round', () => {
+    expect(cardState(asks([call()]), 'T-01', FETCHED)).toBeNull();
+    expect(cardState(asks([row()]), 'T-01', FETCHED, 'Assistance')).toBeNull();
+  });
+
+  it('the banner lists the Open calls of both kinds, the longest waiting first', () => {
+    const requests = asks([row({ name: 'SR-B', waited_seconds: 30 }), call({ waited_seconds: 90 }), call({ name: 'SR-C', status: 'Acknowledged' })]);
+    expect(bannerRequests(requests, FETCHED).map((r) => r.name)).toEqual(['SR-A', 'SR-B']);
+  });
+
+  it('rings once for a new staff call as for a new bill call', () => {
+    const requests = asks([call()]);
+    expect(requestsToRingFor(requests, new Set()).map((r) => r.name)).toEqual(['SR-A']);
+    expect(requestsToRingFor(requests, new Set(['SR-A']))).toEqual([]);
+  });
+
+  it('the names of the calls of a kind at a table (what the answer button resolves)', () => {
+    const requests = asks([call(), call({ name: 'SR-D', table: 'T-02' }), row({ name: 'SR-B' })]);
+    expect(callNames(requests, 'T-01', 'Assistance')).toEqual(['SR-A']);
+    expect(callNames(requests, 'T-01', 'Bill')).toEqual(['SR-B']);
+  });
+});
+
+describe('answering the calls for the staff', () => {
+  it('resolves each call of the table, then reads the calls again', async () => {
+    const { answerStaffCalls } = await import('./service-requests');
+    const resolved: string[] = [];
+    let refreshed = 0;
+    await answerStaffCalls(['SR-A', 'SR-E'], async (name) => void resolved.push(name), () => void (refreshed += 1));
+    expect(resolved).toEqual(['SR-A', 'SR-E']);
+    expect(refreshed).toBe(1);
+  });
+
+  it('reads the calls again even when one failed, and says so', async () => {
+    const { answerStaffCalls } = await import('./service-requests');
+    let refreshed = 0;
+    const failure = await answerStaffCalls(
+      ['SR-A'],
+      async () => {
+        throw new Error('offline');
+      },
+      () => void (refreshed += 1)
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(refreshed).toBe(1);
   });
 });

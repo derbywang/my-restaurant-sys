@@ -4,6 +4,7 @@ import { cn } from '@ury/ui';
 import { formatCurrency, formatInvoiceTime } from '@ury/core';
 import type { Table } from '../lib/table-api';
 import type { CardState } from '../lib/service-requests';
+import StaffCallRow from './StaffCallRow';
 import { waitingBillsLabel, type WaitingBills } from '../lib/table-bills';
 import { Badge } from '@ury/ui';
 import { TableShapeIcon } from './TableShapeIcon';
@@ -36,6 +37,9 @@ interface TableCardProps {
   selfOrderSlot?: ReactNode;
   /** The guests' 「お会計」 call of the table (null: none). Open rings; Acknowledged is quiet but stays until the bill is printed, paid or cancelled. */
   billCall?: CardState | null;
+  /** the guest called a member of staff to this table, and the button that answers it */
+  staffCall?: CardState | null;
+  onAnswerCall?: () => void;
   /** Printed bills of this table that are not paid yet: a small mark 「会計待ち ¥…」 (the table itself may be 空席). */
   waitingBills?: WaitingBills | null;
 }
@@ -58,6 +62,8 @@ const TableCard = ({
   isRestricted = false,
   selfOrderSlot,
   billCall = null,
+  staffCall = null,
+  onAnswerCall,
   waitingBills = null,
 }: TableCardProps) => {
   const isOccupied = table.occupied === 1;
@@ -100,6 +106,7 @@ const TableCard = ({
             )}
           </div>
         )}
+        <StaffCallRow state={staffCall} onAnswer={onAnswerCall} className="mb-3" />
         <div className="mb-3 flex flex-wrap items-start justify-between gap-x-1 gap-y-2">
           <div className="flex min-w-[6rem] flex-1 items-center gap-2">
             <div className="shrink-0">

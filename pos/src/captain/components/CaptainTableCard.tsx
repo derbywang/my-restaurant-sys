@@ -7,6 +7,7 @@ import { t } from '../../i18n';
 import type { Table } from '../../lib/table-api';
 import type { ActiveTableOrder } from '../lib/captain-table-api';
 import type { CardState } from '../../lib/service-requests';
+import StaffCallRow from '../../components/StaffCallRow';
 import { waitingBillsLabel, type WaitingBills } from '../../lib/table-bills';
 
 export type CaptainTableOwnership = 'free' | 'mine' | 'other' | 'occupied-unknown';
@@ -23,6 +24,8 @@ export interface CaptainTableCardProps {
   selfOrderSlot?: ReactNode;
   /** The guests' 「お会計」 call of the table (null: none): the same as on the register's card (bell, minutes, 確認済み, red after 3 minutes). */
   billCall?: CardState | null;
+  staffCall?: CardState | null;
+  onAnswerCall?: () => void;
   /** Printed bills of this table not paid yet: a small mark 「会計待ち ¥…」; the table itself is 空席 or 使用中 by its occupancy. */
   waitingBills?: WaitingBills | null;
 }
@@ -59,6 +62,8 @@ const CaptainTableCard = ({
   onTap,
   selfOrderSlot,
   billCall = null,
+  staffCall = null,
+  onAnswerCall,
   waitingBills = null,
 }: CaptainTableCardProps) => {
   const isOccupied = table.occupied === 1;
@@ -163,6 +168,7 @@ const CaptainTableCard = ({
         )}
       </div>
     </button>
+    {staffCall && <StaffCallRow state={staffCall} onAnswer={onAnswerCall} className="mx-3 mb-3" />}
     {selfOrderSlot && <div className="px-3 pb-3">{selfOrderSlot}</div>}
     </div>
   );

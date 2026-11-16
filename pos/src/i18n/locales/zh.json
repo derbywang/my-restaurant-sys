@@ -676,9 +676,13 @@
     "call_bill": "结账",
     "minutes": "已等待 {{minutes}} 分钟",
     "acknowledged": "已确认",
-    "banner_title": "客人呼叫结账",
+    "banner_title": "顾客呼叫",
     "banner_item": "{{table}}：客人要求结账（{{minutes}}分钟）",
     "mute": "关闭提示音",
-    "unmute": "开启提示音"
+    "unmute": "开启提示音",
+    "call_staff": "呼叫",
+    "done": "已处理",
+    "banner_item_staff": "{{table}}：呼叫店员（{{minutes}}分钟）",
+    "answer_failed": "无法标记为已处理，请再按一次。"
   }
 }

@@ -676,9 +676,13 @@
     "call_bill": "お会計",
     "minutes": "{{minutes}}分待ち",
     "acknowledged": "確認済み",
-    "banner_title": "お会計のお呼び出し",
+    "banner_title": "お客様のお呼び出し",
     "banner_item": "{{table}}：お会計をお願いします（{{minutes}}分）",
     "mute": "呼び出し音を消す",
-    "unmute": "呼び出し音を出す"
+    "unmute": "呼び出し音を出す",
+    "call_staff": "呼び出し",
+    "done": "対応済み",
+    "banner_item_staff": "{{table}}：スタッフをお呼びです（{{minutes}}分）",
+    "answer_failed": "呼び出しを済みにできませんでした。もう一度押してください。"
   }
 }

@@ -50,7 +50,10 @@ const ServiceRequestBanner: React.FC<{ onOpen?: (request: ServiceRequest) => voi
                 seconds > LATE_AFTER_SECONDS ? 'border-red-400 bg-red-50 text-red-800' : 'border-amber-400 bg-amber-50'
               )}
             >
-              {t('service_request.banner_item', { table: request.table, minutes: Math.floor(seconds / 60) })}
+              {t(request.type === 'Assistance' ? 'service_request.banner_item_staff' : 'service_request.banner_item', {
+                table: request.table,
+                minutes: Math.floor(seconds / 60),
+              })}
             </button>
           );
         })}

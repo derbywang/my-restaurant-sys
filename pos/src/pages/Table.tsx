@@ -25,6 +25,7 @@ import TableCard from '../components/TableCard';
 import SelfOrderToggle from '../components/SelfOrderToggle';
 import { useSelfOrderTables } from '../hooks/useSelfOrderTables';
 import { cardState } from '../lib/service-requests';
+import { useAnswerCalls } from '../lib/use-answer-calls';
 import { useServiceRequestStore } from '../store/service-request-store';
 import { useTableBills } from '../hooks/useTableBills';
 import MergeLinkConnector from '../components/MergeLinkConnector';
@@ -44,6 +45,7 @@ const TableView = () => {
   const tableBills = useTableBills(branch);
   const billCalls = useServiceRequestStore((state) => state.requests);
   const billCallsNow = useServiceRequestStore((state) => state.now);
+  const answerCalls = useAnswerCalls();
   const [tablesCache, setTablesCache] = useState<Record<string, Table[]>>({});
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
@@ -367,6 +369,8 @@ const TableView = () => {
       isPrinting={printingTable === table.name}
       isRestricted={isRestricted}
       billCall={cardState(billCalls, table.name, billCallsNow)}
+      staffCall={cardState(billCalls, table.name, billCallsNow, 'Assistance')}
+      onAnswerCall={() => void answerCalls(table.name)}
       waitingBills={tableBills.get(table.name)?.waiting ?? null}
       selfOrderSlot={
         <SelfOrderToggle

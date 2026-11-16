@@ -15,12 +15,13 @@ the POS also polls `get_open_service_requests`, so a request is seen even when t
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import add_to_date, now_datetime
 
 from ury.ury.api.branch_realtime import publish_to_branch
 from ury.ury_pos.api import getBranch
 
 EVENT = "service_request"
+ASSISTANCE_STALE_SECONDS = 3 * 3600  # a call nobody answered for three hours is not shown any more (the guests have gone)
 DOCTYPE = "URY Service Request"
 
 
@@ -54,9 +55,10 @@ def get_open_service_requests():
 		from `tabURY Service Request` r
 		join `tabURY Table` t on t.name = r.`table`
 		where r.status != 'Resolved' and t.branch = %(branch)s
+		  and (r.request_type != 'Assistance' or r.requested_at > %(stale_before)s)
 		order by r.requested_at, r.name
 		""",
-		{"branch": branch},
+		{"branch": branch, "stale_before": add_to_date(now, seconds=-ASSISTANCE_STALE_SECONDS)},
 		as_dict=True,
 	)
 	for row in rows:
@@ -94,3 +96,22 @@ def resolve_requests_of_invoice(invoice):
 		)
 		announce(frappe.get_doc(DOCTYPE, name), "resolved")
 	return len(names)
+
+
+@frappe.whitelist(methods=["POST"])
+def resolve_assistance(request):
+	"""A member of staff went to the table that called (「対応済み」): the call is resolved. Only calls for the staff; a bill
+	call is resolved by the bill (print, payment, cancel). Doing it twice is harmless and tells nobody the second time."""
+	_require_staff()
+	doc = frappe.get_doc(DOCTYPE, request)
+	if doc.request_type != "Assistance":
+		frappe.throw(_("Only a call for the staff can be answered here."), frappe.ValidationError)
+	if frappe.db.get_value("URY Table", doc.table, "branch") != getBranch():
+		frappe.throw(_("This table is not in your branch."), frappe.PermissionError)
+	if doc.status == "Resolved":
+		return {"resolved": 0}
+	frappe.db.set_value(
+		DOCTYPE, doc.name, {"status": "Resolved", "resolved_at": now_datetime(), "resolved_by": frappe.session.user}, update_modified=True
+	)
+	announce(frappe.get_doc(DOCTYPE, doc.name), "resolved")
+	return {"resolved": 1}

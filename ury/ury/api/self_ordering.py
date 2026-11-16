@@ -489,6 +489,7 @@ def _ordering_context_response(raw_session_token, source, profile, table, layout
             "show_item_descriptions": bool(profile.show_item_descriptions),
             "item_notes_enabled": bool(profile.enable_item_notes),
             "request_bill_enabled": bool(profile.enable_request_bill) and bool(table),
+            "call_staff_enabled": call_staff_enabled(profile) and bool(table),
             "customer_payment_enabled": bool(profile.enable_customer_payment),
             "payment_link_enabled": bool(profile.enable_payment_link),
             "pay_at_counter_enabled": bool(profile.enable_pay_at_counter),
@@ -1246,6 +1247,44 @@ def delete_old_sessions(days=7):
 # Request bill
 # ---------------------------------------------------------------------------
 
+def call_staff_enabled(profile):
+	"""The shop's switch for 「呼び出し」 (the Self Ordering Profile's `enable_call_staff`; off unless someone turns it on)."""
+	return bool(profile.get("enable_call_staff"))
+
+
+@frappe.whitelist(allow_guest=True)
+def request_assistance(session):
+    """The guest calls a member of staff to the table (no order needed). One open call per table at a time."""
+    session = _resolve_session(session)
+    profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+
+    if not call_staff_enabled(profile):
+        frappe.throw(_("Calling the staff is not enabled"), frappe.ValidationError)
+    if not session.table:
+        frappe.throw(_("Calling the staff needs a table"), frappe.ValidationError)
+
+    with _elevated():
+        existing = frappe.db.exists(
+            "URY Service Request", {"table": session.table, "request_type": "Assistance", "status": ["!=", "Resolved"]}
+        )
+        if existing:
+            return {"status": "Already Requested", "request": existing}
+
+        req = frappe.get_doc({
+            "doctype": "URY Service Request",
+            "request_type": "Assistance",
+            "table": session.table,
+            "invoice": session.invoice or None,
+            "session": session.name,
+            "status": "Open",
+            "requested_at": now_datetime(),
+        })
+        req.insert(ignore_permissions=True)
+        announce(req, "new")
+
+    return {"status": "Requested", "request": req.name}
+
+
 @frappe.whitelist(allow_guest=True)
 def request_bill(session):
     session = _resolve_session(session)
@@ -1297,17 +1336,32 @@ def get_order_status(session):
             invoice_fields = frappe.db.get_value(
                 "POS Invoice", session.invoice, ["docstatus", "invoice_printed"], as_dict=True,
             )
-            open_requests = frappe.get_all(
-                "URY Service Request",
-                filters={"invoice": session.invoice, "status": ["!=", "Resolved"]},
-                fields=["name", "request_type", "status"],
-            )
         if invoice_fields:
             result["order_state"] = _order_state(invoice_fields.docstatus, invoice_fields.invoice_printed)
         group = frappe.db.get_value("POS Invoice", session.invoice, "custom_split_group")
         result["split"] = _is_split(session.invoice, group)
         result["billed"] = bool(invoice_fields and invoice_fields.invoice_printed)
         result["submitted"] = bool(invoice_fields and invoice_fields.docstatus == 1)
+
+    with _elevated():
+        open_requests = []
+        if session.invoice:
+            open_requests = frappe.get_all(
+                "URY Service Request",
+                filters={"invoice": session.invoice, "status": ["!=", "Resolved"]},
+                fields=["name", "request_type", "status"],
+            )
+        # the guest's own call for the staff, with or without an order
+        open_requests += [
+            row
+            for row in frappe.get_all(
+                "URY Service Request",
+                filters={"session": session.name, "request_type": "Assistance", "status": ["!=", "Resolved"]},
+                fields=["name", "request_type", "status"],
+            )
+            if row["name"] not in {r["name"] for r in open_requests}
+        ]
+    if session.invoice or open_requests:
         result["open_requests"] = open_requests
 
     return result

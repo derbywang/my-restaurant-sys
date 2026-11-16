@@ -607,6 +607,7 @@ class TestTheGuestsCannotTakeDishesBack(SelfOrderingCase):
 		"set_session_language",
 		"add_customer_items",
 		"request_bill",
+		"request_assistance",
 		"get_order_status",
 		"create_payment_request",
 		"get_payment_status",

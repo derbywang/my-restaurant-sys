@@ -36,6 +36,7 @@
   "age_check_item_groups",
   "billing_payment_section",
   "enable_request_bill",
+  "enable_call_staff",
   "enable_customer_payment",
   "column_break_billing_payment",
   "enable_payment_link",
@@ -197,6 +198,13 @@
   },
   {
    "default": "0",
+   "description": "The guest can call a member of staff to the table (「呼び出し」). The POS shows the call like a bill call.",
+   "fieldname": "enable_call_staff",
+   "fieldtype": "Check",
+   "label": "Enable Call Staff"
+  },
+  {
+   "default": "0",
    "fieldname": "enable_customer_payment",
    "fieldtype": "Check",
    "label": "Enable Customer Payment"
@@ -267,7 +275,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-14 12:00:00.000000",
+ "modified": "2026-11-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Self Ordering Profile",

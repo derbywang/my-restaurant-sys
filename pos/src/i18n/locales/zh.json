@@ -31,6 +31,9 @@
     "loading_ury_pos": "正在加载 URY POS...",
     "please_wait_setup": "正在进行设置，请稍候"
   },
+  "connection": {
+    "lost": "连不上服务器。请检查 Wi-Fi。恢复连接之前无法点单和结账。"
+  },
   "drawer": {
     "open": "打开钱箱",
     "opened": "钱箱已打开",

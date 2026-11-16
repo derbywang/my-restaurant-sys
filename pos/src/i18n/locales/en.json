@@ -31,6 +31,9 @@
     "loading_ury_pos": "Loading URY POS...",
     "please_wait_setup": "Please wait while we set things up"
   },
+  "connection": {
+    "lost": "Cannot reach the server. Check the Wi-Fi. Orders and payments are not possible until it is back."
+  },
   "drawer": {
     "open": "Open the drawer",
     "opened": "The drawer is open",

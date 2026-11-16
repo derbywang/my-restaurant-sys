@@ -32,3 +32,6 @@ export {
   MENU_LANGUAGES,
 } from './i18n';
 export type { LocaleLoaders } from './i18n';
+export { CHECK_MS, FAILS_BEFORE_OFFLINE, createConnectionMonitor, startConnectionMonitor } from './connection';
+export { createWakeLock } from './wake-lock';
+export type { WakeLockState } from './wake-lock';

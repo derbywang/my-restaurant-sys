@@ -31,6 +31,9 @@
     "loading_ury_pos": "URY POS 불러오는 중...",
     "please_wait_setup": "준비 중입니다. 잠시만 기다려 주세요"
   },
+  "connection": {
+    "lost": "서버에 연결할 수 없습니다. Wi-Fi를 확인해 주세요. 연결될 때까지 주문과 결제를 할 수 없습니다."
+  },
   "drawer": {
     "open": "금전함 열기",
     "opened": "금전함이 열렸습니다",

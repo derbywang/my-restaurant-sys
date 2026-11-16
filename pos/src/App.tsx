@@ -11,6 +11,8 @@ import AuthGuard from './components/AuthGuard';
 import POSOpeningProvider from './components/POSOpeningProvider';
 import ScreenSizeProvider from './components/ScreenSizeProvider';
 import KotAlertListener from './components/KotAlertListener';
+import ConnectionBanner from './components/ConnectionBanner';
+import { useKeepAwake } from './lib/use-keep-awake';
 import ServiceRequestListener from './components/ServiceRequestListener';
 import CaptainRouteGuard from './captain/components/CaptainRouteGuard';
 import CaptainTables from './captain/pages/CaptainTables';
@@ -25,6 +27,8 @@ function App() {
     initializeApp
   } = usePOSStore();
   
+  useKeepAwake();
+
   useEffect(() => {
     initializeApp();
   }, [initializeApp]);
@@ -38,6 +42,7 @@ function App() {
   return (
     <>
       <ToastProvider />
+      <ConnectionBanner />
       <KotAlertListener />
       <ScreenSizeProvider>
         <AuthGuard>

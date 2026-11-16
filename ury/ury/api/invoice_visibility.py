@@ -46,3 +46,13 @@ def pos_invoice_has_permission(doc, ptype=None, user=None, **kwargs):
 	if branch and branch not in branches_of(user):
 		return False
 	return None
+
+
+OPEN_STATUSES = ("Draft", "Unbilled")
+
+
+def require_open_status(status):
+	"""For the interfaces that list invoices with raw SQL (`getPosInvoice`, `searchPosInvoice`, `getInvoiceForCashier`):
+	the hooks above do not reach raw SQL, so whoever may not settle a bill may ask only for the open orders."""
+	if status not in OPEN_STATUSES and not may_see_sales():
+		frappe.throw(frappe._("Not permitted to view paid invoices"), frappe.PermissionError)

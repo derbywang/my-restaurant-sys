@@ -38,6 +38,7 @@
 - **每完成一个大项（一个功能、一次 DocType 或补丁改动、一次改覆盖 ERPNext 的代码），在交给用户做浏览器测试之前，把全部测试模块在 `ury-test.localhost` 上串行跑一遍**，不要只跑相关的模块（2026-11-14：`test_self_ordering` 有 2 个测试因为前面的改动一直是红的，只跑相关模块没发现）。做法见 `docs/testing/test-site.md` 的“整套回归怎么跑”；模块不能并发；要把 FAIL / ERROR 的模块列给用户，已知的偶发失败（`test_pos_closing`）要单独说明；前端的测试（`cd pos && yarn test`、`cd frontend && yarn test`、`cd self-order && npx vitest run`、`cd packages/core && yarn test`、`cd mosaic && yarn test`）也一起跑。全绿才交给用户。
 - **跑整套回归时节省 token（2026-11-15 要求）**：测试放在后台运行，输出写到日志文件，**不要把完整输出读进对话**；跑完后**只读汇总**（通过 / 失败 / 错误的数量和失败项的名字），有失败时只读那几项的错误信息；**等待期间不要频繁查看进度**（等完成通知，或隔很久才看一次；不用 `pgrep -f run-tests` 轮询）。
 - **整套回归直接作为后台任务运行，不要用 `nohup … &` 再套一层（2026-11-16）**：套了之后，后台任务的完成通知在启动时就发掉了，真正跑完时没有通知（11/15 因此空等了 5 个多小时，其实 58 分钟就跑完了）。**保险：** 到了预期时间还没收到通知（后端整套约 60 分钟），就读**一次**日志的最后一行（`FINISHED` 就是跑完了），不要一直空等；省 token 的规则照旧（日志写文件，只读汇总）。
+- **整套回归里有失败时，当场把该项的完整报错保存下来，再重跑（2026-11-16 要求）**：回归日志只留失败的名字（`full.sh` 不留报错内容），重跑时若通过就没有证据可查，偶发还是真问题都说不清（11/16 `test_merged_bill` 的 `test_a_merged_bill_is_one_card_in_one_tab` 就是这样：整套里红、单独和整模块重跑都绿，报错没留下）。做法：先对失败的模块单独跑一次并把完整输出写到日志文件（只读报错那几行），再判断是偶发还是真问题；整套脚本应在失败时把该模块的 `FAIL` / `ERROR` 回溯写进日志。
 - **测试的运行方法**见 `docs/testing/test-site.md`：`bench --site ury-test.localhost run-tests --module <模块>`。涉及点单、收款、交班的测试继承 `ury.setup.test_site.URYFlowTestCase`，其余继承 `URYTestCase`；常量（公司、商品、用户）从 `ury.setup.test_site` 导入，不要写死站点上的名字。
 
 ## 升级 ERPNext / Frappe 时必须运行的回归测试

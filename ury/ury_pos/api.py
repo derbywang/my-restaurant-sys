@@ -3,6 +3,7 @@ import json
 from frappe import _
 from datetime import date, datetime, timedelta
 from frappe.utils import validate_phone_number
+from ury.ury.api.invoice_visibility import require_open_status
 
 
 #GetTable  decripted temporarily
@@ -449,6 +450,7 @@ def get_split_group(invoice):
 
 @frappe.whitelist()
 def getInvoiceForCashier(status, cashier, limit, limit_start):
+    require_open_status(status)
     branch = getBranch()
     updatedlist = []
     limit = int(limit)+1
@@ -539,6 +541,7 @@ def getInvoiceForCashier(status, cashier, limit, limit_start):
 
 @frappe.whitelist()
 def getPosInvoice(status, limit, limit_start):
+    require_open_status(status)
     branch = getBranch()
     updatedlist = []
     limit = int(limit)+1
@@ -643,6 +646,7 @@ def getPosInvoice(status, limit, limit_start):
 
 @frappe.whitelist()
 def searchPosInvoice(query,status):
+    require_open_status(status)
     if not query:
         return {"data": [], "next": False}
     query = query.lower()

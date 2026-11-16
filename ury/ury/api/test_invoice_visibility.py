@@ -105,6 +105,31 @@ class TestInvoiceVisibility(URYFlowTestCase):
 		found = names(frappe.get_all("POS Invoice", fields=["name"], limit_page_length=0))
 		self.assertIn(self.paid, found)
 
+	def test_the_old_list_interfaces_do_not_hand_the_paid_invoices_to_a_waiter(self):
+		# getPosInvoice / searchPosInvoice / getInvoiceForCashier read with raw SQL: the hooks do not reach them
+		from ury.ury_pos.api import getInvoiceForCashier, getPosInvoice, searchPosInvoice
+
+		calls = {
+			"getPosInvoice": lambda status: getPosInvoice(status, 20, 0),
+			"searchPosInvoice": lambda status: searchPosInvoice("inv", status),
+			"getInvoiceForCashier": lambda status: getInvoiceForCashier(status, CASHIER, 20, 0),
+		}
+		for name, call in calls.items():
+			for status in ("Paid", "Recently Paid", "Consolidated"):
+				with as_user(CAPTAIN):
+					with self.assertRaises(frappe.PermissionError, msg=f"{name} {status}"):
+						call(status)
+			for status in ("Draft", "Unbilled"):
+				with as_user(CAPTAIN):
+					call(status)  # the open orders stay available to the waiter
+
+	def test_the_cashier_still_lists_the_paid_invoices_through_the_old_interfaces(self):
+		from ury.ury_pos.api import getPosInvoice
+
+		with as_user(CASHIER):
+			rows = getPosInvoice("Paid", 50, 0)
+		self.assertIn(self.paid, names(rows["data"] if isinstance(rows, dict) else rows))
+
 	def test_the_decision_is_the_permission_not_the_role_name(self):
 		from ury.ury.api.invoice_visibility import may_see_sales
 

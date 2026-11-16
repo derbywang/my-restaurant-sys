@@ -170,6 +170,13 @@ if __name__ == "__main__":
     unittest.main()
 
 class TestSearchPosInvoiceBranchScoping(FrappeTestCase):
+    """The branch scoping of `searchPosInvoice`; who may ask for paid invoices is tested in test_invoice_visibility."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch("ury.ury.api.invoice_visibility.may_see_sales", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("ury.ury_pos.api.frappe.get_all")
     @patch("ury.ury_pos.api._enrich_split_group_meta")

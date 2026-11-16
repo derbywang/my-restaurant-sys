@@ -115,7 +115,8 @@ for m in $(cat /tmp/modules.txt); do echo "== $m"; bench --site ury-test.localho
 
 ### 命令（在 bench 目录 `frappe-bench` 下）
 ```bash
-DB_ROOT_PASSWORD=<MariaDB root 密码> apps/ury/scripts/trial_run.sh ury.setup.test_x ury.ury.api.test_y
+apps/ury/scripts/trial_run.sh ury.setup.test_x ury.ury.api.test_y
+# 密码：环境变量 DB_ROOT_PASSWORD；没设时读 ~/.ury_trial_env 里的一行 DB_ROOT_PASSWORD=...（权限必须是 600，不进仓库，脚本不会打印它；密码不要写进对话）
 ```
 一批模块一次传入，按顺序跑。退出码 0 且最后一行是 `RESULT: OK` 才可以在测试站点上跑这些模块；`NOT OK` 时修测试，不要碰测试站点。
 

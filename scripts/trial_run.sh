@@ -1,7 +1,11 @@
 #!/bin/bash
 # Run test modules on a throw-away copy of ury-test.localhost first (see docs/testing/test-site.md).
 #
-#   DB_ROOT_PASSWORD=... scripts/trial_run.sh ury.setup.test_x ury.ury.api.test_y [...]
+#   scripts/trial_run.sh ury.setup.test_x ury.ury.api.test_y [...]
+#
+# The MariaDB root password: the environment variable DB_ROOT_PASSWORD, or when it is not set the line
+# DB_ROOT_PASSWORD=... of the file ~/.ury_trial_env (made by the person who owns the server, mode 600; it is not in the
+# repository and the script never prints it). A file that others can read is refused.
 #
 # 1 restore the newest backup of ury-test.localhost into a new site ury-trial-<time>.localhost (no apps are installed again)
 # 2 copy encryption_key and the test flags from the test site (never the database login)
@@ -11,7 +15,15 @@
 set -u
 BENCH="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$BENCH" || exit 2
-: "${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD (the MariaDB root password)}"
+if [ -z "${DB_ROOT_PASSWORD:-}" ]; then
+  SECRET_FILE="${URY_TRIAL_ENV:-$HOME/.ury_trial_env}"
+  if [ -f "$SECRET_FILE" ]; then
+    mode="$(stat -c %a "$SECRET_FILE")"
+    case "$mode" in 400|600) ;; *) echo "$SECRET_FILE must be mode 600 (it is $mode)"; exit 2;; esac
+    DB_ROOT_PASSWORD="$(sed -n 's/^DB_ROOT_PASSWORD=//p' "$SECRET_FILE" | head -n 1)"
+  fi
+fi
+: "${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD, or put the line DB_ROOT_PASSWORD=... in ~/.ury_trial_env (mode 600)}"
 [ $# -ge 1 ] || { echo "usage: $0 <test module> [<test module> ...]"; exit 2; }
 
 SRC=ury-test.localhost

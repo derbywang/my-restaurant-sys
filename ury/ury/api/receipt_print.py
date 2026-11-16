@@ -59,6 +59,16 @@ def write_log(user, reason, ok, message="", invoice=None, printer=None):
 	).insert(ignore_permissions=True)
 
 
+def print_type_for(server_printer, qz_print, bill_printer_present):
+	"""How the POS prints: "server" when the POS Profile has a receipt printer (the iPad cannot run QZ Tray),
+	else the old rules (QZ Tray, a CUPS printer of the bill, the browser's print view)."""
+	if server_printer:
+		return "server"
+	if qz_print == 1:
+		return "qz"
+	return "network" if bill_printer_present else "socket"
+
+
 def _branch():
 	from ury.ury_pos.api import getBranch
 

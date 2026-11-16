@@ -849,15 +849,11 @@ def getPosProfile():
         if printers:
             printer = ",".join(printers)
 
-        if qz_print == 1:
-            print_type = "qz"
+        from ury.ury.api.receipt_print import print_type_for
+
+        print_type = print_type_for(pos_profiles.get("custom_receipt_printer"), qz_print, bill_present)
+        if print_type == "qz":
             qz_host = pos_profiles.qz_host
-
-        elif bill_present == True:
-            print_type = "network"
-
-        else:
-            print_type = "socket"
 
     invoice_details = {
         "pos_profile": pos_profile_name,

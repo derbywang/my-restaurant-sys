@@ -197,3 +197,13 @@ class TestWhatCountsAsCash(PrinterTestCase):
 		self.assertEqual(rp.cash_and_change([("Card", 1100)], 0, cash), (0, 0))
 		self.assertEqual(rp.cash_and_change([("Card", 600), ("Cash", 500)], 0, cash), (500, 0))
 		self.assertEqual(rp.cash_and_change([], None, cash), (0, 0))
+
+
+class TestWhichWayToPrint(PrinterTestCase):
+	def test_a_chosen_server_printer_wins_over_the_old_ways(self):
+		self.assertEqual(rp.print_type_for(server_printer="レジ", qz_print=1, bill_printer_present=True), "server")
+
+	def test_without_it_the_old_rules_stay(self):
+		self.assertEqual(rp.print_type_for(server_printer=None, qz_print=1, bill_printer_present=False), "qz")
+		self.assertEqual(rp.print_type_for(server_printer="", qz_print=0, bill_printer_present=True), "network")
+		self.assertEqual(rp.print_type_for(server_printer=None, qz_print=0, bill_printer_present=False), "socket")

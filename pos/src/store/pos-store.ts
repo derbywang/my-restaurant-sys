@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { setCurrency } from '@ury/core';
 import { getRestaurantMenu, getAggregatorMenu, MenuItem as APIMenuItem } from '../lib/menu-api';
-import { PosProfileCombined, getCombinedPosProfile } from '../lib/pos-profile-api';
+import { PosProfileCombined, getCombinedPosProfile, getPosProfileLimitedFields } from '../lib/pos-profile-api';
+import { refreshPrintType } from '../lib/print-type';
 import { getMenuCourses } from '../lib/menu-course-api';
 import { fetchFresh } from '../lib/fresh-cache';
 import { getCustomerGroups, getCustomerTerritories, getCustomerRecord } from '../lib/customer-api';
@@ -417,6 +418,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
           currency: profile.currency || ''
         });
         void get().fetchDefaultCustomer();
+        // the cached profile may be older than the shop's choice of printer: ask again for the way to print only
+        void refreshPrintType(profile, getPosProfileLimitedFields).then(({ profile: fresh, changed }) => {
+          if (!changed || !fresh) return;
+          sessionStorage.setItem('posProfile', JSON.stringify(fresh));
+          set({ posProfile: fresh });
+        });
         return;
       }
 

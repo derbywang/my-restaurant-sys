@@ -11,6 +11,7 @@ message, never with an error the cashier could mistake for a failed payment.
 
 import frappe
 from frappe import _
+from frappe.utils import now_datetime
 
 from ury.printing import bitmap, service
 from ury.ury.api.pos_permissions import require_billing_permission
@@ -41,6 +42,7 @@ def write_log(user, reason, ok, message="", invoice=None, printer=None):
 	frappe.get_doc(
 		{
 			"doctype": "URY Drawer Log",
+			"opened_at": now_datetime(),
 			"user": user,
 			"reason": reason,
 			"invoice": invoice,

@@ -94,6 +94,16 @@ class TestTheDrawerLog(URYTestCase):
 		self.assertEqual((row.reason, row.ok), ("manual", 0))
 		self.assertIn("開きません", row.message)
 
+	def test_the_list_shows_when_it_was_opened(self):
+		from frappe.utils import add_to_date, now_datetime
+
+		meta = frappe.get_meta("URY Drawer Log")
+		self.assertTrue(meta.get_field("opened_at").in_list_view)
+		before = add_to_date(now_datetime(), seconds=-5)
+		receipt_print.write_log(user=CASHIER, reason="manual", ok=True)
+		row = frappe.get_all("URY Drawer Log", filters={"user": CASHIER}, fields=["opened_at"], order_by="creation desc", limit=1)[0]
+		self.assertGreaterEqual(row.opened_at, before)
+
 	def test_the_manager_can_open_the_list_in_the_desk(self):
 		# a DocType marked "read_only" (User Cannot Search) is left out of the Desk's `can_read`: the Desk then takes
 		# /app/ury-drawer-log for a page and answers "not permitted" (found in the browser test, 2026-11-17)

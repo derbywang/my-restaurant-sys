@@ -22,3 +22,12 @@ export async function getProductionUnitsForBranch(): Promise<string[]> {
     return [];
   }
 }
+
+/** The kitchen error alerts of the branch newer than `since` (seconds): the register's second way to hear them. */
+export async function getRecentKotAlerts(since: number) {
+  const response = await call.get<{ message?: { alert_id: string; at: number; payload: Record<string, unknown> }[] }>(
+    'ury.ury.api.kot_alerts.get_recent_kot_alerts',
+    { since }
+  );
+  return response.message ?? [];
+}

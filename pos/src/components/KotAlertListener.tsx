@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKotErrorChannels } from '../lib/realtime';
 import { showToast } from '@ury/ui';
 import { usePOSStore } from '../store/pos-store';
-import { getProductionUnitsForBranch } from '../lib/production-api';
+import { getProductionUnitsForBranch, getRecentKotAlerts } from '../lib/production-api';
+import { KOT_ALERT_POLL_MS, createAlertTracker, pollKotAlerts } from '../lib/kot-alert-poll';
 import { kotAlertMessage, createAlertDedupe } from '../lib/kot-alert';
 import { t } from '../i18n';
 
@@ -60,15 +61,38 @@ const KotAlertListener: React.FC = () => {
     };
   }, [branch]);
 
-  // Memoize error handler to avoid unnecessary re-subscriptions
-  // the same alert comes once per production unit's channel: show it once
+  // The same alert comes once per production unit's channel, and again by asking the server: show it once
   const seen = useRef(createAlertDedupe(3000));
-  const handleKotError = useCallback((payload: Record<string, unknown>) => {
+  const tracker = useRef(createAlertTracker());
+  const showAlert = useCallback((payload: Record<string, unknown>) => {
+    if (!tracker.current.isNew(payload)) return;
     if (!seen.current(payload)) return;
-    const message = kotAlertMessage(payload, (key, params) => t(key, params));
-
-    showToast.error(message);
+    showToast.error(kotAlertMessage(payload, (key, params) => t(key, params)));
   }, []);
+  const handleKotError = useCallback((payload: Record<string, unknown>) => showAlert(payload), [showAlert]);
+
+  // The second way: an iPad that slept never heard the socket, so ask the server now and then (and on waking up)
+  useEffect(() => {
+    if (!branch) return;
+    const look = () =>
+      pollKotAlerts(
+        tracker.current,
+        getRecentKotAlerts,
+        (payload) => {
+          if (seen.current(payload)) showToast.error(kotAlertMessage(payload, (key, params) => t(key, params)));
+        }
+      );
+    look();
+    const timer = setInterval(look, KOT_ALERT_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') look();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [branch]);
 
   // Subscribe to all production unit channels
   useKotErrorChannels(branch, productionUnits, handleKotError);

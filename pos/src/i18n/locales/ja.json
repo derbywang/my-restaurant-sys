@@ -621,6 +621,12 @@
     "tables_over_time_other": "{{count}} テーブルが時間超過です",
     "needs_attention": "要対応",
     "nothing_needs_attention": "現在、対応が必要な項目はありません。",
+    "attention": {
+      "pending_payment": "{{count}}件の注文が15分以上お会計待ちです",
+      "table_occupied_long": "{{count}}テーブルが60分以上使用中です",
+      "kot_errors": "直近1時間に厨房伝票のエラーが{{count}}件ありました",
+      "unclosed_pos_session": "前日からの未締めのレジ（開店）が{{count}}件あります"
+    },
     "tonight_vs_baseline": "今夜と平常時の比較",
     "no_data": "データがありません",
     "sales": "売上",

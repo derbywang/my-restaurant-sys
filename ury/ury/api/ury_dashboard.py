@@ -102,6 +102,7 @@ def get_needs_attention(branch=None):
 	if pending:
 		items.append({
 			"type": "pending_payment",
+			"count": len(pending),
 			"message": f"{len(pending)} order(s) pending payment for over 15 minutes",
 			"severity": "high",
 			"reference": None,
@@ -115,6 +116,7 @@ def get_needs_attention(branch=None):
 	if tables:
 		items.append({
 			"type": "table_occupied_long",
+			"count": len(tables),
 			"message": f"{len(tables)} table(s) occupied for over 60 minutes",
 			"severity": "medium",
 			"reference": None,
@@ -128,6 +130,7 @@ def get_needs_attention(branch=None):
 	if kot_errors:
 		items.append({
 			"type": "kot_errors",
+			"count": len(kot_errors),
 			"message": f"{len(kot_errors)} KOT generation issue(s) in the last hour",
 			"severity": "high",
 			"reference": None,
@@ -141,6 +144,7 @@ def get_needs_attention(branch=None):
 	if stale_sessions:
 		items.append({
 			"type": "unclosed_pos_session",
+			"count": len(stale_sessions),
 			"message": f"{len(stale_sessions)} POS session(s) left open from a previous day",
 			"severity": "high",
 			"reference": None,

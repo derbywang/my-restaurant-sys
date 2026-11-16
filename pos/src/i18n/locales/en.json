@@ -621,6 +621,12 @@
     "tables_over_time_other": "{{count}} tables running over time",
     "needs_attention": "Needs Attention",
     "nothing_needs_attention": "Nothing needs attention right now.",
+    "attention": {
+      "pending_payment": "{{count}} order(s) pending payment for over 15 minutes",
+      "table_occupied_long": "{{count}} table(s) occupied for over 60 minutes",
+      "kot_errors": "{{count}} KOT generation issue(s) in the last hour",
+      "unclosed_pos_session": "{{count}} POS session(s) left open from a previous day"
+    },
     "tonight_vs_baseline": "Tonight vs Baseline",
     "no_data": "No data available",
     "sales": "Sales",

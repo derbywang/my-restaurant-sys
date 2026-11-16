@@ -72,6 +72,11 @@ class TestTableOpenSince(URYFlowTestCase):
 		items = get_needs_attention(branch=BRANCH)
 		self.assertIn("table_occupied_long", [i["type"] for i in items])
 
+	def test_needs_attention_carries_the_count_for_the_screen_to_translate(self):
+		self._occupy(TABLES[0], add_to_date(now_datetime(), hours=-26, as_datetime=True))
+		row = next(i for i in get_needs_attention(branch=BRANCH) if i["type"] == "table_occupied_long")
+		self.assertGreaterEqual(row["count"], 1)
+
 	def test_needs_attention_ignores_a_table_just_seated(self):
 		self._occupy(TABLES[0], add_to_date(now_datetime(), minutes=-10, as_datetime=True))
 		items = get_needs_attention(branch=BRANCH)

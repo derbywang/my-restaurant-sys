@@ -5,6 +5,7 @@ import { usePOSStore } from '../store/pos-store';
 import { formatCurrency, call } from '@ury/core';
 import HufLogo from '../components/HufLogo';
 import { t } from '../i18n';
+import { attentionMessage } from '../lib/attention';
 
 // Helper function to format relative time
 function getRelativeTime(creationDate: string): string {
@@ -182,7 +183,7 @@ export default function Dashboard() {
         if (Array.isArray(attentionData) && attentionData.length > 0) {
           const processedAttention = attentionData.map((item, idx) => ({
             id: idx,
-            message: item.message,
+            message: attentionMessage(item, t),
             icon: item.severity === 'high' ? AlertTriangle : Clock,
             severity: item.severity
           }));

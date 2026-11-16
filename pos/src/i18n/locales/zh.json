@@ -621,6 +621,12 @@
     "tables_over_time_other": "{{count}} 张桌台超时",
     "needs_attention": "需关注",
     "nothing_needs_attention": "目前没有需要关注的事项。",
+    "attention": {
+      "pending_payment": "有{{count}}张订单等待结账超过15分钟",
+      "table_occupied_long": "有{{count}}张桌子占用超过60分钟",
+      "kot_errors": "最近1小时有{{count}}条厨房单生成异常",
+      "unclosed_pos_session": "有{{count}}个前一天遗留的未交班收银班次"
+    },
     "tonight_vs_baseline": "今晚与基准对比",
     "no_data": "暂无数据",
     "sales": "销售额",

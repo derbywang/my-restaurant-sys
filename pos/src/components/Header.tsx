@@ -19,12 +19,14 @@ import { logoutToLogin } from '../lib/staff-logout';
 import { showToast } from '@ury/ui';
 import LanguageMenu from './LanguageMenu';
 import SoundToggle from './SoundToggle';
+import { openDrawerByHand, showsDrawerButton } from '../lib/drawer';
 
 const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const user = useRootStore((state: RootState) => state.user);
   const permissions = useRootStore((state: RootState) => state.permissions);
+  const printType = usePOSStore((state) => state.posProfile?.print_type);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const { searchQuery, setSearchQuery, setShowVoluntaryClosing } = usePOSStore();
@@ -108,6 +110,12 @@ const Header = () => {
     window.location.reload();
   };
 
+  const handleOpenDrawer = async () => {
+    const result = await openDrawerByHand(undefined, t('drawer.failed'));
+    if (result.ok) showToast.success(t('drawer.opened'));
+    else showToast.error(result.message);
+  };
+
   const handleCloseShift = () => {
     setShowUserMenu(false);
     setShowVoluntaryClosing(true);
@@ -151,6 +159,11 @@ const Header = () => {
           {/* User menu */}
           {/* the switch of the sound of the calls for the bill: always in sight */}
           <SoundToggle />
+          {showsDrawerButton(permissions, printType) && (
+            <Button variant="outline" size="sm" data-testid="open-drawer" onClick={handleOpenDrawer}>
+              {t('drawer.open')}
+            </Button>
+          )}
           <div className="relative" ref={userMenuRef}>
             <Button
               onClick={handleUserMenuToggle}

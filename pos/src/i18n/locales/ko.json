@@ -31,6 +31,11 @@
     "loading_ury_pos": "URY POS 불러오는 중...",
     "please_wait_setup": "준비 중입니다. 잠시만 기다려 주세요"
   },
+  "drawer": {
+    "open": "금전함 열기",
+    "opened": "금전함이 열렸습니다",
+    "failed": "금전함이 열리지 않았습니다. 열쇠로 열어 주세요."
+  },
   "header": {
     "search_placeholder_default": "주문, 메뉴, 고객 검색...",
     "search_placeholder_orders": "주문 검색",

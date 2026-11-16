@@ -31,6 +31,11 @@
     "loading_ury_pos": "URY POS を読み込み中...",
     "please_wait_setup": "準備中です。しばらくお待ちください"
   },
+  "drawer": {
+    "open": "引き出しを開ける",
+    "opened": "引き出しを開けました",
+    "failed": "引き出しが開きませんでした。鍵で開けてください。"
+  },
   "header": {
     "search_placeholder_default": "伝票、メニュー、顧客を検索...",
     "search_placeholder_orders": "伝票を検索",

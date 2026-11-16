@@ -7,6 +7,7 @@ import { defaultCashMode } from '../lib/payment-change';
 import { canShowDiscount, friendlyError } from '../lib/pos-permissions';
 import { useRootStore } from '../store/root-store';
 import { t } from '../i18n';
+import { drawerAfterPayment } from '../lib/drawer';
 import { stampNotice } from '../lib/stamp-duty';
 import { checkPayments, paymentModeLabel, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
@@ -172,6 +173,11 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         table,
       });
       showToast.success(t('payment.success', { amount: formatCurrency(paymentsTotal) }));
+      if (storePosProfile?.print_type === 'server' && invoice) {
+        // cash in or change out: the drawer opens; a drawer that does not open is only a hint, the payment stays
+        const drawer = await drawerAfterPayment(invoice, undefined, t('drawer.failed'));
+        if (!drawer.ok && drawer.message) showToast.error(drawer.message);
+      }
       onClose();
       clearSelectedOrder();
       await fetchOrders();

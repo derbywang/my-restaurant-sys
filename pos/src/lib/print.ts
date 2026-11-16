@@ -6,6 +6,7 @@ import {
   updatePrintStatus
 } from './invoice-api';
 import { PosProfileCombined } from './pos-profile-api';
+import { serverPrint } from './drawer';
 
 interface PrintOrderParams {
   orderId: string;
@@ -13,11 +14,15 @@ interface PrintOrderParams {
   printFormat?: string | null;
 }
 
-export async function printOrder({ orderId, posProfile, printFormat }: PrintOrderParams): Promise<'qz' | 'network' | 'socket'> {
+export async function printOrder({ orderId, posProfile, printFormat }: PrintOrderParams): Promise<'qz' | 'network' | 'socket' | 'server'> {
   const { print_type, qz_host, print_format, printer, name, cashier, multiple_cashier } = posProfile;
   const format = printFormat || print_format;
 
-  if (print_type === 'qz') {
+  if (print_type === 'server') {
+    // the server sends it to the shop's printer: the iPad cannot run QZ Tray
+    await serverPrint(orderId, format as string | undefined, undefined, updatePrintStatus);
+    return 'server';
+  } else if (print_type === 'qz') {
     if (!qz_host) {
       throw new Error('QZ host is not set');
     }

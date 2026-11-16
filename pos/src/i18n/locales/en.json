@@ -31,6 +31,11 @@
     "loading_ury_pos": "Loading URY POS...",
     "please_wait_setup": "Please wait while we set things up"
   },
+  "drawer": {
+    "open": "Open the drawer",
+    "opened": "The drawer is open",
+    "failed": "The drawer did not open. Please open it with the key."
+  },
   "header": {
     "search_placeholder_default": "Search orders, menu items, or customers...",
     "search_placeholder_orders": "Search Orders",

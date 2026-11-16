@@ -31,6 +31,11 @@
     "loading_ury_pos": "正在加载 URY POS...",
     "please_wait_setup": "正在进行设置，请稍候"
   },
+  "drawer": {
+    "open": "打开钱箱",
+    "opened": "钱箱已打开",
+    "failed": "钱箱没有打开，请用钥匙打开。"
+  },
   "header": {
     "search_placeholder_default": "搜索订单、菜品或顾客...",
     "search_placeholder_orders": "搜索订单",

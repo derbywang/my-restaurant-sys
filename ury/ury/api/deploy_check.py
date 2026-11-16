@@ -442,6 +442,35 @@ def _check_receipt_format():
 	return []
 
 
+def receipt_printer_findings(profiles, load):
+	"""`profiles`: (POS Profile, its URY Receipt Printer or None); `load(name)`: the saved printer as a dict, or None."""
+	from ury.printing.service import check_settings
+
+	found = []
+	for profile, printer in profiles:
+		if not printer:
+			found.append((WARN, f"POS Profile {profile}: no receipt printer is chosen (the iPad register cannot print; QZ Tray / CUPS only)"))
+			continue
+		row = load(printer)
+		if not row:
+			found.append((FAIL, f"POS Profile {profile}: the receipt printer {printer} does not exist"))
+		elif not row.get("enabled"):
+			found.append((FAIL, f"POS Profile {profile}: the receipt printer {printer} is switched off"))
+		else:
+			try:
+				check_settings(row.get("address"), row.get("protocol"), row.get("port"), row.get("paper_width"), row.get("drawer_pin"), row.get("drawer_pulse_ms"))
+			except ValueError as error:
+				found.append((FAIL, f"receipt printer {printer}: {error}"))
+	return found
+
+
+def _check_receipt_printer():
+	if not frappe.db.exists("DocType", "URY Receipt Printer") or not frappe.db.has_column("POS Profile", "custom_receipt_printer"):
+		return [(WARN, "URY Receipt Printer is not on this site yet (migrate)")]
+	profiles = [(p.name, p.get("custom_receipt_printer")) for p in frappe.get_all("POS Profile", filters={"restaurant": ("is", "set"), "disabled": 0}, fields=["name", "custom_receipt_printer"])]
+	return receipt_printer_findings(profiles, lambda name: frappe.db.get_value("URY Receipt Printer", name, "*", as_dict=True))
+
+
 def _check_payment_accounts():
 	found = []
 	for profile in _ury_pos_profiles():
@@ -666,6 +695,7 @@ CHECKS = (
 	("export permission of the staff", _check_export),
 	("POS Invoice permissions", _check_pos_invoice_permissions),
 	("sales hidden from the waiter", _check_waiter_sees_no_sales),
+	("receipt printer", _check_receipt_printer),
 	("staff without Desk", _check_staff_without_desk),
 	("language of the staff", _check_staff_language),
 	("URY KOT permissions", _check_ury_kot_permissions),

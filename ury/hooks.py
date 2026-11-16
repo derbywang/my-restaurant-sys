@@ -433,6 +433,7 @@ fixtures = [
                     "POS Profile-custom_enable_multiple_cashier",
                     "POS Profile User-custom_main_cashier",
                     "POS Opening Entry-custom_rooms",
+                    "POS Profile-custom_receipt_printer",
                     "POS Opening Entry-custom_sub_pos_close_entry",
                     "POS Closing Entry Detail-custom_closing_amount",
                     "POS Profile-custom_edit_order_type",

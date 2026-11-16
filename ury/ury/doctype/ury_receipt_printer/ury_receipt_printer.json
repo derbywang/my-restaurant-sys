@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:printer_name",
+ "creation": "2026-11-17 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "field_order": [
+  "printer_name",
+  "enabled",
+  "connection_section",
+  "address",
+  "protocol",
+  "port",
+  "column_break_1",
+  "paper_width",
+  "paper_help",
+  "drawer_section",
+  "has_drawer",
+  "drawer_pin",
+  "drawer_pulse_ms"
+ ],
+ "fields": [
+  {
+   "fieldname": "printer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Printer Name",
+   "reqd": 1,
+   "unique": 1,
+   "description": "例：レジ"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled",
+   "description": "Off: printing says there is no printer, it never tries another way."
+  },
+  {
+   "fieldname": "connection_section",
+   "fieldtype": "Section Break",
+   "label": "Connection"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Address",
+   "reqd": 1,
+   "description": "The printer's fixed IP address or host name, without http:// and without a port."
+  },
+  {
+   "default": "ePOS-Print",
+   "fieldname": "protocol",
+   "fieldtype": "Select",
+   "label": "Protocol",
+   "options": "ePOS-Print\nESC/POS (port 9100)",
+   "reqd": 1,
+   "description": "ePOS-Print: the printer reports paper out, open cover. ESC/POS: no report, the paper sensor is asked before each job."
+  },
+  {
+   "default": "0",
+   "fieldname": "port",
+   "fieldtype": "Int",
+   "label": "Port",
+   "description": "0 = the default of the protocol (80 for ePOS-Print, 9100 for ESC/POS)."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "80",
+   "fieldname": "paper_width",
+   "fieldtype": "Select",
+   "label": "Paper Width (mm)",
+   "options": "80\n58",
+   "reqd": 1
+  },
+  {
+   "fieldname": "paper_help",
+   "fieldtype": "HTML",
+   "options": "<p class=\"text-muted\">80 mm paper prints 72 mm (576 dots), 58 mm paper 48 mm (384 dots).</p>"
+  },
+  {
+   "fieldname": "drawer_section",
+   "fieldtype": "Section Break",
+   "label": "Cash Drawer"
+  },
+  {
+   "default": "1",
+   "fieldname": "has_drawer",
+   "fieldtype": "Check",
+   "label": "Has a Cash Drawer"
+  },
+  {
+   "default": "2",
+   "depends_on": "has_drawer",
+   "fieldname": "drawer_pin",
+   "fieldtype": "Select",
+   "label": "Drawer Pin",
+   "options": "2\n5",
+   "description": "Connector pin of the drawer kick. Try 2 first; if the drawer does not open, 5."
+  },
+  {
+   "default": "100",
+   "depends_on": "has_drawer",
+   "fieldname": "drawer_pulse_ms",
+   "fieldtype": "Int",
+   "label": "Drawer Pulse (ms)",
+   "description": "50 to 500."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-17 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "URY",
+ "name": "URY Receipt Printer",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "URY Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "URY Admin"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

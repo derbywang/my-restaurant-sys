@@ -560,3 +560,33 @@ class TestTheCommand(URYTestCase):
 				deploy_check.ensure_ok()
 		with mock.patch.object(deploy_check, "CHECKS", (("a", lambda: [("WARN", "w")]),)):
 			self.assertTrue(deploy_check.ensure_ok())
+
+
+class TestReceiptPrinterCheck(URYTestCase):
+	"""The printer of the register (URY Receipt Printer, chosen on the POS Profile): what is wrong is named."""
+
+	GOOD = {"address": "192.168.1.20", "protocol": "ePOS-Print", "port": 0, "paper_width": "80", "has_drawer": 1, "drawer_pin": "2", "drawer_pulse_ms": 100, "enabled": 1}
+
+	def run_check(self, profiles, printers):
+		return deploy_check.receipt_printer_findings(profiles, printers.get)
+
+	def test_a_good_printer_passes(self):
+		self.assertEqual(self.run_check([("三友寿司", "レジ")], {"レジ": self.GOOD}), [])
+
+	def test_a_profile_without_a_printer_is_a_warning(self):
+		found = self.run_check([("三友寿司", None)], {})
+		self.assertEqual([level for level, _ in found], [deploy_check.WARN])
+		self.assertIn("三友寿司", found[0][1])
+
+	def test_a_missing_or_switched_off_printer_fails(self):
+		self.assertEqual([l for l, _ in self.run_check([("P", "レジ")], {})], [deploy_check.FAIL])
+		off = {**self.GOOD, "enabled": 0}
+		found = self.run_check([("P", "レジ")], {"レジ": off})
+		self.assertEqual([l for l, _ in found], [deploy_check.FAIL])
+		self.assertIn("switched off", found[0][1])
+
+	def test_a_setting_that_cannot_work_fails_with_the_reason(self):
+		bad = {**self.GOOD, "address": "http://192.168.1.20"}
+		found = self.run_check([("P", "レジ")], {"レジ": bad})
+		self.assertEqual([l for l, _ in found], [deploy_check.FAIL])
+		self.assertIn("アドレス", found[0][1])

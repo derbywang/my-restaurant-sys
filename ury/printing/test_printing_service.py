@@ -54,6 +54,52 @@ class TestConfig(unittest.TestCase):
 			service.PrinterConfig(address="")
 
 
+class TestSettingsCheck(unittest.TestCase):
+	"""What the form of the printer refuses before it is saved (the controller of URY Receipt Printer calls this)."""
+
+	def ok(self, **over):
+		fields = dict(address="192.168.1.20", protocol="ePOS-Print", port=0, paper_width="80", drawer_pin="2", drawer_pulse_ms=100)
+		fields.update(over)
+		return service.check_settings(**fields)
+
+	def test_a_good_setting_passes(self):
+		self.ok()
+		self.ok(address="ury-printer.lan", protocol="ESC/POS (port 9100)", port=9100, paper_width="58", drawer_pin="5", drawer_pulse_ms=200)
+
+	def test_the_address_is_a_host_not_a_url(self):
+		for bad in ("", "  ", "http://192.168.1.20", "192.168.1.20/epos", "192.168.1.20:80", "a b"):
+			with self.assertRaises(ValueError, msg=repr(bad)):
+				self.ok(address=bad)
+
+	def test_the_port_is_empty_or_a_real_port(self):
+		self.ok(port=0)
+		self.ok(port=8008)
+		for bad in (-1, 70000):
+			with self.assertRaises(ValueError):
+				self.ok(port=bad)
+
+	def test_paper_pin_and_pulse_are_the_known_ones(self):
+		with self.assertRaises(ValueError):
+			self.ok(paper_width="70")
+		with self.assertRaises(ValueError):
+			self.ok(drawer_pin="3")
+		with self.assertRaises(ValueError):
+			self.ok(drawer_pulse_ms=5)
+		with self.assertRaises(ValueError):
+			self.ok(drawer_pulse_ms=2000)
+
+	def test_the_protocol_is_one_of_the_two(self):
+		with self.assertRaises(ValueError):
+			self.ok(protocol="CUPS")
+
+	def test_the_config_is_built_from_the_saved_row(self):
+		config = service.config_from_row(
+			{"address": "10.0.0.5", "protocol": "ESC/POS (port 9100)", "port": 0, "paper_width": "58", "has_drawer": 1, "drawer_pin": "5", "drawer_pulse_ms": 200}
+		)
+		self.assertEqual((config.protocol, config.effective_port, config.paper_mm, config.pin, config.on_ms), ("escpos", 9100, 58, 1, 200))
+		self.assertTrue(config.has_drawer)
+
+
 class TestEposPrinter(unittest.TestCase):
 	def setUp(self):
 		renderer.calls.clear()

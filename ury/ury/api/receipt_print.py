@@ -33,15 +33,7 @@ def printer_config_for(branch):
 	)
 	if not row or not row.enabled:
 		return None
-	return service.PrinterConfig(
-		address=row.address,
-		protocol="escpos" if row.protocol and row.protocol.startswith("ESC") else "epos",
-		port=int(row.port or 0),
-		paper_mm=int(row.paper_width or 80),
-		has_drawer=bool(row.has_drawer),
-		pin=0 if int(row.drawer_pin or 2) == 2 else 1,
-		on_ms=int(row.drawer_pulse_ms or 100),
-	)
+	return service.config_from_row(row)
 
 
 def write_log(user, reason, ok, message="", invoice=None, printer=None):

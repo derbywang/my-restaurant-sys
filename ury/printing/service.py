@@ -44,6 +44,41 @@ class Result:
 	message: str = ""
 
 
+PROTOCOL_LABELS = {"ePOS-Print": "epos", "ESC/POS (port 9100)": "escpos"}  # the Select values of the form -> protocol
+PULSE_MS = (50, 500)  # what the drawer's pulse may be, in ms
+
+
+def check_settings(address, protocol, port, paper_width, drawer_pin, drawer_pulse_ms):
+	"""Refuse a printer setting that cannot work; ValueError with a sentence for the manager."""
+	host = (address or "").strip()
+	if not host or any(c in host for c in ("/", ":", " ")):
+		raise ValueError("アドレスはプリンターの IP アドレスかホスト名だけを書いてください（http:// やポート番号は付けません）。")
+	if protocol not in PROTOCOL_LABELS:
+		raise ValueError("方式は「ePOS-Print」か「ESC/POS (port 9100)」から選んでください。")
+	if not 0 <= int(port or 0) <= 65535:
+		raise ValueError("ポートは 0（既定）から 65535 までの数字です。")
+	if str(paper_width) not in ("80", "58"):
+		raise ValueError("用紙幅は 80 mm か 58 mm です。")
+	if str(drawer_pin) not in ("2", "5"):
+		raise ValueError("引き出しのピンは 2 か 5 です。")
+	if not PULSE_MS[0] <= int(drawer_pulse_ms or 0) <= PULSE_MS[1]:
+		raise ValueError("引き出しのパルスは %d〜%d ミリ秒の間で指定してください。" % PULSE_MS)
+
+
+def config_from_row(row):
+	"""A PrinterConfig from a saved URY Receipt Printer (a dict or a document)."""
+	get = row.get
+	return PrinterConfig(
+		address=(get("address") or "").strip(),
+		protocol=PROTOCOL_LABELS.get(get("protocol"), "epos"),
+		port=int(get("port") or 0),
+		paper_mm=int(get("paper_width") or 80),
+		has_drawer=bool(get("has_drawer")),
+		pin=0 if str(get("drawer_pin") or "2") == "2" else 1,
+		on_ms=int(get("drawer_pulse_ms") or 100),
+	)
+
+
 def drawer_wanted(cash_paid, change):
 	"""The drawer opens when cash came in or change goes out; a card or a bill for the guest does not."""
 	return bool(cash_paid and cash_paid > 0) or bool(change and change > 0)

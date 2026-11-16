@@ -9,6 +9,8 @@ export interface OrderingCapabilities {
   show_item_descriptions: boolean
   item_notes_enabled: boolean
   request_bill_enabled: boolean
+  /** the guest can call a member of staff to the table (「呼び出し」) */
+  call_staff_enabled?: boolean
   customer_payment_enabled: boolean
   payment_link_enabled: boolean
   pay_at_counter_enabled: boolean
@@ -259,6 +261,11 @@ export async function addItems(
 
 export async function requestBill(session: string): Promise<{ status: string; request: string }> {
   const response = await call.post<FrappeResponse<{ status: string; request: string }>>(`${M}.request_bill`, { session })
+  return response.message
+}
+
+export async function requestAssistance(session: string): Promise<{ status: string; request: string }> {
+  const response = await call.post<FrappeResponse<{ status: string; request: string }>>(`${M}.request_assistance`, { session })
   return response.message
 }
 

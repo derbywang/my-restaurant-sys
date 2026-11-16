@@ -1,3 +1,4 @@
+import CallStaffButton from '../components/CallStaffButton'
 import { useState } from 'react'
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ItemOptionsDialog from '../components/ItemOptionsDialog'
@@ -31,6 +32,8 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
     submitting,
     error,
     billRequested,
+    staffCalled,
+    handleCallStaff,
     paymentRequest,
     payingOnline,
     selectItem,
@@ -99,6 +102,7 @@ function MobileQRLayout({ initialContext }: LayoutProps) {
           {isPickup ? t('header.pickup') : context?.table ? t('header.table', { table: context.table }) : t('header.order')}
         </h1>
         <div className="flex shrink-0 items-center gap-2">
+          <CallStaffButton enabled={Boolean(context?.capabilities.call_staff_enabled)} called={staffCalled} onCall={handleCallStaff} />
           <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} variant="menu" />
           <button
             onClick={handleStartOver}

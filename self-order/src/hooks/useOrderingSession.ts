@@ -11,7 +11,10 @@ import {
   getStoredToken,
   setSessionLanguage,
   previewCart,
+  requestAssistance,
   requestBill,
+  getStatus,
+  type OrderStatus,
   type CartPreview,
   type CustomerOrder,
   type Grade,
@@ -29,6 +32,7 @@ import { orderSignature } from '../lib/order-lines'
 import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
 import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
 import { billAsked } from '../lib/bill-request'
+import { staffCalled } from '../lib/staff-call'
 import { setLanguage, t } from '../i18n'
 import { languageFromPhone, renameCart } from '../lib/language'
 import {
@@ -92,6 +96,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   // would overwrite the stored cart with the empty one the page starts with.
   const [cartRestored, setCartRestored] = useState(false)
   const [billPressed, setBillPressed] = useState(false)
+  const [staffPressed, setStaffPressed] = useState(false)
+  const [staffStatus, setStaffStatus] = useState<OrderStatus | null>(null)
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequestResult | null>(null)
   const [payingOnline, setPayingOnline] = useState(false)
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null)
@@ -424,6 +430,25 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     })
   }, [session, closedNow, handleFailure])
 
+  // the guest's call for the staff: ask the server how it stands now and then, so the button comes back once the staff have been
+  const callStaffOn = Boolean(context?.capabilities.call_staff_enabled)
+  useEffect(() => {
+    if (!session || closedNow || !callStaffOn) return
+    let stopped = false
+    const stop = startAutoRefresh(async () => {
+      try {
+        const status = await getStatus(session)
+        if (!stopped) setStaffStatus(status)
+      } catch {
+        // the next look tries again
+      }
+    })
+    return () => {
+      stopped = true
+      stop()
+    }
+  }, [session, closedNow, callStaffOn])
+
   // keep the cart for a reload of the page
   useEffect(() => {
     if (session && cartRestored) saveCart(sessionStorage, session, cart)
@@ -452,6 +477,17 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     try {
       await requestBill(context.session)
       setBillPressed(true)
+    } catch (err) {
+      handleFailure(err)
+    }
+  }
+
+  async function handleCallStaff() {
+    if (!context) return
+    try {
+      await requestAssistance(context.session)
+      setStaffPressed(true)
+      setStaffStatus(null) // until the next look, the press counts
     } catch (err) {
       handleFailure(err)
     }
@@ -486,6 +522,8 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     error,
     // after a reload the order itself says it (the call is still there for the staff)
     billRequested: billAsked(order, billPressed),
+    staffCalled: staffCalled(staffStatus, staffPressed),
+    handleCallStaff,
     paymentRequest,
     payingOnline,
     addToCart,

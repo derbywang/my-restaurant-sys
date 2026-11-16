@@ -95,6 +95,10 @@
     "title": "您还在使用吗？",
     "still_here": "是的，还在使用"
   },
+  "staff": {
+    "call": "呼叫店员",
+    "called": "已呼叫店员，请稍等。"
+  },
   "pay": {
     "online": "在线支付",
     "starting": "正在准备支付…",

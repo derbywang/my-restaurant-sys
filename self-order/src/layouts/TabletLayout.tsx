@@ -1,3 +1,4 @@
+import CallStaffButton from '../components/CallStaffButton'
 import AgeConfirmDialog from '../components/AgeConfirmDialog'
 import ItemOptionsDialog from '../components/ItemOptionsDialog'
 import ClosedNotice from '../components/ClosedNotice'
@@ -37,6 +38,8 @@ function TabletLayout({ initialContext }: LayoutProps) {
     submitting,
     error,
     billRequested,
+    staffCalled,
+    handleCallStaff,
     payingOnline,
     selectItem,
     addLine,
@@ -122,6 +125,7 @@ function TabletLayout({ initialContext }: LayoutProps) {
           {context?.table ? t('header.table', { table: context.table }) : t('header.pickup')}
         </h1>
         <div className="flex items-center gap-3">
+          <CallStaffButton enabled={Boolean(context?.capabilities.call_staff_enabled)} called={staffCalled} onCall={handleCallStaff} className="px-3 py-2 text-sm" />
           <LanguageSwitcher languages={context?.languages} current={language} onChange={changeLanguage} size="md" />
           <button
             onClick={handleReset}

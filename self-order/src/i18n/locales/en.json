@@ -95,6 +95,10 @@
     "title": "Still there?",
     "still_here": "I'm still here"
   },
+  "staff": {
+    "call": "Call staff",
+    "called": "Staff have been called. Please wait a moment."
+  },
   "pay": {
     "online": "Pay Online",
     "starting": "Starting payment…",

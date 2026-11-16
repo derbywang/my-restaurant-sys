@@ -11,7 +11,7 @@ from pathlib import Path
 import frappe
 
 from ury.ury.api import receipt_print
-from ury.setup.test_site import BRANCH, CASHIER, POS_PROFILE, URYTestCase
+from ury.setup.test_site import BRANCH, CASHIER, MANAGER, POS_PROFILE, URYTestCase
 
 NAME = "テスト用プリンター"
 
@@ -93,6 +93,16 @@ class TestTheDrawerLog(URYTestCase):
 		row = frappe.get_all("URY Drawer Log", filters={"user": CASHIER}, fields=["reason", "ok", "message", "creation"], order_by="creation desc", limit=1)[0]
 		self.assertEqual((row.reason, row.ok), ("manual", 0))
 		self.assertIn("開きません", row.message)
+
+	def test_the_manager_can_open_the_list_in_the_desk(self):
+		# a DocType marked "read_only" (User Cannot Search) is left out of the Desk's `can_read`: the Desk then takes
+		# /app/ury-drawer-log for a page and answers "not permitted" (found in the browser test, 2026-11-17)
+		from frappe.utils.user import UserPermissions
+
+		self.assertFalse(frappe.get_meta("URY Drawer Log").read_only)
+		permissions = UserPermissions(MANAGER)
+		permissions.build_permissions()
+		self.assertIn("URY Drawer Log", permissions.can_read)
 
 	def test_nobody_but_the_managers_reads_it(self):
 		roles = {p.role for p in frappe.get_meta("URY Drawer Log").permissions if p.read}

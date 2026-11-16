@@ -1,6 +1,6 @@
 # 小票打印机和钱箱（iPad 收银台）
 
-状态：2026-11-16 写；打印核心（`ury/printing/`）已做并用假打印机测过；**没有任何一步在真实打印机上跑过**，打印机预计 11/27 前到货。标记：【已读代码】【已测逻辑（假打印机）】【待打印机】【估计】。
+状态：2026-11-16 写，11-17 更新：打印核心（`ury/printing/`）、服务器接口（`ury/ury/api/receipt_print.py`）、收银台的按钮和付款后开钱箱、断线提示条和屏幕常亮、厨房出错提醒的第二条通道已做，并用假打印机测过；**没有任何一步在真实打印机上跑过**，打印机预计 11/27 前到货。标记：【已读代码】【已测逻辑（假打印机）】【待打印机】【估计】。
 
 ## 1. 为什么和原来的设计不一样
 
@@ -12,7 +12,7 @@
 - 原来的 QZ、CUPS 路径保留不动（有电脑的店仍可用），新路径是 POS Profile 上多选一项。
 - **厨房单不在纸上打印**：KOT 的纸质打印设置项保留，默认关（`URY Printer Settings` 的 `custom_kot_print`，本来就是逐项勾选）。
 
-## 2. 设置（打印机一台一条记录）【待实现，随 11/25 的 migrate 一起】
+## 2. 设置（打印机一台一条记录）【已写好，随这次 migrate 上线；2026-11-17】
 
 新的 DocType **URY Receipt Printer**，POS Profile 里选一台：
 
@@ -91,3 +91,11 @@
 - ePOS-Print 允许跨域与否（**不影响**：我们从服务器发，不从浏览器发）。
 - CD-B3336W 的开箱规格（针脚、脉冲）。
 - 生产镜像里有没有 `wkhtmltoimage`：镜像构建文件（`images/custom/Containerfile`）安装的是 `wkhtmltox` 0.12.6.1-3 的 .deb，这个包同时带 `wkhtmltopdf` 和 `wkhtmltoimage`；开发容器里两个都在 `/usr/local/bin`，版本相同（0.12.6.1，patched qt）。**服务器上构建后确认**：`docker run --rm ury:<标签> which wkhtmltoimage`。
+
+## 7. 代码在哪里（2026-11-17）
+- `ury/printing/`：不依赖 Frappe 的打印核心（`bitmap` 把小票 HTML 画成黑白图，`escpos` / `epos` 拼任务，`transport` 发送，`service.send` 把一台打印机的设置变成一次打印并把所有故障变成一句日文）。测试：`cd apps/ury && ../../env/bin/python -W ignore -m unittest ury.printing.test_printing_core ury.printing.test_printing_service`（假打印机，不需要站点）。
+- `ury/ury/api/receipt_print.py`：`print_bill`（印账单 / 領収書，不开钱箱）、`open_drawer`（只有能收款的人；每次都记一条 URY Drawer Log）、`drawer_for_settlement`（付款后由收银台单独调用：有现金收入或找零才开；**不放进 `make_invoice`**：打印机最多等 8 秒，不能占着单据的锁）；`get_pos_profile` 在 POS Profile 选了打印机时返回 `print_type = "server"`。
+- 前端：`pos/src/lib/drawer.ts`（`serverPrint`、`openDrawerByHand`、`drawerAfterPayment`）；收银台顶栏的「引き出しを開ける」（只有能收款的人看得到，且只在 `print_type = "server"` 时显示）；付款成功后自动调用。
+- DocType：URY Receipt Printer、URY Drawer Log，POS Profile 的 `custom_receipt_printer`（Custom Field，在 fixtures）；`deploy_check` 的「receipt printer」检查。
+- iPad 长时间运行：`@ury/core` 的 `connection.ts`（每 15 秒看服务器，连续两次没回应就显示红色提示条）和 `wake-lock.ts`（屏幕常亮；Safari 16.4 以上；iPad 本身的自动锁定仍要设为「なし」）；厨房屏幕（`mosaic/src/lib/connection.js`、`wake-lock.js`）是同一套规则的副本。
+- 厨房出错提醒（`KotAlertListener`）的第二条通道：服务器把最近 1 小时的提醒按分店保存（`branch_realtime.py`，同一条提醒只有一个 `alert_id`），收银台每 30 秒和从休眠醒来时问一次（`kot_alerts.get_recent_kot_alerts`），实时推送和轮询到的同一条只弹一次。

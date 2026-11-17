@@ -4,6 +4,7 @@ Run:  cd apps/ury && ../../env/bin/python -m unittest ury.printing.test_printing
 """
 
 import base64
+import os
 import shutil
 import socket
 import threading
@@ -267,6 +268,139 @@ class TestSendRaw(unittest.TestCase):
 		with self.assertRaises(transport.PrinterError) as caught:
 			transport.send_raw("127.0.0.1", b"x", port=port, timeout=2)
 		self.assertIn("接続できません", str(caught.exception))
+
+
+# what frappe.get_print returns around the receipt: a banner with "Print" and "Get PDF", a grey gutter and a paper-sized box
+# with padding (found in the browser test: the receipt came out pushed to the right and clipped, with the banner on top)
+FRAPPE_PAGE = (
+	'<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+	"@media screen{.print-format-gutter{background-color:#d1d8dd;padding:30px 0px}"
+	".print-format{background-color:white;border-radius:8px;max-width:8.3in;min-height:11.69in;padding:0.75in;margin:auto}"
+	"@media(max-width:767px){.print-format{padding:0.2in}}}"
+	".print-format td,.print-format th{vertical-align:top !important;padding:6px !important}"
+	"</style></head><body>"
+	'<div class="action-banner print-hide"><a class="p-2">Print</a><a class="p-2">Get PDF</a></div>'
+	'<div class="print-format-gutter"><div class="print-format">'
+	"<style>.jp-receipt{width:72mm;font-size:12px}.jp-receipt .r{text-align:right}@media screen{.jp-receipt{padding:8px}}</style>"
+	'<div class="jp-receipt"><table style="width:100%"><tr><td>まぐろ握り（並）</td><td class="r">¥1,100</td></tr>'
+	'<tr><td>合計（税込）</td><td class="r">¥1,100</td></tr></table></div>'
+	"</div></div></body></html>"
+)
+
+
+def ink_columns(bits, width_bytes, height):
+	return [x for x in range(width_bytes * 8) if any(bits[y * width_bytes + x // 8] & (0x80 >> (x % 8)) for y in range(height))]
+
+
+def receipt_page(names, total="¥1,000", stamp=False):
+	"""The real template (ury/templates/print_formats/ury_jp_receipt.html) drawn with made-up data, inside the page Frappe puts
+	around it. Plain jinja2: the template only reads `r`, which the site would have made with `jp_receipt_data`."""
+	import re
+
+	import jinja2
+
+	path = os.path.join(os.path.dirname(__file__), "..", "templates", "print_formats", "ury_jp_receipt.html")
+	with open(path, encoding="utf-8") as f:
+		source = re.sub(r"\{%-?\s*set r = jp_receipt_data\(doc\)\s*-?%\}", "", f.read())
+	lines = [{"name": n, "qty": 1, "rate": "¥390", "amount": "¥390", "reduced": False} for n in names]
+	r = {
+		"company": "三友寿司", "branch": "三友寿司", "address": "", "phone": "", "registration_valid": True,
+		"registration_number": "T1234567890123", "title": "領収書", "posting": "2026年11月17日 05:36", "order_type": "店内",
+		"table": "MD-06", "merged": False, "invoices": [{"name": "INV-1", "lines": lines, "total": total}],
+		"subtotal": total, "discount": "", "total": total, "paid": True, "methods": "現金", "cashless": [],
+		"cash_received": "¥5,000", "cash_label": "お預かり", "change": "¥100", "has_reduced": False, "credit_note": "",
+		"rates": [{"rate": "10%", "reduced": False, "discount": "", "gross": "", "taxable": total, "tax": "¥90"}],
+		"stamp_box": "収入印紙" if stamp else "",
+	}
+	html = jinja2.Template(source).render(r=r, doc={"name": "INV-1"})
+	return FRAPPE_PAGE.split('<div class="print-format-gutter">')[0] + '<div class="print-format-gutter"><div class="print-format">' + html + "</div></div></body></html>"
+
+
+@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+class TestThePaperWidthReachesThePrinter(unittest.TestCase):
+	"""The raster's width in the job follows the paper (nothing is written down as 576): GS v 0 m xL xH yL yH, xL xH = bytes per row."""
+
+	def job_header(self, paper):
+		from ury.printing import service
+
+		printer = FakeRaw()
+		config = service.PrinterConfig(address="127.0.0.1", protocol="escpos", port=printer.port, paper_mm=paper)
+		result = service.send(config, html=receipt_page(["コーラ"]), pulse=False)
+		printer.thread.join(3)
+		self.assertTrue(result.ok, result.message)
+		return printer.job
+
+	def test_58_mm_paper_sends_48_bytes_per_row_and_80_mm_sends_72(self):
+		self.assertIn(b"\x1dv0\x00\x30\x00", self.job_header(58))  # 48 bytes = 384 dots
+		self.assertNotIn(b"\x1dv0\x00\x48\x00", self.job_header(58))
+		self.assertIn(b"\x1dv0\x00\x48\x00", self.job_header(80))  # 72 bytes = 576 dots
+
+	def test_the_ePOS_image_takes_its_width_from_the_paper_too(self):
+		from ury.printing import service
+
+		for paper, dots in ((58, 384), (80, 576)):
+			printer = FakeEpos()
+			try:
+				config = service.PrinterConfig(address="127.0.0.1", protocol="epos", port=printer.port, paper_mm=paper)
+				self.assertTrue(service.send(config, html=receipt_page(["コーラ"]), pulse=False).ok)
+				self.assertIn('<image width="%d"' % dots, printer.received[0][2])
+			finally:
+				printer.shutdown()
+				printer.server_close()
+
+
+@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+class TestTheReceiptOn58mmPaper(unittest.TestCase):
+	def height(self, names, paper=58, **kwargs):
+		_, _, height = bitmap.receipt_raster(receipt_page(names, **kwargs), paper)
+		return height
+
+	def test_a_long_dish_name_is_not_squeezed_into_a_narrow_column(self):
+		# on 48 mm the name, the quantity and the amount cannot share a line: the name gets its own line (a name of 14
+		# characters is one line, as a name of 3), the quantity and the amount the line below
+		self.assertEqual(self.height(["0%ノンアルコールビール"]), self.height(["コーラ"]))
+
+	def test_a_name_longer_than_a_line_goes_on_to_the_next_line_and_nothing_is_clipped(self):
+		bits, width_bytes, height = bitmap.receipt_raster(receipt_page(["サーモン尽くし五貫盛・シャリ大盛り"]), 58)
+		columns = ink_columns(bits, width_bytes, height)
+		self.assertLessEqual(min(columns), 8)
+		self.assertLessEqual(max(columns), 383)
+		self.assertGreater(self.height(["サーモン尽くし五貫盛・シャリ大盛り"]), self.height(["コーラ"]))
+
+	def test_80_mm_paper_keeps_the_one_line_layout(self):
+		self.assertEqual(self.height(["0%ノンアルコールビール"], paper=80), self.height(["コーラ"], paper=80))
+		# the two-line layout is for the narrow paper only: on 80 mm a dish takes one line, on 58 mm two
+		self.assertLess(self.height(["コーラ"], paper=80) * 384 // 576 - 1, self.height(["コーラ"], paper=58))
+
+	def test_the_stamp_box_of_a_large_receipt_fits_on_the_paper(self):
+		bits, width_bytes, height = bitmap.receipt_raster(receipt_page(["寿司盛り合わせ"], total="¥54,849", stamp=True), 58)
+		columns = ink_columns(bits, width_bytes, height)
+		self.assertLessEqual(max(columns), 383)
+		self.assertGreaterEqual(max(columns), 383 - 12)  # the box sits at the right edge (margin: 8px 0 0 auto)
+
+
+class TestThePageAroundTheReceipt(unittest.TestCase):
+	def test_the_banner_the_gutter_and_the_padding_are_taken_away(self):
+		fitted = bitmap.fit_to_paper(FRAPPE_PAGE, 58)
+		for rule in (".print-hide", ".action-banner", ".print-format-gutter", ".print-format"):
+			self.assertIn(rule, fitted.split("</style>")[0] + fitted[fitted.find("<style>") :][:1500])
+		self.assertIn("width:48mm", fitted.replace(" ", ""))
+
+	@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+	def test_the_receipt_fills_the_paper_from_its_left_edge_to_its_right_edge(self):
+		for paper, dots in ((80, 576), (58, 384)):
+			bits, width_bytes, height = bitmap.receipt_raster(FRAPPE_PAGE, paper)
+			columns = ink_columns(bits, width_bytes, height)
+			self.assertEqual(width_bytes * 8, dots)
+			self.assertLessEqual(min(columns), 8, "%d mm: the receipt starts at the left edge" % paper)
+			self.assertGreaterEqual(max(columns), dots - 12, "%d mm: the amounts end at the right edge" % paper)
+
+	@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+	def test_the_banner_is_not_drawn(self):
+		with_banner = FRAPPE_PAGE
+		without_banner = FRAPPE_PAGE.replace('<div class="action-banner print-hide"><a class="p-2">Print</a><a class="p-2">Get PDF</a></div>', "")
+		self.assertEqual(bitmap.receipt_raster(with_banner, 58), bitmap.receipt_raster(without_banner, 58))
 
 
 @unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")

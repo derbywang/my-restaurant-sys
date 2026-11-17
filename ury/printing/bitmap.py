@@ -25,13 +25,30 @@ def printable_dots(paper_mm):
 
 
 def fit_to_paper(html, paper_mm):
-	"""The same page with the receipt's box as wide as the paper's printable width (the template says 72 mm)."""
+	"""The same page, drawn as a receipt: `frappe.get_print` wraps the receipt in a page of its own (a banner with "Print" and
+	"Get PDF", a grey gutter, a paper-sized box with 0.2 to 0.75 inch of padding, and 6px of padding in every table cell, all
+	with `!important`). All of that is taken away, and the receipt's box is as wide as the paper's printable width (the template
+	says 72 mm)."""
 	mm = PRINTABLE_MM[paper_mm]
-	style = '<meta charset="utf-8"><style>body{margin:0;background:#fff}.jp-receipt{width:%dmm !important}</style>' % mm
+	style = (
+		'<meta charset="utf-8"><style>'
+		"body{margin:0 !important;background:#fff !important}"
+		".action-banner,.print-hide{display:none !important}"
+		"@media screen{.print-format-gutter{background:#fff !important;padding:0 !important}"
+		".print-format{background:#fff !important;border-radius:0 !important;max-width:none !important;min-height:0 !important;"
+		"padding:0 !important;margin:0 !important}}"
+		".print-format-gutter{background:#fff !important;padding:0 !important}"
+		".print-format{padding:0 !important;margin:0 !important;max-width:none !important;min-height:0 !important}"
+		".print-format .jp-receipt td,.print-format .jp-receipt th{padding:1px 0 !important}"
+		".print-format .jp-receipt td.r{padding-left:6px !important}"
+		".jp-receipt{width:%dmm !important;padding:0 !important;margin:0 !important}"
+		"</style>"
+	) % mm
 	lowered = html.lower()
-	at = lowered.find("<head>")
+	at = lowered.find("</head>")
 	if at >= 0:
-		return html[: at + 6] + style + html[at + 6 :]
+		# after the page's own styles: an equal `!important` rule later in the page wins
+		return html[:at] + style + html[at:]
 	return "<html><head>" + style + "</head><body>" + html + "</body></html>"
 
 

@@ -12,6 +12,9 @@
 	.jp-receipt hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
 	.jp-receipt .small { font-size: 10.5px; }
 	@media screen { .jp-receipt { padding: 8px; } }
+	/* narrow paper (58 mm: the page is 384 device pixels wide): the dish's name gets a line of its own, the quantity and the amount the line below */
+	.jp-receipt .narrow { display: none; }
+	@media (max-width: 400px) { .jp-receipt .wide { display: none; } .jp-receipt tr.narrow { display: table-row; } }
 </style>
 <div class="jp-receipt">
 	<div class="c"><b>{{ r.company }}</b></div>
@@ -35,10 +38,17 @@
 	{%- if r.merged %}<div class="small"><b>{{ section.name }}</b></div>{% endif %}
 	<table>
 		{%- for line in section.lines %}
-		<tr>
+		<tr class="wide">
 			<td>{% if line.reduced %}※{% endif %}{{ line.name }}</td>
 			<td class="r">{{ line.qty }} × {{ line.rate }}</td>
 			<td class="r" style="width: 22%">{{ line.amount }}</td>
+		</tr>
+		<tr class="narrow">
+			<td colspan="3">{% if line.reduced %}※{% endif %}{{ line.name }}</td>
+		</tr>
+		<tr class="narrow">
+			<td colspan="2" class="r">{{ line.qty }} × {{ line.rate }}</td>
+			<td class="r">{{ line.amount }}</td>
 		</tr>
 		{%- endfor %}
 	</table>

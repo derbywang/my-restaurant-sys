@@ -25,7 +25,7 @@ def _unreachable(address, error):
 
 def _silent(address):
 	return PrinterError(
-		"プリンター（%s）は応答しません。エラーの状態かもしれません。ERROR ランプ（橙）を見て、カバーと紙を確かめ、直らなければ電源を入れ直してください。" % address
+		"プリンター（%s）は応答しません。エラーの状態かもしれません。エラーランプ（「！」マーク、橙）を見て、カバーと紙を確かめ、直らなければ電源を入れ直してください。" % address
 	)
 
 

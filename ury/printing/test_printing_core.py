@@ -193,7 +193,8 @@ class TestSendEpos(unittest.TestCase):
 			transport.send_epos("127.0.0.1", epos.job(), port=fake.port, timeout=0.5)
 		message = str(caught.exception)
 		self.assertIn("応答しません", message)
-		self.assertIn("ERROR", message)
+		self.assertIn("エラーランプ", message)
+		self.assertIn("「！」", message)
 		self.assertNotIn("接続できません", message)
 
 	def test_a_busy_printer_gets_the_time_it_needs(self):

@@ -139,4 +139,129 @@ ok "health: the daily mail is sent when all is well, with the result of deploy_c
 touch -d '9 days ago' "$T/log/health-2026-01-01.log"; "$here/health.sh" record > "$T/out" 2>&1
 ok "health: logs older than a week are removed" '[ ! -e "$T/log/health-2026-01-01.log" ]'
 
+# ------------------------------------------------------------------ health.sh: what the stability report needs
+reset; now_stamp
+export FAKE_NGINX_LOG='1.2.3.4 [2026-12-14T19:42:11+09:00] "POST /api/method/ury.ury_pos.api.sync_order HTTP/1.1" 200 10 rt=0.640\n1.2.3.4 [2026-12-14T19:43:02+09:00] "POST /api/method/ury.ury.api.self_ordering.add_customer_items HTTP/1.1" 200 10 rt=1.250\n1.2.3.4 [2026-12-14T19:43:30+09:00] "GET /assets/x.js HTTP/1.1" 200 10 rt=9.000\n'
+"$here/health.sh" record > "$T/out" 2>&1
+ok "health: the total memory is in the block (the report needs the memory in use)" 'grep -q "available_mb=3000 swap_used_mb=100 mem_total_mb=7812" "$T"/log/health-*.log'
+ok "health: each order is kept with its time and seconds (the report needs them, not an hour's p95)" \
+	'[ "$(cat "$T"/log/order-times-*.log)" = "2026-12-14 19:42:11 0.640
+2026-12-14 19:43:02 1.250" ]'
+touch -d '9 days ago' "$T/log/order-times-2026-01-01.log"; "$here/health.sh" record > "$T/out" 2>&1
+ok "health: the order times older than the days kept are removed too" '[ ! -e "$T/log/order-times-2026-01-01.log" ]'
+unset FAKE_NGINX_LOG
+
+# ------------------------------------------------------------------ stability_report.sh
+# helpers: a health block every hour from <start> for <hours> hours, `avail`/`swap`/`total` given as functions of the hour h
+# (GNU date reads "08:00:00 +25 hours" as the time zone +25: the sums are made on the seconds)
+addsec() { TZ=UTC date -d "@$(($(TZ=UTC date -d "$1" +%s) + $2))" '+%Y-%m-%d %H:%M:%S'; }
+mkhealth() { # start "YYYY-MM-DD HH:MM:SS", hours, avail-expr, swap-expr, used-expr (MB in use)
+	local start=$1 hours=$2 a=$3 sw=$4 u=$5 h t used avail
+	mkdir -p "$T/log"
+	for h in $(seq 0 "$hours"); do
+		t=$(addsec "$start" $((h * 3600)))
+		used=$(eval "echo \$(($u))"); avail=$((8000 - used)); [ -n "$a" ] && avail=$(eval "echo \$(($a))")
+		echo "== $t available_mb=$avail swap_used_mb=$(eval "echo \$(($sw))") mem_total_mb=8000 load=0.1 0.1 0.1 disk_percent=20" >> "$T/log/health-${t%% *}.log"
+	done
+}
+mkorders() { # start, n-fast, fast-seconds, n-slow, slow-seconds   (one order a minute, the slow ones last)
+	local start=$1 nf=$2 vf=$3 ns=$4 vs=$5 i t n=0
+	mkdir -p "$T/log"
+	for i in $(seq 1 "$nf") $(seq 1 "$ns"); do
+		n=$((n + 1)); t=$(addsec "$start" $((n * 60)))
+		if [ "$n" -le "$nf" ]; then echo "$t $vf"; else echo "$t $vs"; fi >> "$T/log/order-times-${t%% *}.log"
+	done
+}
+report() { STABILITY_FROM="2026-12-14 08:00:00" "$here/stability_report.sh" "$@" > "$T/rep" 2>&1; echo $?; }
+START="2026-12-14 08:00:00"
+
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: four days, everything inside the limits -> all pass, exit 0" '[ "$code" = 0 ] && grep -q "全部合格" "$T/rep" && ! grep -q "不合格" "$T/rep"'
+ok "report: it says what it measured (lowest available memory, most swap, p95 with the number of orders, the growth)" \
+	'grep -q "可用内存最低 4000 MB" "$T/rep" && grep -q "交换区最多用 100 MB" "$T/rep" && grep -q "下单 p95 0.6 秒（300 单" "$T/rep" && grep -q "内存增长 0.0%" "$T/rep"'
+
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+mkhealth "2026-12-15 03:00:00" 0 "1500" "100" "6500"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: available memory of exactly 1500 MB passes (the limit is 'at least 1500')" '[ "$code" = 0 ] && grep -q "可用内存最低 1500 MB.*合格" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkhealth "2026-12-15 03:00:00" 0 "1499" "100" "6501"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: 1499 MB fails, exit 1, and it names the criterion" '[ "$code" = 1 ] && grep -q "可用内存最低 1499 MB.*不合格" "$T/rep"'
+
+reset; mkhealth "$START" 96 "" "500" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: swap of exactly 500 MB passes" '[ "$code" = 0 ] && grep -q "交换区最多用 500 MB.*合格" "$T/rep"'
+reset; mkhealth "$START" 96 "" "501" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: 501 MB of swap fails" '[ "$code" = 1 ] && grep -q "交换区最多用 501 MB.*不合格" "$T/rep"'
+
+# p95 by the nearest rank: of 100 orders the 95th slowest-but-five
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 95 1.0 5 3.0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: for reference it shows the slowest order and how many took more than 2 seconds (not a criterion)" 'grep -q "参考：最慢一单 3.0 秒，超过 2 秒的 5 单" "$T/rep"'
+ok "report: 95 orders at 1.0 s and 5 at 3.0 s -> p95 is 1.0 s, passes (the slowest 5% may be slow)" '[ "$code" = 0 ] && grep -q "下单 p95 1.0 秒（100 单" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 94 1.0 6 3.0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: 94 at 1.0 s and 6 at 3.0 s -> p95 is 3.0 s, fails" '[ "$code" = 1 ] && grep -q "下单 p95 3.0 秒.*不合格" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 95 1.0 6 3.0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: 101 orders, the 96th is the p95 (the rank is rounded UP): 95 at 1.0 s and 6 at 3.0 s -> 3.0 s, fails" '[ "$code" = 1 ] && grep -q "下单 p95 3.0 秒（101 单" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 100 1.5 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: p95 of exactly 1.5 s passes" '[ "$code" = 0 ] && grep -q "下单 p95 1.5 秒.*合格" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 100 1.51 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: p95 of 1.51 s fails" '[ "$code" = 1 ] && grep -q "下单 p95 1.51 秒.*不合格" "$T/rep"'
+
+# growth: the median of the first 12 hours against the median of the last 12 hours
+grow() { reset; mkhealth "$START" 96 "" "100" "4000 + h * $1 / 96"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; report conclusion --to "2026-12-18 08:00:00"; }
+code=$(grow 0)
+ok "report: no growth" '[ "$code" = 0 ] && grep -q "内存增长 0.0%" "$T/rep"'
+mkhealth_growth() { reset; mkhealth "$START" 96 "" "100" "$1"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; }
+mkhealth_growth "h < 12 ? 4000 : (h > 84 ? 4800 : 4400)"; code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: +20% exactly (4000 -> 4800 MB) passes" '[ "$code" = 0 ] && grep -q "内存增长 +20.0%.*合格" "$T/rep"'
+mkhealth_growth "h < 12 ? 4000 : (h > 84 ? 4810 : 4400)"; code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: +20.25% fails" '[ "$code" = 1 ] && grep -q "内存增长 +20.2%.*不合格\|内存增长 +20.3%.*不合格" "$T/rep"'
+
+# what is not enough data is not a verdict
+reset; mkhealth "$START" 48 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-16 08:00:00")
+ok "report: the conclusion with only two days -> 'not enough data', exit 2, and it does not say pass" '[ "$code" = 2 ] && grep -q "数据不足" "$T/rep" && ! grep -q "全部合格" "$T/rep"'
+reset; mkhealth "$START" 30 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report preliminary --to "2026-12-15 14:00:00")
+ok "report: the preliminary of 12/15 works with one day and a half, and says it is preliminary" '[ "$code" = 0 ] && grep -q "初步" "$T/rep" && grep -q "可用内存最低 4000 MB" "$T/rep"'
+reset; mkhealth "$START" 10 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report preliminary --to "2026-12-14 18:00:00")
+ok "report: under a day the growth is 'not enough data' (it needs a first and a last 12 hours)" 'grep -q "内存增长.*数据不足" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 10 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: ten orders are too few for a p95: not enough data, not a pass" '[ "$code" = 2 ] && grep -q "下单 p95.*数据不足" "$T/rep"'
+
+# the warnings of the preliminary (docs/design/launch-plan.md 0.0: change the machine that night)
+reset; mkhealth "$START" 30 "1900" "100" "6100"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report preliminary --to "2026-12-15 14:00:00")
+ok "report: preliminary with less than 2000 MB available -> a warning to think of another machine" 'grep -q "要注意" "$T/rep" && grep -q "2000 MB" "$T/rep"'
+reset; mkhealth "$START" 30 "" "h * 10" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report preliminary --to "2026-12-15 14:00:00")
+ok "report: preliminary with the swap rising -> a warning" 'grep -q "要注意" "$T/rep" && grep -q "交换区在增长" "$T/rep"'
+reset; mkhealth "$START" 48 "" "100" "4000 + h * 20"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report preliminary --to "2026-12-16 08:00:00")
+ok "report: preliminary with the memory growing more than 5% a day -> a warning" 'grep -q "要注意" "$T/rep" && grep -q "每天" "$T/rep"'
+
+# only the window counts
+reset; mkhealth "2026-12-13 08:00:00" 5 "200" "900" "7800"; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: what was logged before the window (the days of the setting up) is not counted" '[ "$code" = 0 ] && grep -q "可用内存最低 4000 MB" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; echo "2026-12-14 09:10:00 0.6" >> "$T/log/order-times-2026-12-14.log"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: an order logged twice (two hourly runs that overlap) is counted once" 'grep -q "300 单" "$T/rep"'
+
+# mail
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+STABILITY_FROM="$START" "$here/stability_report.sh" conclusion --to "2026-12-18 08:00:00" --mail > "$T/rep" 2>&1
+ok "report: --mail sends the report once, with the verdict in the subject" '[ "$(grep -c "^Subject:" "$T/mail")" = 1 ] && grep -q "^Subject:.*稳定性" "$T/mail" && grep -q "全部合格" "$T/mail"'
+reset; code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report: no log at all -> not enough data (exit 2), never a pass" '[ "$code" = 2 ] && ! grep -q "全部合格" "$T/rep"'
+
 echo; [ $fails = 0 ] && echo "ALL PASSED" || { echo "$fails FAILED"; exit 1; }

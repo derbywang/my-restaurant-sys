@@ -29,3 +29,6 @@ MAX_SSD_USED_PERCENT=80      # the life of the SSD used, in percent
 MAX_BACKUP_AGE_HOURS=26
 SLOW_SECONDS=2               # an order that took longer is counted as slow
 ALERT_REPEAT_HOURS=6         # the same alert is not mailed again before this
+
+# --- the stability report (deploy/stability_report.sh): the period starts here; the limits are in the script (docs/deploy/operations.md 5.2)
+#STABILITY_FROM="2026-12-14 08:00:00"

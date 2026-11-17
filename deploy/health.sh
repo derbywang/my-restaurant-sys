@@ -50,6 +50,14 @@ order_times() {
 			END {if (NR == 0) {print "0 0 0 0"; exit} i = int(NR * 0.95); if (i < 1) i = 1; printf "%d %d %s %s", NR, s, v[i], v[NR]}'
 }
 
+# every order of the last hour with its time and seconds, "YYYY-MM-DD HH:MM:SS 0.123" (the stability report needs the real times:
+# the p95 of a few days cannot be made from the p95 of each hour)
+order_samples() {
+	dc logs --since 1h --no-log-prefix frontend 2>/dev/null |
+		grep -E 'sync_order|add_customer_items|make_invoice' |
+		sed -n 's/.*\[\([0-9-]*\)T\([0-9:]*\)[+-][0-9:]*\].* rt=\([0-9.]*\).*/\1 \2 \3/p'
+}
+
 # alert <key> <subject> <body>: the same alert is mailed once in $ALERT_REPEAT_HOURS
 alert() {
 	local key=$1 file="$STATE/$1"
@@ -81,12 +89,13 @@ record() {
 	local t
 	t=$(order_times)
 	{
-		echo "== $(now) available_mb=$(available_mb) swap_used_mb=$(swap_used_mb) load=$(cut -d' ' -f1-3 /proc/loadavg) disk_percent=$(disk_percent)"
+		echo "== $(now) available_mb=$(available_mb) swap_used_mb=$(swap_used_mb) mem_total_mb=$(mem MemTotal) load=$(cut -d' ' -f1-3 /proc/loadavg) disk_percent=$(disk_percent)"
 		echo "ssd: $(ssd | awk '{print "used_percent=" $1 " written=" $2 " health=" $3}')"
 		echo "orders_last_hour: count=$(echo "$t" | cut -d' ' -f1) slow=$(echo "$t" | cut -d' ' -f2) p95=$(echo "$t" | cut -d' ' -f3)s max=$(echo "$t" | cut -d' ' -f4)s"
 		docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sed 's/^/  /'
 	} >> "$LOG"
-	find "$LOG_DIR" -name 'health-*.log' -mtime +"$KEEP_LOG_DAYS" -delete
+	order_samples >> "$LOG_DIR/order-times-$(date +%F).log" || true
+	find "$LOG_DIR" \( -name 'health-*.log' -o -name 'order-times-*.log' \) -mtime +"$KEEP_LOG_DAYS" -delete
 	checks
 }
 

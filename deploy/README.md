@@ -14,7 +14,8 @@ The files of the shop's server. The steps are in `docs/deploy/`:
 | `nginx-template.conf` | frappe_docker's template with two changes (long cache for our built files, request times in the log) |
 | `ury-deploy.conf.example` | `/etc/ury/deploy.conf` (no real values) |
 | `lib.sh`, `backup.sh`, `health.sh`, `update.sh` | the scripts cron and the owner run |
-| `test.sh` | tests of `backup.sh` and `health.sh` with stand-ins for docker, rclone, msmtp: `deploy/test.sh` |
+| `stability_report.sh` | the report of the minimum-configuration stability test (12/15 preliminary, 12/18 conclusion); read-only |
+| `test.sh` | tests of `backup.sh`, `health.sh` and `stability_report.sh` with stand-ins for docker, rclone, msmtp: `deploy/test.sh` |
 
 **This repository is public.** No password, key, `.env`, real configuration, backup, staff list or device file ever goes
 in (docs/deploy/server-setup.md, section 0). Change a script → run `deploy/test.sh`.

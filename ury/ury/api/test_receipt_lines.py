@@ -39,7 +39,7 @@ class TestReceiptLines(URYFlowTestCase):
 		import re
 
 		lines = []
-		for row in re.findall(r"<tr>(.*?)</tr>", render(invoice), flags=re.S):
+		for row in re.findall(r"<tr(?: class=\"wide\")?>(.*?)</tr>", render(invoice), flags=re.S):
 			cells = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", cell)).strip() for cell in re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.S)]
 			if len(cells) == 3 and "×" in cells[1]:
 				lines.append(" | ".join(cells))

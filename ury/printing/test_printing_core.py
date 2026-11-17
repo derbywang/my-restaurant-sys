@@ -185,6 +185,23 @@ class TestSendEpos(unittest.TestCase):
 		with self.assertRaises(transport.PrinterError):
 			transport.send_epos("127.0.0.1", epos.job(), port=fake.port, timeout=0.5)
 
+	def test_a_printer_that_is_there_but_silent_is_not_a_printer_that_cannot_be_reached(self):
+		# a printer in an error state (the cover was opened, a job is stuck) takes the connection and then says nothing: the
+		# cashier is told to look at the ERROR lamp, not to look for a network cable (found in the real-printer test)
+		fake = self.printer(delay=2)
+		with self.assertRaises(transport.PrinterError) as caught:
+			transport.send_epos("127.0.0.1", epos.job(), port=fake.port, timeout=0.5)
+		message = str(caught.exception)
+		self.assertIn("応答しません", message)
+		self.assertIn("ERROR", message)
+		self.assertNotIn("接続できません", message)
+
+	def test_a_busy_printer_gets_the_time_it_needs(self):
+		# one receipt takes about 2 seconds, and one after another took 8 in the real-printer test: the default is 15
+		from ury.printing import service
+
+		self.assertEqual(service.PrinterConfig(address="p").timeout, 15)
+
 
 class FakeRaw:
 	"""A printer on raw TCP: answers DLE EOT 4 (the paper sensor) and records the job."""

@@ -23,6 +23,12 @@ def _unreachable(address, error):
 	return PrinterError("プリンター（%s）に接続できません。電源とネットワークを確認してください。（%s）" % (address, error))
 
 
+def _silent(address):
+	return PrinterError(
+		"プリンター（%s）は応答しません。エラーの状態かもしれません。ERROR ランプ（橙）を見て、カバーと紙を確かめ、直らなければ電源を入れ直してください。" % address
+	)
+
+
 def send_epos(address, xml, timeout=8, port=80, https=False, requester=None):
 	"""POST the job; returns the printer's reply. `requester` replaces `requests.post` (tests)."""
 	import requests
@@ -38,6 +44,9 @@ def send_epos(address, xml, timeout=8, port=80, https=False, requester=None):
 			timeout=timeout,
 			verify=False,  # the printer's certificate is its own (docs/deploy/printer.md)
 		)
+	except requests.exceptions.ReadTimeout as error:
+		# the connection was made and then nothing came back: the printer is there (error state, a stuck job), the network is fine
+		raise _silent(address) from error
 	except requests.RequestException as error:
 		raise _unreachable(address, type(error).__name__) from error
 	if response.status_code != 200:

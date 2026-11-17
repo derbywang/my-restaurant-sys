@@ -23,7 +23,7 @@ class PrinterConfig:
 	pin: int = 0  # 0: connector pin 2, 1: pin 5 (ESC p m); ePOS-Print drawer_1 / drawer_2
 	on_ms: int = 100
 	off_ms: int = 500
-	timeout: float = 8
+	timeout: float = 15  # one receipt takes about 2 seconds to print, and one after another took 8 once
 
 	def __post_init__(self):
 		if not self.address:

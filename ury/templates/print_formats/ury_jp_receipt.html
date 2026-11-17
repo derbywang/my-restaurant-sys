@@ -14,8 +14,11 @@
 	@media screen { .jp-receipt { padding: 8px; } }
 	/* narrow paper (58 mm: the page is 384 device pixels wide): the dish's name gets a line of its own, the quantity and the amount the line below */
 	.jp-receipt .narrow { display: none; }
+	/* a dish and its topping are one name 「dish・topping」: it breaks at the 「・」 (the topping, with its dot, goes down as one piece) and not in the middle of 「大盛り」; a piece longer than the line still wraps by itself */
+	.jp-receipt .seg { display: inline-block; max-width: 100%; }
 	@media (max-width: 400px) { .jp-receipt .wide { display: none; } .jp-receipt tr.narrow { display: table-row; } }
 </style>
+{%- macro item_name(text) -%}{%- for part in text.split('・') -%}<span class="seg">{% if not loop.first %}・{% endif %}{{ part }}</span>{%- endfor -%}{%- endmacro %}
 <div class="jp-receipt">
 	<div class="c"><b>{{ r.company }}</b></div>
 	{%- if r.branch and r.branch != r.company %}<div class="c">{{ r.branch }}</div>{% endif %}
@@ -39,12 +42,12 @@
 	<table>
 		{%- for line in section.lines %}
 		<tr class="wide">
-			<td>{% if line.reduced %}※{% endif %}{{ line.name }}</td>
+			<td>{% if line.reduced %}※{% endif %}{{ item_name(line.name) }}</td>
 			<td class="r">{{ line.qty }} × {{ line.rate }}</td>
 			<td class="r" style="width: 22%">{{ line.amount }}</td>
 		</tr>
 		<tr class="narrow">
-			<td colspan="3">{% if line.reduced %}※{% endif %}{{ line.name }}</td>
+			<td colspan="3">{% if line.reduced %}※{% endif %}{{ item_name(line.name) }}</td>
 		</tr>
 		<tr class="narrow">
 			<td colspan="2" class="r">{{ line.qty }} × {{ line.rate }}</td>

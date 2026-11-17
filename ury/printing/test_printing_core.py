@@ -350,6 +350,71 @@ class TestThePaperWidthReachesThePrinter(unittest.TestCase):
 				printer.server_close()
 
 
+def template_source():
+	path = os.path.join(os.path.dirname(__file__), "..", "templates", "print_formats", "ury_jp_receipt.html")
+	with open(path, encoding="utf-8") as f:
+		return f.read()
+
+
+def name_page(name):
+	"""Only the dish's name, drawn with the template's own style and macro (`item_name`), on the page of a 58 mm receipt."""
+	import re
+
+	import jinja2
+
+	source = template_source()
+	style = re.search(r"<style>.*?</style>", source, re.S).group(0)
+	macro = re.search(r"\{%-? macro item_name.*?\{%-? endmacro -?%\}", source, re.S)
+	assert macro, "the template has no macro item_name"
+	body = '<div class="jp-receipt"><div style="font-size:12px">{{ item_name(name) }}</div></div>'
+	return style + jinja2.Template(macro.group(0) + body).render(name=name)
+
+
+def text_bands(bits, width_bytes, height):
+	"""[(first row, last row, leftmost ink column, rightmost ink column)] of each run of rows that have ink."""
+	bands, start = [], None
+	for y in range(height + 1):
+		row = bits[y * width_bytes : (y + 1) * width_bytes] if y < height else b""
+		if any(row):
+			if start is None:
+				start = y
+		elif start is not None:
+			cols = ink_columns(bits[start * width_bytes : y * width_bytes], width_bytes, y - start)
+			bands.append((start, y - 1, min(cols), max(cols)))
+			start = None
+	return bands
+
+
+@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+class TestWhereADishNameBreaks(unittest.TestCase):
+	"""A dish and its topping are one name 「dish・topping」: on 48 mm it breaks at the 「・」 (the topping, with its dot, on the line
+	below), never in the middle of 「大盛り」 (found in the browser test of the 58 mm receipt)."""
+
+	def bands(self, name):
+		bits, width_bytes, height = bitmap.receipt_raster(name_page(name), 58)
+		return text_bands(bits, width_bytes, height)
+
+	def test_the_name_breaks_before_the_dot_of_the_topping(self):
+		bands = self.bands("サーモン尽くし五貫盛・シャリ大盛り")
+		self.assertEqual(len(bands), 2)
+		self.assertLess(bands[0][3], 300)  # 「サーモン尽くし五貫盛」 is 10 characters: about 250 dots, not a full line of 15
+
+	def test_the_topping_stays_in_one_piece(self):
+		# 「・シャリ大盛り」 is 8 characters on the second line, however long the dish before it
+		bands = self.bands("サーモン尽くし五貫盛・シャリ大盛り")
+		self.assertGreater(bands[1][3], 150)  # eight characters (about 200 dots) on the second line: nothing was left behind
+		self.assertLess(bands[1][3], 300)
+
+	def test_a_name_that_fits_is_one_line_and_a_name_without_a_dot_is_unchanged(self):
+		self.assertEqual(len(self.bands("まぐろ・わさび抜き")), 1)
+		self.assertEqual(len(self.bands("0%ノンアルコールビール")), 1)
+
+	def test_a_piece_longer_than_the_line_still_wraps_and_is_not_clipped(self):
+		bands = self.bands("とても長い名前のおまかせ特選盛り合わせ六種・シャリ大盛り")
+		self.assertGreaterEqual(len(bands), 3)
+		self.assertTrue(all(b[3] <= 383 for b in bands))
+
+
 @unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
 class TestTheReceiptOn58mmPaper(unittest.TestCase):
 	def height(self, names, paper=58, **kwargs):

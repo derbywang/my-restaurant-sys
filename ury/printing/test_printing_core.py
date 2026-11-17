@@ -415,6 +415,45 @@ class TestWhereADishNameBreaks(unittest.TestCase):
 		self.assertTrue(all(b[3] <= 383 for b in bands))
 
 
+class TestThePaperWidthTestPage(unittest.TestCase):
+	"""「テスト印刷」: a page with a frame as wide as the printable width, a mark at each side and a ruler, to see at a glance whether
+	the paper width of the settings is right: a frame cut off on the right means the setting is wider than the paper; empty paper
+	on the right means it is narrower."""
+
+	def page(self, paper, address="192.168.40.178", protocol="ePOS-Print"):
+		from ury.printing import testpage
+
+		return testpage.test_page_html(paper, address, protocol)
+
+	def test_the_page_says_the_paper_width_the_dots_and_the_address(self):
+		for paper, dots in ((80, 576), (58, 384)):
+			html = self.page(paper)
+			for text in ("%d mm" % paper, "%d 点" % dots, "192.168.40.178", "ePOS-Print"):
+				self.assertIn(text, html)
+
+	def test_the_page_has_a_mark_on_each_side(self):
+		html = self.page(80)
+		self.assertIn("左", html)
+		self.assertIn("右", html)
+
+	@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+	def test_the_frame_touches_both_edges_of_the_printable_width(self):
+		for paper, dots in ((80, 576), (58, 384)):
+			bits, width_bytes, height = bitmap.receipt_raster(self.page(paper), paper)
+			self.assertEqual(width_bytes * 8, dots)
+			columns = ink_columns(bits, width_bytes, height)
+			self.assertEqual(min(columns), 0, "%d mm: the left border is the first column" % paper)
+			self.assertEqual(max(columns), dots - 1, "%d mm: the right border is the last column" % paper)
+
+	@unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
+	def test_the_frame_is_closed_the_whole_way_down(self):
+		bits, width_bytes, height = bitmap.receipt_raster(self.page(80), 80)
+		for y in range(height):
+			row = bits[y * width_bytes : (y + 1) * width_bytes]
+			self.assertTrue(row[0] & 0x80, "row %d: the left border" % y)
+			self.assertTrue(row[-1] & 0x01, "row %d: the right border" % y)
+
+
 @unittest.skipUnless(HAS_WKHTMLTOIMAGE, "wkhtmltoimage is not installed")
 class TestTheReceiptOn58mmPaper(unittest.TestCase):
 	def height(self, names, paper=58, **kwargs):

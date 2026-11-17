@@ -77,7 +77,8 @@
    "fieldtype": "Select",
    "label": "Paper Width (mm)",
    "options": "80\n58",
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 1
   },
   {
    "fieldname": "paper_help",
@@ -115,7 +116,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-17 12:00:00.000000",
+ "modified": "2026-11-17 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "URY",
  "name": "URY Receipt Printer",

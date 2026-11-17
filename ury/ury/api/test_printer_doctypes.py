@@ -126,3 +126,72 @@ class TestTheCallStaffSwitch(URYTestCase):
 		field = next(f for f in json.loads(path.read_text())["fields"] if f["fieldname"] == "enable_call_staff")
 		self.assertEqual(str(field.get("default", "0")), "0")
 		self.assertTrue(frappe.db.has_column("URY Self Ordering Profile", "enable_call_staff"))
+
+
+class TestTheTestPrint(URYTestCase):
+	"""「テスト印刷」 on the form of the printer: a page that shows the paper width of the settings (against a fake printer)."""
+
+	def setUp(self):
+		super().setUp()
+		from ury.printing.test_printing_core import FakeEpos
+
+		self.fake = FakeEpos()
+		self.addCleanup(self.fake.server_close)
+		self.addCleanup(self.fake.shutdown)
+		self.addCleanup(self.remove)
+		self.remove()
+
+	def remove(self):
+		if frappe.db.exists("URY Receipt Printer", NAME):
+			frappe.delete_doc("URY Receipt Printer", NAME, force=True, ignore_permissions=True)
+
+	def make(self, paper="80"):
+		return printer(address="127.0.0.1", port=self.fake.port, paper_width=paper).insert(ignore_permissions=True)
+
+	def width_of_the_image(self):
+		import re
+
+		return int(re.search(r'<image width="(\d+)"', self.fake.received[-1][2]).group(1))
+
+	def test_the_manager_prints_a_page_as_wide_as_the_paper_of_the_settings(self):
+		from ury.setup.test_site import as_user
+
+		for paper, dots in (("80", 576), ("58", 384)):
+			self.remove()
+			self.make(paper)
+			with as_user(MANAGER):
+				answer = receipt_print.print_test_page(NAME)
+			self.assertTrue(answer["ok"], answer)
+			self.assertEqual(self.width_of_the_image(), dots)
+
+	def test_it_never_opens_the_drawer(self):
+		from ury.setup.test_site import as_user
+
+		self.make()
+		with as_user(MANAGER):
+			receipt_print.print_test_page(NAME)
+		self.assertNotIn("<pulse", self.fake.received[-1][2])
+
+	def test_the_cashier_and_the_waiter_cannot(self):
+		from ury.setup.test_site import CAPTAIN, as_user
+
+		self.make()
+		for user in (CASHIER, CAPTAIN):
+			with as_user(user):
+				with self.assertRaises(frappe.PermissionError):
+					receipt_print.print_test_page(NAME)
+		self.assertEqual(self.fake.received, [])
+
+	def test_a_printer_that_is_off_is_a_sentence_not_an_error(self):
+		from ury.setup.test_site import as_user
+
+		self.make()
+		self.fake.shutdown()
+		self.fake.server_close()
+		with as_user(MANAGER):
+			answer = receipt_print.print_test_page(NAME)
+		self.assertFalse(answer["ok"])
+		self.assertIn("接続できません", answer["message"])
+
+	def test_the_paper_width_is_in_the_list_of_printers(self):
+		self.assertTrue(frappe.get_meta("URY Receipt Printer").get_field("paper_width").in_list_view)

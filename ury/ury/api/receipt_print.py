@@ -97,6 +97,20 @@ def print_bill(invoice, print_format=None):
 
 
 @frappe.whitelist()
+def print_test_page(printer):
+	"""「テスト印刷」 on the form of the printer: a page with a frame as wide as the paper width of the settings (never opens the
+	drawer). Whoever may change the printer's settings may try them."""
+	if not frappe.has_permission("URY Receipt Printer", "write", doc=printer):
+		frappe.throw(_("Not permitted to test this printer"), frappe.PermissionError)
+	from ury.printing import testpage
+
+	doc = frappe.get_doc("URY Receipt Printer", printer)
+	config = service.config_from_row(doc)
+	html = testpage.test_page_html(config.paper_mm, config.address, doc.protocol, now=now_datetime())
+	return _answer(service.send(config, html=html, pulse=False, renderer=RENDERER))
+
+
+@frappe.whitelist()
 def open_drawer():
 	"""The cashier's button: open the drawer (changing money). Every press is logged."""
 	require_billing_permission()

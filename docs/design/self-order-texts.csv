@@ -25,6 +25,8 @@ split.title,お会計が別々になりました。,The bill has been split.,账
 split.message,この画面には、こちらのお会計分のご注文と金額を表示しています。このあとご注文いただいた商品も、こちらのお会計に加わります。,This screen shows the order and the amount for this part of the bill. Anything you order from now on will be added to this part.,此画面显示的是这份账单的订单和金额。之后点的菜品也会加入这份账单。,이 화면에는 이 계산서의 주문 내용과 금액이 표시됩니다. 이후 주문하시는 상품도 이 계산서에 추가됩니다.,,,会計分割の案内：お店と店長が確認
 closed.table_closed.title,ご注文の受付は終了しました,Ordering has ended,点餐已结束,주문 접수가 종료되었습니다,,,
 closed.table_closed.message,お会計中などのため、こちらからのご注文はできません。追加のご注文はスタッフにお声がけください。,"Ordering from this page is closed (for example, the bill is being prepared). For anything more, please ask a member of staff.",由于正在结账等原因，无法再通过此处点餐。如需追加点餐，请告知店员。,계산 중 등의 이유로 이곳에서는 주문하실 수 없습니다. 추가 주문은 직원에게 말씀해 주세요.,,,
+closed.table_not_open.title,ただいまご注文を受け付けていません,We are not taking orders right now,目前暂不接受点餐,지금은 주문을 받지 않습니다,,,
+closed.table_not_open.message,スタッフにお声がけください。,Please ask a member of staff.,请联系店员。,직원에게 문의해 주세요.,,,
 closed.store_closed.title,ただいまご注文をお受けできません,We cannot take orders now,目前无法接受点餐,지금은 주문을 받을 수 없습니다,,,
 closed.store_closed.message,営業時間外のため、ご注文をお受けできません。スタッフにお声がけください。,"We are closed, so we cannot take your order. Please ask a member of staff.",现在不在营业时间，无法点餐。请告知店员。,영업시간이 아니어서 주문을 받을 수 없습니다. 직원에게 말씀해 주세요.,,,
 closed.order_closed.title,このご注文は終了しました,This order has ended,此订单已结束,이 주문은 종료되었습니다,,,

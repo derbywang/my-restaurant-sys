@@ -157,6 +157,22 @@ class TestDrawerAtSettlement(PrinterTestCase):
 			result = rp.drawer_for_settlement(paid.name)
 		self.assertTrue(result["opened"])
 
+	def test_a_printer_without_a_drawer_is_not_a_failure_at_settlement(self):
+		# the shop has no drawer on this printer (yet): cash is taken and there is nothing to open, so no red message after the payment
+		self.config = service.PrinterConfig(address="127.0.0.1", protocol="epos", port=self.printer.port, has_drawer=False)
+		paid = pay_with(self.order(), [("Cash", 1100)])
+		with as_user(CASHIER):
+			result = rp.drawer_for_settlement(paid.name)
+		self.assertEqual((result["ok"], result["opened"], result["message"]), (True, False, ""))
+		self.assertEqual(self.printer.received, [])
+
+	def test_the_button_still_says_so_when_the_printer_has_no_drawer(self):
+		self.config = service.PrinterConfig(address="127.0.0.1", protocol="epos", port=self.printer.port, has_drawer=False)
+		with as_user(CASHIER):
+			result = rp.open_drawer()
+		self.assertFalse(result["ok"])
+		self.assertIn("引き出し", result["message"])
+
 	def test_an_open_order_is_refused(self):
 		with as_user(CASHIER):
 			with self.assertRaises(frappe.ValidationError):

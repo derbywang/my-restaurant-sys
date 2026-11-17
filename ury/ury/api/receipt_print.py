@@ -148,6 +148,9 @@ def drawer_for_settlement(invoice):
 	if not service.drawer_wanted(cash, change):
 		return {"ok": True, "opened": False, "message": ""}
 	config = printer_config_for(_branch())
+	if config is not None and not config.has_drawer:
+		# no drawer on this printer: cash is taken and there is nothing to open (not a failure, nothing to log)
+		return {"ok": True, "opened": False, "message": ""}
 	result = service.Result(False, NO_PRINTER) if config is None else service.send(config, html=None, pulse=True)
 	_record(frappe.session.user, "settlement", result, invoice=invoice)
 	return {**_answer(result), "opened": result.ok}

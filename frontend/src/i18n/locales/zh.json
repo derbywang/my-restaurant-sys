@@ -190,5 +190,30 @@
     "paid": "已结账",
     "consolidated": "已汇总",
     "return": "退单"
+  },
+  "staff_account": {
+    "add": "创建账号",
+    "title": "创建店员账号",
+    "first_name": "名字",
+    "last_name": "姓（可不填）",
+    "login_id": "登录 ID（邮箱的形式，不必真实存在）",
+    "role": "角色",
+    "role_cashier": "收银员",
+    "role_captain": "服务员",
+    "role_kitchen": "厨房",
+    "submit": "创建账号",
+    "cancel": "取消",
+    "result_title": "账号已创建",
+    "result_password": "初始密码",
+    "password_once": "这个密码只在此画面显示一次。请先告诉本人，再点“关闭”；关闭之后就看不到了。",
+    "password_change": "本人第一次登录后，自己修改密码。",
+    "copy": "复制",
+    "copied": "已复制",
+    "close": "关闭",
+    "name_required": "请填写名字。",
+    "login_invalid": "登录 ID 要是邮箱的形式（名字@地方），不能有空格。",
+    "role_invalid": "请选择角色。",
+    "failed": "无法创建账号。",
+    "hint": "店长可以创建收银员、服务员和厨房的账号。忘记密码或要停用账号时，请联系管理员。"
   }
 }

@@ -190,5 +190,30 @@
     "paid": "결제 완료",
     "consolidated": "집계됨",
     "return": "반품"
+  },
+  "staff_account": {
+    "add": "계정 만들기",
+    "title": "직원 계정 만들기",
+    "first_name": "이름",
+    "last_name": "성 (선택)",
+    "login_id": "로그인 ID (이메일 형식, 실제로 없어도 됩니다)",
+    "role": "역할",
+    "role_cashier": "계산 담당",
+    "role_captain": "홀",
+    "role_kitchen": "주방",
+    "submit": "계정 만들기",
+    "cancel": "취소",
+    "result_title": "계정을 만들었습니다",
+    "result_password": "초기 비밀번호",
+    "password_once": "이 비밀번호는 이 화면에서 한 번만 표시됩니다. 본인에게 알려 준 뒤 '닫기'를 누르세요. 닫으면 다시 볼 수 없습니다.",
+    "password_change": "본인이 처음 로그인한 뒤에 직접 비밀번호를 바꿉니다.",
+    "copy": "복사",
+    "copied": "복사했습니다",
+    "close": "닫기",
+    "name_required": "이름을 입력해 주세요.",
+    "login_invalid": "로그인 ID는 이메일 형식(이름@장소)으로, 공백 없이 입력해 주세요.",
+    "role_invalid": "역할을 선택해 주세요.",
+    "failed": "계정을 만들 수 없습니다.",
+    "hint": "점장은 계산 담당, 홀, 주방 계정을 만들 수 있습니다. 비밀번호를 잊었거나 계정을 중지할 때는 관리자에게 연락하세요."
   }
 }

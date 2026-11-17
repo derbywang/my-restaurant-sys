@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useBranchContext } from '../../context/BranchContext';
 import { Users, Plus, ShieldCheck, Edit2 } from 'lucide-react';
-import { Card, Button, Badge, Input, Spinner, showToast } from '@ury/ui';
+import { Card, Button, Badge, Input, Spinner, showToast, Dialog, DialogContent, DialogHeader, DialogTitle } from '@ury/ui';
+import { t } from '../../i18n';
+import { STAFF_ROLES, serverMessageOf, validateStaffAccount } from '../../utils/staffAccount';
 import { SearchableSelect } from '../../components/common/SearchableSelect';
 import { Switch } from '../../components/ui/switch';
 import { dashboardService } from '../../services/dashboard';
@@ -30,6 +32,18 @@ export const UserPage: React.FC = () => {
   // what the server allows this user to do with User records; hidden until the answer is a yes
   const [canCreateUser, setCanCreateUser] = useState<boolean>(false);
   const [canEditUser, setCanEditUser] = useState<boolean>(false);
+
+  // the manager makes the accounts of the staff through one narrow call (ury/ury/api/staff_accounts.py); the password is shown once
+  const [staffOptions, setStaffOptions] = useState<{ can_create: boolean; roles: string[]; branches: string[] }>({ can_create: false, roles: [], branches: [] });
+  const [staffDrawer, setStaffDrawer] = useState(false);
+  const [staffForm, setStaffForm] = useState({ first_name: '', last_name: '', login_id: '', role: 'URY Cashier', branch: '' });
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffResult, setStaffResult] = useState<{ login_id: string; full_name: string; role: string; branch: string; initial_password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const staffRoleLabel = (role: string) => {
+    const known = STAFF_ROLES.find((r) => r.role === role);
+    return known ? t(`staff_account.role_${known.key}`) : role;
+  };
 
   const [newUser, setNewUser] = useState({
     first_name: '',
@@ -84,6 +98,60 @@ export const UserPage: React.FC = () => {
     };
     ask();
   }, []);
+
+  useEffect(() => {
+    call('ury.ury.api.staff_accounts.get_staff_account_options')
+      .then((res: any) => setStaffOptions((res.message ?? res) as typeof staffOptions))
+      .catch(() => setStaffOptions({ can_create: false, roles: [], branches: [] }));
+  }, []);
+
+  const openStaffDrawer = () => {
+    setStaffForm({ first_name: '', last_name: '', login_id: '', role: staffOptions.roles[0] ?? 'URY Cashier', branch: staffOptions.branches.length === 1 ? staffOptions.branches[0] : '' });
+    setStaffDrawer(true);
+  };
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const problem = validateStaffAccount(staffForm, staffOptions.roles);
+    if (problem) {
+      showToast.error(t(`staff_account.${problem}`));
+      return;
+    }
+    setStaffSaving(true);
+    try {
+      const res: any = await call.post('ury.ury.api.staff_accounts.create_staff_account', {
+        first_name: staffForm.first_name.trim(),
+        last_name: staffForm.last_name.trim() || undefined,
+        login_id: staffForm.login_id.trim(),
+        role: staffForm.role,
+        branch: staffForm.branch || undefined,
+      });
+      setStaffDrawer(false);
+      setCopied(false);
+      setStaffResult(res.message ?? res);
+      fetchUsers();
+    } catch (err) {
+      showToast.error(serverMessageOf(err) || t('staff_account.failed'));
+    } finally {
+      setStaffSaving(false);
+    }
+  };
+
+  // the password is kept only while the window is open: closing it forgets it
+  const closeStaffResult = () => {
+    setStaffResult(null);
+    setCopied(false);
+  };
+
+  const copyPassword = async () => {
+    if (!staffResult) return;
+    try {
+      await navigator.clipboard.writeText(staffResult.initial_password);
+      setCopied(true);
+    } catch {
+      // the browser may refuse (not a secure page): the password is on the screen to be written down
+    }
+  };
 
   const getDisplayRole = (user: UserRecord): string => {
     if (user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
@@ -228,14 +296,15 @@ export const UserPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Toolbar — no title, partition style. Adding users is for those who may create a User. */}
-      {canCreateUser && (
+      {(canCreateUser || staffOptions.can_create) && (
         <div className="flex flex-col md:flex-row items-center justify-end gap-4 pb-3 border-b border-gray-200 -mx-6 px-6 -mt-6 pt-6">
+          {!canCreateUser && staffOptions.can_create && <p className="flex-1 text-xs text-gray-500">{t('staff_account.hint')}</p>}
           <Button
-            onClick={openAddDrawer}
+            onClick={canCreateUser ? openAddDrawer : openStaffDrawer}
             className="bg-primary hover:bg-primary/90 text-white font-semibold flex items-center space-x-1.5 shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>Add User</span>
+            <span>{canCreateUser ? 'Add User' : t('staff_account.add')}</span>
           </Button>
         </div>
       )}
@@ -309,6 +378,86 @@ export const UserPage: React.FC = () => {
           </table>
         </div>
       )}
+
+      {/* The manager makes the account of a member of staff */}
+      <SideDrawer isOpen={staffDrawer} onClose={() => setStaffDrawer(false)} title={t('staff_account.title')}>
+        <form onSubmit={handleCreateStaff} className="space-y-5 text-sm" data-testid="staff-account-form">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1.5">{t('staff_account.first_name')}</label>
+              <Input value={staffForm.first_name} onChange={(e) => setStaffForm({ ...staffForm, first_name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1.5">{t('staff_account.last_name')}</label>
+              <Input value={staffForm.last_name} onChange={(e) => setStaffForm({ ...staffForm, last_name: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1.5">{t('staff_account.login_id')}</label>
+            <Input type="email" value={staffForm.login_id} onChange={(e) => setStaffForm({ ...staffForm, login_id: e.target.value })} required />
+          </div>
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1.5">{t('staff_account.role')}</label>
+            <SearchableSelect
+              id="staff-role"
+              value={staffForm.role}
+              onChange={(_, value) => setStaffForm({ ...staffForm, role: value })}
+              options={staffOptions.roles.map((role) => ({ value: role, label: staffRoleLabel(role) }))}
+            />
+          </div>
+          {staffOptions.branches.length > 1 && (
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1.5">{t('layout.header.branch') !== 'layout.header.branch' ? t('layout.header.branch') : 'Branch'}</label>
+              <SearchableSelect
+                id="staff-branch"
+                value={staffForm.branch}
+                onChange={(_, value) => setStaffForm({ ...staffForm, branch: value })}
+                options={staffOptions.branches.map((b) => ({ value: b, label: b }))}
+              />
+            </div>
+          )}
+          <div className="pt-6 flex justify-end gap-3 border-t mt-4 border-gray-100">
+            <Button type="button" variant="outline" onClick={() => setStaffDrawer(false)} disabled={staffSaving}>
+              {t('staff_account.cancel')}
+            </Button>
+            <Button type="submit" className="bg-primary hover:bg-primary/90 text-white px-6" disabled={staffSaving}>
+              {t('staff_account.submit')}
+            </Button>
+          </div>
+        </form>
+      </SideDrawer>
+
+      {/* The password: shown once, kept only while this window is open */}
+      <Dialog open={staffResult !== null} onOpenChange={(open) => { if (!open) closeStaffResult(); }}>
+        <DialogContent className="max-w-md" data-testid="staff-account-result">
+          <DialogHeader>
+            <DialogTitle>{t('staff_account.result_title')}</DialogTitle>
+          </DialogHeader>
+          {staffResult && (
+            <div className="space-y-4 text-sm">
+              <p className="text-gray-700">
+                {staffResult.full_name}（{staffRoleLabel(staffResult.role)} / {staffResult.branch}）
+              </p>
+              <div>
+                <div className="text-xs text-gray-500">{t('staff_account.login_id')}</div>
+                <div className="font-mono text-base" data-testid="staff-login-id">{staffResult.login_id}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">{t('staff_account.result_password')}</div>
+                <div className="flex items-center gap-3">
+                  <div className="font-mono text-2xl tracking-wider select-all" data-testid="staff-initial-password">{staffResult.initial_password}</div>
+                  <Button type="button" variant="outline" size="sm" onClick={copyPassword}>{copied ? t('staff_account.copied') : t('staff_account.copy')}</Button>
+                </div>
+              </div>
+              <p className="rounded bg-red-50 border border-red-200 p-3 font-semibold text-red-800">{t('staff_account.password_once')}</p>
+              <p className="text-gray-600">{t('staff_account.password_change')}</p>
+              <div className="flex justify-end">
+                <Button type="button" className="bg-primary hover:bg-primary/90 text-white px-6" onClick={closeStaffResult}>{t('staff_account.close')}</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit SideDrawer */}
       <SideDrawer

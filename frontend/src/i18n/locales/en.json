@@ -190,5 +190,30 @@
     "paid": "Paid",
     "consolidated": "Consolidated",
     "return": "Return"
+  },
+  "staff_account": {
+    "add": "Create an account",
+    "title": "Create a staff account",
+    "first_name": "Name",
+    "last_name": "Family name (optional)",
+    "login_id": "Login ID (looks like an e-mail address; it need not exist)",
+    "role": "Role",
+    "role_cashier": "Cashier",
+    "role_captain": "Waiter",
+    "role_kitchen": "Kitchen",
+    "submit": "Create the account",
+    "cancel": "Cancel",
+    "result_title": "The account was created",
+    "result_password": "Initial password",
+    "password_once": "This password is shown only once, on this screen. Tell it to the person before you press Close; afterwards it cannot be seen again.",
+    "password_change": "The person changes the password after logging in for the first time.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "name_required": "Please enter a name.",
+    "login_invalid": "The login ID has the form of an e-mail address (name@place), without spaces.",
+    "role_invalid": "Please choose a role.",
+    "failed": "The account could not be created.",
+    "hint": "A manager can create accounts for the cashier, the waiter and the kitchen. For a forgotten password or to stop an account, contact the administrator."
   }
 }

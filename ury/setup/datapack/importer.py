@@ -359,6 +359,14 @@ class _MenuImport(_Import):
 			)
 		)
 
+	@staticmethod
+	def price_detail(dish):
+		"""What the plan shows for the owner to check: the tax-exclusive price and the two tax-inclusive ones, cut down like the
+		sheet's formulas (eating in 10%; taking away 8% for food, 10% for the rest)."""
+		price = dish["price"]
+		take_away = 108 if dish["kind"] == "食品" else 110
+		return f"税抜 {price}・店内 {price * 110 // 100}・持ち帰り {price * take_away // 100}"
+
 	def _items(self):
 		uom = self._uom()
 		for dish in self.dishes:
@@ -369,7 +377,7 @@ class _MenuImport(_Import):
 			content = self._read(image) if image else None
 			exists = frappe.db.exists("Item", name)
 			if not exists:
-				self.result.add("create", "Item", name)
+				self.result.add("create", "Item", name, self.price_detail(dish))
 				if not self.dry:
 					doc = frappe.new_doc("Item")
 					doc.update(
@@ -397,7 +405,7 @@ class _MenuImport(_Import):
 				or any(stored.get(k) != label for k, label in wanted.items())
 				or not image_same
 			)
-			self.result.add("update" if differs else "same", "Item", name)
+			self.result.add("update" if differs else "same", "Item", name, self.price_detail(dish) if differs else "")
 			if differs and not self.dry:
 				doc = frappe.get_doc("Item", name)
 				doc.item_group = group
@@ -439,7 +447,8 @@ class _MenuImport(_Import):
 		menu = self.shop["menu"]
 		wanted = [self._menu_row(d) for d in self.dishes]
 		if not frappe.db.exists("URY Menu", menu):
-			self.result.add("create", "URY Menu", menu, f"{len(wanted)}品")
+			dishes = sum(1 for d in self.dishes if d["role"] != "topping")
+			self.result.add("create", "URY Menu", menu, f"商品 {dishes}・加料 {len(self.dishes) - dishes}")
 			if not self.dry:
 				frappe.get_doc(
 					{"doctype": "URY Menu", "name": menu, "branch": self.shop["branch"], "enabled": 1, "items": wanted}

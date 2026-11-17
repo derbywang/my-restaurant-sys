@@ -86,6 +86,29 @@ class TestTheTemplateFile(WithTemplate):
 		text = " ".join(str(c.value) for row in book[schema.DESCRIPTION_TITLE].iter_rows() for c in row if c.value)
 		self.assertIn(schema.FORMAT_VERSION, text)
 
+	def description_of(self, sheet_key, column_key=None):
+		sheet = schema.sheet(sheet_key)
+		if column_key is None:
+			return sheet.intro
+		return next(c.how for c in sheet.columns if c.key == column_key)
+
+	def test_the_variant_sheet_says_the_base_dishs_course_kind_and_kitchen_carry_over(self):
+		text = self.description_of("variants") + self.description_of("variants", "base")
+		for word in ("分類", "種類", "厨房", "基本の品と同じ"):
+			self.assertIn(word, text)
+
+	def test_the_price_says_taking_away_has_the_same_price_and_only_the_tax_differs(self):
+		text = self.description_of("menu", "price")
+		self.assertIn("持ち帰り", text)
+		self.assertIn("同じ", text)
+		self.assertIn("税率", text)
+
+	def test_the_shop_sheet_says_the_example_row_is_not_imported(self):
+		text = self.description_of("shop")
+		self.assertIn("4行目", text)
+		self.assertIn("取り込まれません", text)
+		self.assertIn("5行目", text)
+
 	def test_there_is_one_sheet_for_each_part_of_the_pack(self):
 		book = load_workbook(self.path)
 		self.assertEqual(book.sheetnames[1:], [s.title for s in schema.SHEETS])

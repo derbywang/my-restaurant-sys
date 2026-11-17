@@ -104,6 +104,29 @@ class TestPlan(RolledBack):
 		self.assertEqual(seen[("URY Production Unit", KITCHEN_SUSHI)], "create")
 		self.assertEqual({d: frappe.db.count(d) for d in counts}, counts)
 
+	def detail_of(self, result, doctype, name):
+		return next(a.detail for a in result.actions if (a.doctype, a.name) == (doctype, name))
+
+	def test_each_dish_in_the_plan_shows_its_prices_for_the_owner_to_check(self):
+		# tax-exclusive, eating in (10%) and taking away (8% for food, 10% for the rest), cut down like the sheet's formulas
+		result = importer.plan_menu(pack())
+		self.assertEqual(self.detail_of(result, "Item", TUNA), "税抜 1000・店内 1100・持ち帰り 1080")
+		self.assertEqual(self.detail_of(result, "Item", BEER), "税抜 500・店内 550・持ち帰り 550")
+
+	def test_the_prices_are_cut_down_like_the_sheet_does(self):
+		result = importer.plan_menu(pack(menu=rows(dish(TUNA, COURSE, "食品", KITCHEN_SUSHI, 280))))
+		self.assertEqual(self.detail_of(result, "Item", TUNA), "税抜 280・店内 308・持ち帰り 302")
+
+	def test_the_menu_line_counts_dishes_and_toppings_apart(self):
+		result = importer.plan_menu(pack())
+		self.assertEqual(self.detail_of(result, "URY Menu", MENU), "商品 2・加料 0")
+
+	def test_a_variant_and_a_topping_show_their_prices_too(self):
+		result = importer.plan_menu(with_options())
+		self.assertIn("税抜 1650", self.detail_of(result, "Item", TUNA_UP))
+		self.assertIn("税抜 100", self.detail_of(result, "Item", f"{TUNA}・{TOPPING}"))
+		self.assertRegex(self.detail_of(result, "URY Menu", MENU), r"商品 \d+・加料 \d+")
+
 	def test_a_branch_that_is_not_there_is_an_error_that_points_to_the_wizard(self):
 		data = pack(shop=rows({"branch": "存在しない店", "restaurant": RESTAURANT, "menu": MENU, "profile": None}))
 		result = importer.plan_menu(data)

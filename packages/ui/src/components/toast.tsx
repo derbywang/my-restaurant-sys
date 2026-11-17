@@ -41,6 +41,24 @@ export const showToast = {
       className: 'toast-error',
     });
   },
+  /**
+   * A red message that stays until someone touches it (or the same `id` is shown again): for what the staff must not miss and
+   * cannot be allowed to lose behind the next screen (the drawer did not open after a payment). Solid red, large, bold.
+   */
+  errorStay: (message: string, id?: string) => {
+    toast.error(message, {
+      position: 'top-right',
+      autoClose: false,
+      hideProgressBar: true,
+      closeOnClick: true,
+      pauseOnHover: false,
+      draggable: false,
+      theme: 'colored',
+      icon: toastIcons.error,
+      className: 'toast-error-sticky',
+      toastId: id,
+    });
+  },
   warning: (message: string) => {
     toast.warning(message, {
       position: 'top-right',

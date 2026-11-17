@@ -60,3 +60,31 @@ export async function serverPrint(
   }
   await markPrinted(invoice);
 }
+
+export interface FinishPaymentOptions {
+  /** Opens the drawer after a payment; null when the server does not print (nothing to open). */
+  openDrawer: (() => Promise<SettlementDrawerAnswer>) | null;
+  /** Shows the message that stays (`showToast.errorStay`); the id is the invoice's, so the same message does not pile up. */
+  notify: (message: string, id: string) => void;
+  /** Closes the payment window. */
+  onClosed: () => void;
+  table: string | null;
+  invoice: string;
+}
+
+/**
+ * The payment went through: close the window AT ONCE (the cashier must not wait for the drawer; one call in eleven to the printer
+ * was slow) and open the drawer in the background. A drawer that did not open is a red message that stays, with the table's name so
+ * that it cannot be taken for the next order's. The payment is never undone by it.
+ */
+export function finishPayment({ openDrawer, notify, onClosed, table, invoice }: FinishPaymentOptions): void {
+  const tell = (message: string) => notify(`${table || invoice}：${message}`, `drawer-${invoice}`);
+  if (openDrawer) {
+    void openDrawer()
+      .then((answer) => {
+        if (!answer.ok && answer.message) tell(answer.message);
+      })
+      .catch(() => tell(DRAWER_FAILED));
+  }
+  onClosed();
+}

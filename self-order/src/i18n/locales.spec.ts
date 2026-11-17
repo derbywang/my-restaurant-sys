@@ -45,7 +45,7 @@ describe('the notices that stop a guest from ordering', () => {
   const closed = ja.closed as Record<string, { title: string; message: string } | string>
 
   it('every one tells the guest to ask the staff, and none says it is an error', () => {
-    for (const kind of ['table_closed', 'store_closed', 'order_closed', 'session_expired']) {
+    for (const kind of ['table_closed', 'table_not_open', 'store_closed', 'order_closed', 'session_expired']) {
       const { title, message } = closed[kind] as { title: string; message: string }
       expect(message, kind).toContain('スタッフにお声がけください')
       expect(`${title}${message}`, kind).not.toMatch(/エラー|失敗|error/i)
@@ -54,6 +54,22 @@ describe('the notices that stop a guest from ordering', () => {
 
   it('the closed table says it can be the bill (a guest whose tables were merged for paying)', () => {
     expect((closed.table_closed as { message: string }).message).toContain('お会計中')
+  })
+
+  it('a table nobody has opened says so, and does not talk about the bill (a guest who scans too early)', () => {
+    const notice = closed.table_not_open as { title: string; message: string }
+    expect(notice.title).toBe('ただいまご注文を受け付けていません')
+    expect(notice.message).toBe('スタッフにお声がけください。')
+    expect(`${notice.title}${notice.message}`).not.toContain('お会計')
+  })
+
+  it('the notice for a table nobody has opened exists in every language of the page, and none of them talks about the bill', () => {
+    for (const [name, locale] of Object.entries({ en, zh, ko })) {
+      const notice = (locale.closed as unknown as Record<string, { title: string; message: string }>).table_not_open
+      expect(notice?.title, name).toBeTruthy()
+      expect(notice?.message, name).toBeTruthy()
+      expect(`${notice.title}${notice.message}`, name).not.toMatch(/お会計|bill|结账|계산/i)
+    }
   })
 })
 

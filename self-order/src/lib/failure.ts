@@ -6,6 +6,7 @@
 
 export type FailureKind =
   | 'table_closed' // the staff closed the table, or opened it again for the next guests
+  | 'table_not_open' // a guest scanned a table nobody has opened (yet)
   | 'store_closed' // there is no opened shift
   | 'order_closed' // the order is paid, cancelled or its bill is printed
   | 'session_expired' // the session is not valid (any more)
@@ -17,6 +18,7 @@ export type FailureKind =
 
 const BY_TITLE: Record<string, FailureKind> = {
   'Table closed': 'table_closed',
+  'Table not open': 'table_not_open',
   'Store closed': 'store_closed',
   'Order closed': 'order_closed',
   'Session expired': 'session_expired',
@@ -59,5 +61,5 @@ export function classifyFailure(err: unknown): FailureKind {
 
 /** The ordering is over for this page: the cart is dropped and a notice takes the place of the menu. */
 export function isOrderingOver(kind: FailureKind): boolean {
-  return kind === 'table_closed' || kind === 'store_closed' || kind === 'order_closed' || kind === 'session_expired'
+  return kind === 'table_closed' || kind === 'table_not_open' || kind === 'store_closed' || kind === 'order_closed' || kind === 'session_expired'
 }

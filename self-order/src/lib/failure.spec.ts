@@ -13,6 +13,7 @@ const refusal = (title: string, httpStatus = 417) => ({
 describe('what went wrong, from the error of a call', () => {
   it('knows the reasons the ordering is over, by the title the server gives', () => {
     expect(classifyFailure(refusal('Table closed'))).toBe('table_closed')
+    expect(classifyFailure(refusal('Table not open'))).toBe('table_not_open')
     expect(classifyFailure(refusal('Store closed'))).toBe('store_closed')
     expect(classifyFailure(refusal('Order closed'))).toBe('order_closed')
     expect(classifyFailure(refusal('Session expired', 403))).toBe('session_expired')
@@ -61,6 +62,7 @@ describe('what went wrong, from the error of a call', () => {
 
   it('says which kinds mean the ordering is over (the cart goes, the notice screen comes)', () => {
     expect(isOrderingOver('table_closed')).toBe(true)
+    expect(isOrderingOver('table_not_open')).toBe(true)
     expect(isOrderingOver('store_closed')).toBe(true)
     expect(isOrderingOver('order_closed')).toBe(true)
     expect(isOrderingOver('session_expired')).toBe(true)

@@ -182,7 +182,16 @@ class TestOpeningHours(SelfOrderingCase):
 
 class TestTheTableMustBeOpen(SelfOrderingCase):
 	def test_a_table_that_is_not_open_cannot_be_ordered_from(self):
-		self.refused("Table closed", self.scan)
+		# a guest who scans a table nobody has opened is told it is not open (not that the bill is being made)
+		self.refused("Table not open", self.scan)
+
+	def test_not_open_and_closed_are_told_apart(self):
+		# "not open": nobody has opened the table for the guest scanning. "closed": the guest had it and it was closed (the bill)
+		self.staff_open()
+		session = self.scan()
+		self.staff_close()
+		self.refused("Table closed", self.order, session)  # the guest who was ordering
+		self.refused("Table not open", self.scan)  # the next guest who scans
 
 	def test_after_the_staff_open_it_the_guests_can_order(self):
 		self.staff_open()
@@ -220,7 +229,7 @@ class TestTheTableMustBeOpen(SelfOrderingCase):
 		long_ago = add_to_date(now_datetime(), minutes=-241)
 		frappe.db.set_value("URY Table", TABLE, "self_order_opened_at", long_ago, update_modified=False)
 		self.refused("Table closed", self.order, session)
-		self.refused("Table closed", self.scan)
+		self.refused("Table not open", self.scan)
 
 	def test_a_guest_can_still_read_the_order_after_the_table_was_closed(self):
 		self.staff_open()
@@ -237,7 +246,7 @@ class TestTheTableMustBeOpen(SelfOrderingCase):
 
 	def test_a_table_opened_is_not_the_other_table(self):
 		self.staff_open(TABLE)
-		self.refused("Table closed", self.scan, OTHER_TABLE)
+		self.refused("Table not open", self.scan, OTHER_TABLE)
 
 
 class TestTheTableClosesByItself(SelfOrderingCase):
@@ -776,7 +785,7 @@ class TestOverHttp(SelfOrderingCase):
 		frappe.db.commit()
 		status, body = self.http("GET", "get_ordering_context", token=token)
 		self.assertEqual(status, 403)
-		self.assertIn("Table closed", self.messages(body))
+		self.assertIn("Table not open", self.messages(body))
 
 	def test_the_way_a_browser_goes_from_the_code_to_the_order(self):
 		self.staff_open()

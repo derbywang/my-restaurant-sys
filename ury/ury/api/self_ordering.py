@@ -135,11 +135,14 @@ def _require_open_store(profile):
         _fail("Store closed", _("We are not open right now."))
 
 
-def _require_open_table(profile, table):
+def _require_open_table(profile, table, scanning=False):
+    """The table must be open for ordering. A guest who SCANS a table nobody has opened is told it is "not open" (the page says
+    it is not taking orders yet); a guest who was ordering and whose table was closed is told it is "closed" (the page says
+    ordering has ended, for example because the bill is being made). The two say different things to the guest."""
     state = _open_table_state(table, profile)
     if not state:
         _fail(
-            "Table closed",
+            "Table not open" if scanning else "Table closed",
             _("This table is not open for ordering yet. Please ask the staff."),
             frappe.PermissionError,
         )
@@ -515,7 +518,8 @@ def get_ordering_context(token=None, device_id=None, device_credential=None):
         frappe.throw(_("Missing ordering token or device credentials"), frappe.PermissionError)
 
     _require_open_store(profile)
-    state = _require_open_table(profile, table) if table else None
+    # a guest scanning a table nobody has opened (a QR code) is told it is not open; a tablet goes by its own status call
+    state = _require_open_table(profile, table, scanning=bool(token)) if table else None
 
     raw_session_token, session = _open_session(
         profile, source, table, device_name, table_opening=state.self_order_opening if state else None

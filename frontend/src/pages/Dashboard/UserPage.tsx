@@ -34,6 +34,7 @@ export const UserPage: React.FC = () => {
   const [canEditUser, setCanEditUser] = useState<boolean>(false);
 
   // the manager makes the accounts of the staff through one narrow call (ury/ury/api/staff_accounts.py); the password is shown once
+  const [staffOptionsFailed, setStaffOptionsFailed] = useState<boolean>(false);
   const [staffOptions, setStaffOptions] = useState<{ can_create: boolean; roles: string[]; branches: string[] }>({ can_create: false, roles: [], branches: [] });
   const [staffDrawer, setStaffDrawer] = useState(false);
   const [staffForm, setStaffForm] = useState({ first_name: '', last_name: '', login_id: '', role: 'URY Cashier', branch: '' });
@@ -100,9 +101,12 @@ export const UserPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    call('ury.ury.api.staff_accounts.get_staff_account_options')
+    call.get('ury.ury.api.staff_accounts.get_staff_account_options')
       .then((res: any) => setStaffOptions((res.message ?? res) as typeof staffOptions))
-      .catch(() => setStaffOptions({ can_create: false, roles: [], branches: [] }));
+      .catch(() => {
+        setStaffOptions({ can_create: false, roles: [], branches: [] });
+        setStaffOptionsFailed(true);
+      });
   }, []);
 
   const openStaffDrawer = () => {
@@ -307,6 +311,10 @@ export const UserPage: React.FC = () => {
             <span>{canCreateUser ? 'Add User' : t('staff_account.add')}</span>
           </Button>
         </div>
+      )}
+
+      {staffOptionsFailed && (
+        <p className="text-xs text-red-600" role="alert" data-testid="staff-options-failed">{t('staff_account.options_failed')}</p>
       )}
 
       {loading ? (

@@ -192,6 +192,7 @@
     "return": "Return"
   },
   "staff_account": {
+    "options_failed": "Could not load the account creation function. If reopening the page does not help, please tell the person in charge of the system.",
     "add": "Create an account",
     "title": "Create a staff account",
     "first_name": "Name",

@@ -11,6 +11,7 @@ from ury.ury.api.receipt import STAMP_THRESHOLD, stamp_duty_needed
 from ury.ury.api.test_receipt import render, text
 
 CREDIT_NOTE = "クレジットカードによる信用取引の決済です"  # no ※: that mark means 軽減税率対象 on the receipt
+MIXED_NOTE = "クレジットカード決済分は信用取引です"  # when the card paid only a part (税理士, 2026-11-19)
 STAMP_BOX = "収入印紙 貼付欄"
 
 
@@ -111,7 +112,36 @@ class TestReceiptPayment(URYFlowTestCase):
 	def test_cash_and_card_list_both(self):
 		out = self._paid(1000, [("Cash", 500), ("クレジットカード", 600)])
 		self.assertIn("お支払方法：現金、クレジットカード", out)
+		# the card paid a part: the note says that it is about the card part (not the whole bill)
+		self.assertIn(MIXED_NOTE, out)
+		self.assertNotIn(CREDIT_NOTE, out)
+
+	def test_cash_and_card_print_each_amount_so_that_they_can_be_told_apart(self):
+		"""税理士 (2026-11-19): with cash and card on one bill the receipt shows the cash and the card amounts apart."""
+		out = self._paid(1000, [("Cash", 500), ("クレジットカード", 600)])
+		self.assertIn("クレジットカード | ¥600", out)
+		self.assertIn("お預かり（現金） | ¥500", out)
+		self.assertNotIn("お釣り", out)
+
+	def test_the_card_alone_keeps_its_own_note(self):
+		out = self._paid(1000, [("クレジットカード", 1100)])
 		self.assertIn(CREDIT_NOTE, out)
+		self.assertNotIn(MIXED_NOTE, out)
+
+	def test_a_card_and_a_wallet_is_a_mixed_payment_too(self):
+		out = self._paid(1000, [("クレジットカード", 600), ("PayPay", 500)])
+		self.assertIn(MIXED_NOTE, out)
+		self.assertNotIn(CREDIT_NOTE, out)
+
+	def test_the_wallets_print_their_name_and_nothing_about_the_stamp_duty(self):
+		"""PayPay and 楽天ペイ: whether they need a stamp depends on the contract with the merchant (not decided, 2026-11-19), so
+		the receipt only says how it was paid, even for a large amount."""
+		for mode in ("PayPay", "楽天ペイ"):
+			out = self._paid(100000, [(mode, 110000)])
+			self.assertIn(f"お支払方法：{mode}", out)
+			self.assertNotIn(STAMP_BOX, out)
+			self.assertNotIn("印紙", out)
+			self.assertNotIn("信用取引", out)
 
 	def test_before_the_payment_there_is_nothing_of_it(self):
 		self._set_price(1000)
@@ -144,3 +174,9 @@ class TestReceiptPayment(URYFlowTestCase):
 	def test_the_cash_part_of_a_mixed_payment_counts_by_its_share_without_tax(self):
 		self.assertIn(STAMP_BOX, self._paid(100000, [("Cash", 55000), ("クレジットカード", 55000)]))
 		self.assertNotIn(STAMP_BOX, self._paid(100000, [("Cash", 54000), ("クレジットカード", 56000)]))
+
+	def test_change_is_taken_off_the_cash_part_of_a_mixed_payment_too(self):
+		"""Bill 110,000 (100,000 without tax): card 50,000 and cash 70,000 handed over, 10,000 back = 60,000 of cash kept, which is
+		54,545 without tax: a stamp. The same hand-over with 16,000 back would keep 54,000 (49,090 without tax): none."""
+		self.assertIn(STAMP_BOX, self._paid(100000, [("クレジットカード", 50000), ("Cash", 70000)]))
+		self.assertNotIn(STAMP_BOX, self._paid(100000, [("クレジットカード", 56000), ("Cash", 70000)]))

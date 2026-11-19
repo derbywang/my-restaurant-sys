@@ -21,6 +21,8 @@ REGISTRATION_NUMBER = re.compile(r"T\d{13}")
 ORDER_TYPES = {"Dine In": "店内", "Take Away": "お持ち帰り"}
 # no ※ at the start: on the receipt ※ means 軽減税率対象 (see the note at the bottom)
 CREDIT_NOTE = "クレジットカードによる信用取引の決済です"
+# when the card paid only a part of the bill (cash or a wallet paid the rest): the note is about the card part (税理士, 2026-11-19)
+CREDIT_NOTE_MIXED = "クレジットカード決済分は信用取引です"
 # 収入印紙: cash received of this much or more, counted without the consumption tax (the same rule is in
 # pos/src/lib/stamp-duty.ts, which tells the cashier before the payment is confirmed)
 STAMP_THRESHOLD = 50000
@@ -170,9 +172,17 @@ def _payment_lines(invoices):
 		"cash_received": yen(cash) if cash else "",
 		"cash_label": "お預かり（現金）" if cashless else "お預かり",
 		"methods": "、".join(methods),
-		"credit_note": CREDIT_NOTE if any(m in CREDIT_CARD_MODES for m in cashless) else "",
+		"credit_note": _credit_note(cashless, methods),
 		"stamp_box": "収入印紙 貼付欄" if stamp_duty_needed(cash - change, net_total, total) else "",
 	}
+
+
+def _credit_note(cashless, methods):
+	"""The note for a credit card: the whole-bill text when the card is the only method, the card-part text when another
+	method (cash, a wallet, another card) paid a part."""
+	if not any(mode in CREDIT_CARD_MODES for mode in cashless):
+		return ""
+	return CREDIT_NOTE if len(methods) == 1 else CREDIT_NOTE_MIXED
 
 
 def _rate_label(rate):

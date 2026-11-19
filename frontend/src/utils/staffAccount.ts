@@ -37,3 +37,23 @@ export function serverMessageOf(err: unknown): string {
     return '';
   }
 }
+
+/** What the server says (its English) -> the key of the words of the page (`staff_account.<key>`). Each message of
+ *  ury/ury/api/staff_accounts.py is here; a test reads that file and fails when one is missing. */
+const SERVER_MESSAGES: Array<[string, string]> = [
+  ['Not permitted', 'not_permitted'],
+  ['You are not in any branch', 'no_branch'],
+  ['Please write the name', 'name_required'],
+  ['The login ID has the form of an e-mail address', 'login_invalid'],
+  ['Only a cashier, a waiter or the kitchen can be made here', 'role_invalid'],
+  ['Say which branch the account is for', 'branch_required'],
+  ['This is not your branch', 'branch_not_yours'],
+  ['There is already an account with this login ID', 'duplicate'],
+  ['The account could not be made', 'failed'],
+];
+
+/** The key of the page's own words for a refusal of the server; '' when the message is not one it knows. */
+export function serverErrorKeyOf(err: unknown): string {
+  const message = serverMessageOf(err);
+  return SERVER_MESSAGES.find(([english]) => message.startsWith(english))?.[1] ?? '';
+}

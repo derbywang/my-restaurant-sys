@@ -3,7 +3,7 @@ import { useBranchContext } from '../../context/BranchContext';
 import { Users, Plus, ShieldCheck, Edit2 } from 'lucide-react';
 import { Card, Button, Badge, Input, Spinner, showToast, Dialog, DialogContent, DialogHeader, DialogTitle } from '@ury/ui';
 import { t } from '../../i18n';
-import { STAFF_ROLES, serverMessageOf, validateStaffAccount } from '../../utils/staffAccount';
+import { STAFF_ROLES, serverErrorKeyOf, validateStaffAccount } from '../../utils/staffAccount';
 import { SearchableSelect } from '../../components/common/SearchableSelect';
 import { Switch } from '../../components/ui/switch';
 import { dashboardService } from '../../services/dashboard';
@@ -135,7 +135,7 @@ export const UserPage: React.FC = () => {
       setStaffResult(res.message ?? res);
       fetchUsers();
     } catch (err) {
-      showToast.error(serverMessageOf(err) || t('staff_account.failed'));
+      showToast.error(t(`staff_account.${serverErrorKeyOf(err) || 'failed'}`));
     } finally {
       setStaffSaving(false);
     }

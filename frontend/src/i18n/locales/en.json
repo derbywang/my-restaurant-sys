@@ -192,6 +192,11 @@
     "return": "Return"
   },
   "staff_account": {
+    "not_permitted": "You are not allowed to do this.",
+    "no_branch": "You are not registered in any branch.",
+    "branch_required": "Please choose the branch of the account.",
+    "branch_not_yours": "You cannot make an account for this branch.",
+    "duplicate": "There is already an account with this login ID.",
     "options_failed": "Could not load the account creation function. If reopening the page does not help, please tell the person in charge of the system.",
     "add": "Create an account",
     "title": "Create a staff account",

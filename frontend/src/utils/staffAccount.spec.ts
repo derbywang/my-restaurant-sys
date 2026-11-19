@@ -4,7 +4,9 @@ import en from '../i18n/locales/en.json';
 import ja from '../i18n/locales/ja.json';
 import ko from '../i18n/locales/ko.json';
 import zh from '../i18n/locales/zh.json';
-import { STAFF_ROLES, serverMessageOf, validateStaffAccount } from './staffAccount';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { STAFF_ROLES, serverErrorKeyOf, serverMessageOf, validateStaffAccount } from './staffAccount';
 
 const ok = { first_name: '新人', login_id: 'shinjin@example.com', role: 'URY Cashier' };
 
@@ -68,5 +70,32 @@ describe('the words of the page that makes an account', () => {
 
   it('name the three roles in the staff\'s own words', () => {
     expect([locales.ja.staff_account?.role_cashier, locales.ja.staff_account?.role_captain, locales.ja.staff_account?.role_kitchen]).toEqual(['レジ担当', 'ホール', '厨房']);
+  });
+});
+
+describe('a refusal of the server is shown in the language of the page, never in the English of the server (2026-11-19)', () => {
+  const locales = { ja, en, zh, ko } as unknown as Record<string, { staff_account?: Record<string, string> }>;
+  const fromServer = (message: string) => ({ _server_messages: JSON.stringify([JSON.stringify({ message })]) });
+
+  it('knows the duplicate login ID', () => {
+    expect(serverErrorKeyOf(fromServer('There is already an account with this login ID.'))).toBe('duplicate');
+  });
+
+  it('knows every message that staff_accounts.py can send, and each one has its words in the four languages', () => {
+    const python = readFileSync(resolve(__dirname, '../../../ury/ury/api/staff_accounts.py'), 'utf8');
+    const messages = [...python.matchAll(/frappe\.throw\(_\("((?:[^"\\]|\\.)*)"\)/g)].map((m) => m[1].replace(/\{0\}/g, '140'));
+    expect(messages.length).toBeGreaterThanOrEqual(8);
+    for (const message of messages) {
+      const key = serverErrorKeyOf(fromServer(message));
+      expect(key, message).not.toBe('');
+      for (const [name, locale] of Object.entries(locales)) {
+        expect(locale.staff_account?.[key], `${name}.${key} for "${message}"`).toBeTruthy();
+      }
+    }
+  });
+
+  it('is empty for a message it does not know (the page then says the general failure in its own words)', () => {
+    expect(serverErrorKeyOf(fromServer('Something else'))).toBe('');
+    expect(serverErrorKeyOf({})).toBe('');
   });
 });

@@ -192,6 +192,11 @@
     "return": "退单"
   },
   "staff_account": {
+    "not_permitted": "你没有权限进行此操作。",
+    "no_branch": "你没有登记在任何分店。",
+    "branch_required": "请选择账号所属的分店。",
+    "branch_not_yours": "不能为这个分店建账号。",
+    "duplicate": "这个登录ID的账号已经存在。",
     "options_failed": "无法加载“建账号”功能。重新打开页面仍然如此时，请联系系统负责人。",
     "add": "创建账号",
     "title": "创建店员账号",

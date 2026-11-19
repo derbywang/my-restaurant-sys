@@ -880,8 +880,9 @@ class TestQRPickup(unittest.TestCase):
         # Invoice name doubles as the pickup reference the customer sees.
         self.assertEqual(result["pickup_code"], "POS-INV-PICKUP")
 
+    @patch(f"{MOD}._ordering_state", return_value="open")  # what it says is tested in test_self_ordering_idle
     @patch(f"{MOD}._resolve_session")
-    def test_get_customer_order_pickup_code_present_before_order(self, mock_resolve_session):
+    def test_get_customer_order_pickup_code_present_before_order(self, mock_resolve_session, _mock_ordering_state):
         session = MagicMock()
         session.invoice = None
         mock_resolve_session.return_value = session

@@ -30,7 +30,7 @@ import { noticeReducer } from '../lib/notice'
 import { startAutoRefresh } from '../lib/auto-refresh'
 import { orderSignature } from '../lib/order-lines'
 import { clearStoredCart, loadCart, saveCart } from '../lib/cart-store'
-import { classifyFailure, isOrderingOver, type FailureKind } from '../lib/failure'
+import { classifyFailure, isOrderingOver, orderingEndOf, type FailureKind } from '../lib/failure'
 import { billAsked } from '../lib/bill-request'
 import { staffCalled } from '../lib/staff-call'
 import { setLanguage, t } from '../i18n'
@@ -133,21 +133,25 @@ export function useOrderingSession(initialContext?: OrderingContext) {
   // for the next guests, the shift is closed, the order is paid, the session ran out) the cart is dropped
   // and a notice replaces the menu: nothing more can be ordered from this page. Anything else is said in
   // words of the page (no connection, a problem of the server), never in the raw text of the server.
+  const endOrdering = useCallback((kind: FailureKind) => {
+    setCart({})
+    setCartPreview(null)
+    setPreviewFailed(false)
+    setAgeQuestion(null)
+    setError(null)
+    setClosed(kind)
+  }, [])
+
   const handleFailure = useCallback((err: unknown) => {
     const kind = classifyFailure(err)
     if (isOrderingOver(kind)) {
-      setCart({})
-      setCartPreview(null)
-      setPreviewFailed(false)
-      setAgeQuestion(null)
-      setError(null)
-      setClosed(kind)
+      endOrdering(kind)
     } else {
       if (kind === 'age') setAgeConfirmed(false) // the server has no answer of this guest: ask again
       setError(t(`errors.${kind}`))
     }
     return kind
-  }, [])
+  }, [endOrdering])
 
   const init = useCallback(async () => {
     setLoading(true)
@@ -423,12 +427,15 @@ export function useOrderingSession(initialContext?: OrderingContext) {
     return startAutoRefresh(async () => {
       try {
         const current = await getCurrentOrder(session)
-        setOrder(current)
+        // the answer is given after the table was closed too (the order can be read): it says whether the ordering is over
+        const over = orderingEndOf(current, { device: Boolean(initialContext) })
+        if (over) endOrdering(over)
+        else setOrder(current)
       } catch (err) {
         if (isOrderingOver(classifyFailure(err))) handleFailure(err)
       }
     })
-  }, [session, closedNow, handleFailure])
+  }, [session, closedNow, handleFailure, endOrdering, initialContext])
 
   // the guest's call for the staff: ask the server how it stands now and then, so the button comes back once the staff have been
   const callStaffOn = Boolean(context?.capabilities.call_staff_enabled)

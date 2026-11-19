@@ -120,6 +120,8 @@ export interface CustomerOrder {
   split?: boolean
   /** the order has a call for the bill that the staff have not dealt with yet */
   bill_requested?: boolean
+  /** is the ordering still open: the order is also answered after the table was closed (the page then shows its notice) */
+  ordering?: 'open' | 'table_closed' | 'store_closed'
 }
 
 /** What the cart comes to with the tax, from the server (`preview_customer_cart`). */

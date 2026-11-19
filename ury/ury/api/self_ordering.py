@@ -843,6 +843,27 @@ def _bill_requested(invoice):
 @frappe.whitelist(allow_guest=True)
 def get_customer_order(session):
     session = _resolve_session(session, require_open=False)
+    answer = _customer_order(session)
+    # the order may be read after the table was closed, so the answer does not refuse; it says whether the ordering is still
+    # open, so that a page that only waits shows its notice by itself (it asks for this order every 30 seconds)
+    answer["ordering"] = _ordering_state(session)
+    return answer
+
+
+def _ordering_state(session):
+    """"open", "store_closed" or "table_closed": the rules of `_resolve_session(require_open=True)`, as a word and not a refusal."""
+    with _elevated():
+        profile = frappe.get_doc("URY Self Ordering Profile", session.ordering_profile)
+        if not branch_is_open(profile.branch):
+            return "store_closed"
+        if session.table:
+            state = _open_table_state(session.table, profile)
+            if not state or session.table_opening != state.self_order_opening:
+                return "table_closed"
+    return "open"
+
+
+def _customer_order(session):
     empty = {
         "invoice": None, "pickup_code": None, "items": [], "grand_total": 0, "billed": False, "split": False,
         "bill_requested": False,

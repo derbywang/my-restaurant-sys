@@ -185,6 +185,28 @@ class TestJPTaxStructure(URYTestCase):
 		self.assertEqual(doc.grand_total, 1630)
 
 
+class TestTheReducedOnePercentIsKeptButNotUsed(URYTestCase):
+	"""税理士 (2026-11-19): 「軽減1％」 is kept for a change of the system later and must not be used now: the account and the
+	template exist, and no item, item group or invoice goes through them. Reads only."""
+
+	def test_no_item_or_item_group_uses_the_one_percent_template(self):
+		templates = frappe.get_all("Item Tax Template", filters={"title": ["like", "%軽減1%"]}, pluck="name")
+		for name in templates:
+			self.assertEqual(frappe.db.count("Item Tax", {"item_tax_template": name}), 0, name)
+
+	def test_no_invoice_has_tax_in_the_one_percent_account(self):
+		for account in frappe.get_all("Account", filters={"account_name": ["like", "%軽減1％%"]}, pluck="name"):
+			self.assertEqual(frappe.db.count("Sales Taxes and Charges", {"account_head": account, "tax_amount": [">", 0]}), 0, account)
+
+	def test_the_sales_tax_templates_the_pos_uses_do_not_charge_one_percent_by_default(self):
+		rows = frappe.db.sql(
+			"""select count(*) from `tabSales Taxes and Charges` t join `tabAccount` a on a.name = t.account_head
+			where a.account_name like %s and t.parenttype = 'Sales Taxes and Charges Template' and t.rate > 0""",
+			("%軽減1％%",),
+		)[0][0]
+		self.assertEqual(rows, 0)
+
+
 class TestMenuItemGroups(URYTestCase):
 	def test_only_leaf_groups_below_the_tax_groups_are_offered(self):
 		with patch("ury.ury.api.item_group.is_japan_site", return_value=True):

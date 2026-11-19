@@ -390,6 +390,20 @@ class TestMergedBill(URYFlowTestCase):
 		self.assertEqual(first.paid_amount - first.change_amount + second.paid_amount, 1650)
 		self.assertEqual(frappe.get_all("Sales Invoice Payment", filters={"parent": self.first}, pluck="amount"), [1450])
 
+	def test_the_change_is_the_handed_over_minus_the_total_of_the_receipt_when_the_tax_is_rounded_once(self):
+		"""The tax advisor's sample 05 (2026-11-19): two bills of 1,505 (tax 150 + 151 = 301 for the merged 3,010) paid with 4,000
+		give 689, not 690. Here a discount makes the amounts odd, so that the tax of each bill and of the merged bill differ: what goes
+		back is always what was handed over minus the total printed, and the two bills together are paid exactly that total."""
+		totals = self._preview(self.first, 7)
+		self._pay(self.first, 2000, discount=7, expected=totals["rounded_total"])
+		out = text(render(self.first))
+		self.assertIn(f"合計（税込） | ¥{totals['rounded_total']:,.0f}", out)
+		self.assertIn(f"お釣り | ¥{2000 - totals['rounded_total']:,.0f}", out)
+		first = self._values(self.first, "paid_amount", "change_amount")
+		second = self._values(self.second, "paid_amount", "change_amount")
+		kept = first.paid_amount - first.change_amount + second.paid_amount - second.change_amount
+		self.assertEqual(kept, totals["rounded_total"])
+
 	def test_the_receipt_shows_what_was_handed_over_and_the_change(self):
 		self._pay_with(self.first, [("Cash", 1000), ("Cash", 1000)], expected=1650)
 		for name in (self.first, self.second):

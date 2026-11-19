@@ -59,6 +59,41 @@ export const showToast = {
       toastId: id,
     });
   },
+  /**
+   * A message with one button, for a few seconds (the receipt that can be printed after a payment): it goes away by itself, and a
+   * touch beside the button does not close it, so that the cashier can reach the button with a wet hand.
+   */
+  withAction: (message: string, actionLabel: string, onAction: () => void, id?: string) => {
+    toast.success(
+      ({ closeToast }) => (
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex-1 text-sm font-semibold">{message}</span>
+          <button
+            type="button"
+            className="shrink-0 rounded bg-white px-3 py-1.5 text-sm font-bold text-gray-900"
+            onClick={() => {
+              closeToast?.();
+              onAction();
+            }}
+          >
+            {actionLabel}
+          </button>
+        </div>
+      ),
+      {
+        position: 'top-right',
+        autoClose: 10000,
+        hideProgressBar: false,
+        closeOnClick: false,
+        pauseOnHover: true,
+        draggable: false,
+        theme: 'colored',
+        icon: toastIcons.success,
+        className: 'toast-success',
+        toastId: id,
+      }
+    );
+  },
   warning: (message: string) => {
     toast.warning(message, {
       position: 'top-right',

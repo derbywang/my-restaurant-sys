@@ -812,6 +812,7 @@ export default function Orders() {
           fetchOrders={fetchOrders}
           clearSelectedOrder={clearSelectedOrder}
           discountPercentage={selectedOrder.additional_discount_percentage}
+          receiptFormat={resolvePrintFormat(selectedOrder, posStore.posProfile?.print_format)}
         />
       )}
       {selectedOrder && (

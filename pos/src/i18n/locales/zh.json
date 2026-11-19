@@ -92,6 +92,8 @@
     "item_note": "备注：{{note}}"
   },
   "payment": {
+    "receipt_offer": "{{name}}：已完成结账",
+    "receipt_button": "打印收据",
     "title": "结账",
     "apply_discount": "应用折扣",
     "discount_placeholder": "输入 %",
@@ -257,6 +259,8 @@
     "save_button": "保存备注"
   },
   "errors": {
+    "receipt_failed": "无法打印收据：{{reason}}",
+    "receipt_no_profile": "无法打印收据（打印机设置尚未加载）",
     "pos_profile_not_found": "未找到收银配置",
     "pos_profile_not_loaded": "收银配置尚未加载",
     "user_not_logged_in": "用户未登录",

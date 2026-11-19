@@ -25,6 +25,8 @@ from ury.setup.test_site import (
 	pay_with,
 	place_order,
 )
+from ury.ury.api.test_receipt import text
+from ury.ury.api.test_receipt_payment import CREDIT_NOTE, MIXED_NOTE, STAMP_BOX
 
 BITS = (b"\xff" * 72) * 10, 72, 10
 
@@ -223,3 +225,92 @@ class TestWhichWayToPrint(PrinterTestCase):
 		self.assertEqual(rp.print_type_for(server_printer=None, qz_print=1, bill_printer_present=False), "qz")
 		self.assertEqual(rp.print_type_for(server_printer="", qz_print=0, bill_printer_present=True), "network")
 		self.assertEqual(rp.print_type_for(server_printer=None, qz_print=0, bill_printer_present=False), "socket")
+
+
+class TestTheReceiptTheButtonAfterAPaymentPrints(PrinterTestCase):
+	"""2026-11-20: after a payment the cashier is offered 「領収書を印刷」; the button prints through `print_bill` of the paid invoice
+	(the drawer stays shut). What it prints is the receipt as before for every way of paying and for a merged or split bill: the
+	method line, the card notes, the 収入印紙 貼付欄 when the cash kept is 50,000 yen or more without the tax."""
+
+	def setUp(self):
+		super().setUp()
+		original = frappe.db.get_value("Item Price", {"item_code": FOOD_ITEM, "selling": 1}, "price_list_rate")
+		self.addCleanup(self._set_price, original)
+
+	def _set_price(self, price):
+		frappe.db.sql("update `tabItem Price` set price_list_rate = %s where item_code = %s and selling = 1", (price, FOOD_ITEM))
+		frappe.db.commit()
+
+	def _receipt(self, invoice):
+		with as_user(CASHIER):
+			result = rp.print_bill(invoice)
+		self.assertTrue(result["ok"], result)
+		self.assertEqual(self.pulses(), 0)  # the drawer stays shut
+		return text(fake_renderer.calls[-1])
+
+	def _paid(self, price, payments, table=0):
+		self._set_price(price)
+		order = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[table])
+		pay_with(order, payments)
+		return order
+
+	def test_cash_of_fifty_thousand_without_the_tax_has_the_place_for_a_stamp(self):
+		out = self._receipt(self._paid(50000, [("Cash", 55000)]))
+		self.assertIn("お支払方法：現金", out)
+		self.assertIn(STAMP_BOX, out)
+
+	def test_cash_below_it_has_none(self):
+		self.assertNotIn(STAMP_BOX, self._receipt(self._paid(49999, [("Cash", 54998)])))
+
+	def test_the_change_is_taken_off_the_cash(self):
+		self.assertNotIn(STAMP_BOX, self._receipt(self._paid(40000, [("Cash", 60000)])))
+
+	def test_a_card_says_the_credit_note_and_never_a_stamp(self):
+		out = self._receipt(self._paid(100000, [("クレジットカード", 110000)]))
+		self.assertIn(CREDIT_NOTE, out)
+		self.assertNotIn(STAMP_BOX, out)
+
+	def test_cash_and_card_print_each_amount_with_the_note_for_the_card_part(self):
+		out = self._receipt(self._paid(100000, [("Cash", 55000), ("クレジットカード", 55000)]))
+		self.assertIn("クレジットカード | ¥55,000", out)
+		self.assertIn("お預かり（現金） | ¥55,000", out)
+		self.assertIn(MIXED_NOTE, out)
+		self.assertIn(STAMP_BOX, out)  # 55,000 of 110,000 kept in cash is 50,000 without the tax
+
+	def test_a_wallet_prints_its_name_and_nothing_of_the_stamp(self):
+		out = self._receipt(self._paid(100000, [("PayPay", 110000)]))
+		self.assertIn("お支払方法：PayPay", out)
+		self.assertNotIn("印紙", out)
+
+	def test_a_merged_bill_prints_both_bills_and_the_total_it_was_paid_for(self):
+		from frappe.utils import add_to_date
+
+		from ury.ury_pos.api import merge_bills
+
+		self._set_price(1000)
+		first = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[0])
+		second = place_order(CASHIER, [(FOOD_ITEM, 1)], table=TABLES[1])
+		made = frappe.db.get_value("POS Invoice", first, "creation")
+		frappe.db.set_value("POS Invoice", second, "creation", add_to_date(made, seconds=1), update_modified=False)
+		with as_user(CASHIER):
+			merge_bills(first, second)
+		pay_with(first, [("Cash", 2300)], expected_total=2200)
+		out = self._receipt(first)
+		self.assertIn(first, out)
+		self.assertIn(second, out)
+		self.assertIn("合計（税込） | ¥2,200", out)
+		self.assertIn("お釣り | ¥100", out)
+
+	def test_a_part_of_a_split_bill_prints_its_own_dishes_and_total(self):
+		from ury.ury.doctype.ury_order.ury_order import split_bill
+
+		self._set_price(1000)
+		order = place_order(CASHIER, [(FOOD_ITEM, 2)], table=TABLES[0])
+		row = frappe.get_all("POS Invoice Item", filters={"parent": order}, pluck="name")[0]
+		with as_user(CASHIER):
+			split = split_bill(order, [{"name": row, "qty": 1}])["new_invoice"]
+		frappe.db.commit()
+		pay_with(split, [("Cash", 1100)])
+		out = self._receipt(split)
+		self.assertIn("合計（税込） | ¥1,100", out)
+		self.assertIn("1 × ¥1,000", out)

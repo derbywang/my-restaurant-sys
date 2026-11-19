@@ -92,6 +92,8 @@
     "item_note": "備考：{{note}}"
   },
   "payment": {
+    "receipt_offer": "{{name}}：お会計が済みました",
+    "receipt_button": "領収書を印刷",
     "title": "お会計",
     "apply_discount": "割引を適用",
     "discount_placeholder": "% を入力",
@@ -257,6 +259,8 @@
     "save_button": "コメントを保存"
   },
   "errors": {
+    "receipt_failed": "領収書を印刷できませんでした：{{reason}}",
+    "receipt_no_profile": "領収書を印刷できませんでした（プリンターの設定が読み込まれていません）",
     "pos_profile_not_found": "レジ設定が見つかりません",
     "pos_profile_not_loaded": "レジ設定がまだ読み込まれていません",
     "user_not_logged_in": "ログインしていません",

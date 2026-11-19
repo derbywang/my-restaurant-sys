@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const error = vi.fn();
+const success = vi.fn();
 vi.mock('react-toastify', () => ({
-  toast: { error: (...args: unknown[]) => error(...args), success: vi.fn(), warning: vi.fn(), info: vi.fn(), dismiss: vi.fn() },
+  toast: { error: (...args: unknown[]) => error(...args), success: (...args: unknown[]) => success(...args), warning: vi.fn(), info: vi.fn(), dismiss: vi.fn() },
   ToastContainer: () => null,
 }));
 
@@ -28,5 +29,19 @@ describe('a red message that stays', () => {
   it('the usual red message still goes away after two seconds', () => {
     showToast.error('x');
     expect(error.mock.calls[0][1].autoClose).toBe(2000);
+  });
+});
+
+describe('a message with a button that goes away by itself (the receipt after a payment)', () => {
+  beforeEach(() => success.mockClear());
+
+  it('stays a few seconds, long enough to press, and has an id of its own', () => {
+    showToast.withAction('INV-1（MD-06）：お会計が済みました', '領収書を印刷', () => undefined, 'receipt-INV-1');
+    const [content, options] = success.mock.calls[0];
+    expect(content).toBeTruthy();
+    expect(options.toastId).toBe('receipt-INV-1');
+    expect(options.autoClose).toBeGreaterThanOrEqual(6000);
+    expect(options.autoClose).toBeLessThanOrEqual(15000);
+    expect(options.closeOnClick).toBe(false); // a touch beside the button must not make it disappear
   });
 });

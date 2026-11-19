@@ -68,6 +68,8 @@ export interface FinishPaymentOptions {
   notify: (message: string, id: string) => void;
   /** Closes the payment window. */
   onClosed: () => void;
+  /** Offers the receipt (a message with a button for a few seconds); it never holds back the window or the drawer. */
+  offerReceipt?: () => void;
   table: string | null;
   invoice: string;
 }
@@ -77,7 +79,7 @@ export interface FinishPaymentOptions {
  * was slow) and open the drawer in the background. A drawer that did not open is a red message that stays, with the table's name so
  * that it cannot be taken for the next order's. The payment is never undone by it.
  */
-export function finishPayment({ openDrawer, notify, onClosed, table, invoice }: FinishPaymentOptions): void {
+export function finishPayment({ openDrawer, notify, onClosed, offerReceipt, table, invoice }: FinishPaymentOptions): void {
   const tell = (message: string) => notify(`${table || invoice}：${message}`, `drawer-${invoice}`);
   if (openDrawer) {
     void openDrawer()
@@ -87,4 +89,9 @@ export function finishPayment({ openDrawer, notify, onClosed, table, invoice }: 
       .catch(() => tell(DRAWER_FAILED));
   }
   onClosed();
+  try {
+    offerReceipt?.();
+  } catch {
+    // the payment stays paid, and the drawer has been asked for already
+  }
 }

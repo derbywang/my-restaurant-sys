@@ -92,6 +92,8 @@
     "item_note": "Note: {{note}}"
   },
   "payment": {
+    "receipt_offer": "{{name}}: payment completed",
+    "receipt_button": "Print receipt",
     "title": "Payment",
     "apply_discount": "Apply Discount",
     "discount_placeholder": "Enter %",
@@ -257,6 +259,8 @@
     "save_button": "Save Comment"
   },
   "errors": {
+    "receipt_failed": "Could not print the receipt: {{reason}}",
+    "receipt_no_profile": "Could not print the receipt (the printer settings are not loaded)",
     "pos_profile_not_found": "POS Profile not found",
     "pos_profile_not_loaded": "POS profile not loaded yet",
     "user_not_logged_in": "User not logged in",

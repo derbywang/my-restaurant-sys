@@ -8,6 +8,8 @@ import { canShowDiscount, friendlyError } from '../lib/pos-permissions';
 import { useRootStore } from '../store/root-store';
 import { t } from '../i18n';
 import { drawerAfterPayment, finishPayment } from '../lib/drawer';
+import { offerReceipt } from '../lib/receipt-offer';
+import { printOrder } from '../lib/print';
 import { stampNotice } from '../lib/stamp-duty';
 import { checkPayments, paymentModeLabel, type PaymentRow } from '../lib/payment-change';
 import { isAmountChangedError, previewOrderTotals, type OrderTotals } from '../lib/order-totals-api';
@@ -27,6 +29,8 @@ interface PaymentDialogProps {
   fetchOrders: () => Promise<void>;
   clearSelectedOrder: () => void;
   discountPercentage?: number;
+  /** The print format of this invoice (a merged bill has its own): the receipt offered after the payment is printed with it. */
+  receiptFormat?: string | null;
 }
 
 const PaymentDialog: React.FC<PaymentDialogProps> = ({
@@ -42,7 +46,8 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
   owner,
   fetchOrders,
   clearSelectedOrder,
-  discountPercentage
+  discountPercentage,
+  receiptFormat
 }) => {
   const { paymentModes, paymentModeTypes, fetchPaymentModes, posProfile: storePosProfile } = usePOSStore();
   const permissions = useRootStore((state) => state.permissions);
@@ -179,6 +184,23 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({
         openDrawer: storePosProfile?.print_type === 'server' && invoice ? () => drawerAfterPayment(invoice, undefined, t('drawer.failed')) : null,
         notify: (message, id) => showToast.errorStay(message, id),
         onClosed: onClose,
+        // the receipt is not printed by itself: the cashier is offered it for a few seconds (a failure is a red message that stays)
+        offerReceipt: () =>
+          offerReceipt({
+            invoice,
+            table: tableLabel || table || null,
+            print: async () => {
+              if (!storePosProfile) throw new Error(t('errors.receipt_no_profile'));
+              await printOrder({ orderId: invoice, posProfile: storePosProfile, printFormat: receiptFormat });
+            },
+            show: (message, button, press, id) => showToast.withAction(message, button, press, id),
+            notifyFailure: (message, id) => showToast.errorStay(message, id),
+            texts: {
+              offer: (name) => t('payment.receipt_offer', { name }),
+              button: t('payment.receipt_button'),
+              failed: (reason) => t('errors.receipt_failed', { reason }),
+            },
+          }),
         table,
         invoice,
       });

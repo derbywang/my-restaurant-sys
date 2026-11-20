@@ -102,7 +102,7 @@
 **每小时（`record`）** 在 `/var/log/ury/health-<日期>.log` 里记一段（内存、交换区、负载、磁盘占用、SSD 的寿命和累计写入量、下单耗时、各容器内存），保留 7 天：
 
     == 2026-12-14 19:05:01 available_mb=3120 swap_used_mb=40 load=0.82 0.64 0.51 disk_percent=4
-    ssd: used_percent=3 written=632_GB health=PASSED
+    ssd: used_percent=3 written=632_GB health=PASSED critical_warning=0x00 spare=75 spare_threshold=50 media_errors=7 unsafe_shutdowns=46 power_on_hours=15216
     orders_last_hour: count=38 slow=0 p95=0.412s max=1.203s
       frappe_docker-backend-1 612MiB / 1.758GiB
       frappe_docker-db-1 1.102GiB / 1.758GiB
@@ -120,10 +120,49 @@
 | Tunnel | `cloudflared` 不在运行 | Tunnel 不在线 |
 | SSD 寿命已用（`smartctl` 的 `Percentage Used`；SATA 的 SSD 取"剩余寿命"属性换算） | 超过 80% | SSD 寿命将尽 |
 | SSD 自检（`smartctl -H`） | 不是 `PASSED` | SSD 自检不通过 |
+| **硬盘读数**（NVMe 的 Integrity Errors、Available Spare、Critical Warning） | **比基线差就报，第一次读到就发**（不等第二次）；同一个值只发一次，更坏再发 | 硬盘在恶化，需要换盘 |
+| **意外断电**（Unsafe Shutdowns） | 比基线大，每增加一次发一次；**通知邮箱还没设好（`MAIL_TO` 为空或示例地址）时只写进记录和报告，不发邮件** | 服务器发生过意外断电 |
+
+**什么时候要连续几次**：只会变坏的（硬盘读数、意外断电）、不能等的（服务停了、磁盘满、备份过期）**第一次读到就报**；会波动的（内存、交换区）要**连续 `ALERT_CONSECUTIVE` 次（默认 2 次，检查是每小时一次）都超标**才报，中间有一次正常就重新数。温度**不做告警**（这台机器的传感器读数不可信）。
 
 **每天 08:00（`daily`）** 一封日报：现在的内存、交换区、磁盘、备份多久之前、有没有停掉的服务、昨天可用内存最低的那一小时、`deploy_check` 的 FAIL 行。**没事也发**：哪天早上**没收到**，就是服务器或它的邮件出了问题，这是唯一能发现"整台机器死了"的办法（它自己发不出求救）。
 
 scheduler 是否在跑、Error Log、未执行的补丁，都由 `deploy_check` 查（它已有 `scheduler and jobs`、`error log`、`patches and doctypes` 等项），日报里带它的结果。
+
+### 3.1 硬盘（NVMe）基线和换盘（2026-11-21）
+
+**基线**（日本时间 11/21，服务器笔记本的硬盘，LITEON CL1-3D256-Q11 256GB）：
+
+| 项 | 值 |
+|---|---|
+| Critical Warning | 0x00 |
+| Percentage Used | 4% |
+| Available Spare / 阈值 | 75% / 50% |
+| Media and Data Integrity Errors | 7 |
+| Error Information Log | 0 条 |
+| Short 自测 | 两次都没有错误 |
+| Unsafe Shutdowns | 46 |
+| Power On Hours / Power Cycles | 15,216 / 892 |
+| Data Units Written / Read | 19.5 TB / 41.5 TB |
+| Controller Busy Time | 78,066 |
+| 温度 | 读数 13℃，**传感器读数不可信**（不据此判断） |
+
+基线值写在服务器的 `/etc/ury/deploy.conf`（`SSD_BASELINE_*`）；`health.sh` 每小时比，`stability_report.sh` 在报告里比。
+
+**检查时间点**：**12/1** 和 **12/8** 各手工看一次（`sudo smartctl -a /dev/nvme0`，把输出和上面的基线对一遍），再跑一次 `stability_report.sh preliminary`。之后每小时自动比。
+
+**换盘的触发条件**（任意一条）：Integrity Errors 比 7 大；Available Spare 比 75% 小或到了阈值 50%；Critical Warning 不是 0x00；Percentage Used 超过 80%；自检不通过。意外断电（Unsafe Shutdowns 增加）**不是**换盘的理由，是要查电源、UPS。
+
+**换盘的大致步骤**（不是克隆：要重装系统和 Docker，所以**最晚 12/8 前决定**，要来得及买盘；笔记本的 M.2 插槽规格先确认）：
+
+1. 做一次备份并确认到了 R2（`backup.sh`，第 2 节），在另一台电脑上能解开（2.4 的验收 ③）。
+2. 装新盘，按 `server-setup.md` 第 1 节装 Ubuntu 和 Docker（第 1.0～1.5 节）。
+3. 取代码、构建镜像（第 2 节）；起服务、建站点的壳（第 3 节）。
+4. 从 R2 恢复到正式站点（2.4，这次是真的恢复，不是临时站点）。
+5. 跑 `deploy_check`，确认能登录、菜单和账号在、二维码仍有效。
+6. 更新 `/etc/ury/deploy.conf` 里的基线（新盘的读数，写上日期），重跑第 6 节的自检。
+
+**最晚 12/8 前**：在新的 NVMe 固态盘上按 `server-setup.md` 重装系统，再从 Cloudflare R2 备份恢复，作为备份和重装文档的真实演练；**换盘与否由店主在 12/8 前根据检查结果和这次演练决定**。
 
 **例行事项**：每月一次，闭店后装需要重启的系统更新并重启（`sudo apt update && sudo apt upgrade && sudo reboot`），然后做 `server-setup.md` 第 6 节的自检。
 

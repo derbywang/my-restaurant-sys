@@ -36,6 +36,11 @@ cut -d'|' -f1 "$W/blocks" > "$W/times"
 if [ -s "$W/times" ]; then date -f "$W/times" +%s > "$W/epochs"; else : > "$W/epochs"; fi
 paste -d' ' "$W/epochs" <(cut -d'|' -f2 "$W/blocks") > "$W/samples"
 
+# the drive's lines of the period (those that carry the NVMe values): "stamp|ssd: used_percent=... media_errors=..."
+{ cat "$LOG_DIR"/health-*.log 2>/dev/null || true; } | awk -v from="$FROM" -v to="$TO" '
+	/^== / { stamp = $2 " " $3; next }
+	/^ssd: / && /media_errors=/ && stamp >= from && stamp <= to { print stamp "|" $0 }' | sort > "$W/ssd"
+
 # the orders of the period: the seconds, each order once
 { cat "$LOG_DIR"/order-times-*.log 2>/dev/null || true; } | sort -u | awk -v from="$FROM" -v to="$TO" '{ stamp = $1 " " $2; if (stamp >= from && stamp <= to) print $3 }' | sort -n > "$W/orders"
 
@@ -57,7 +62,7 @@ first_last_medians() { # column -> "first last", or nothing when there is no fir
 	echo "$f $l"
 }
 
-fails=0; missing=0; warnings=""
+fails=0; missing=0; warnings=""; ssd_bad=0
 line() { echo "$1"; }
 body=""
 add() { body+="$1"$'\n'; }
@@ -99,6 +104,33 @@ if g=$(first_last_medians 4) && [ "${g%% *}" -gt 0 ]; then
 else
 	verdict "4. 内存增长" missing "要有前 12 小时和后 12 小时的记录（至少 24 小时，且记录里要有总内存）"
 fi
+# 5. the drive (docs/deploy/operations.md, 硬盘基线和换盘): Integrity Errors, Available Spare and Critical Warning only get worse, so
+# worse than the baseline of the conf is a failed criterion; an unsafe shutdown is a note. Not judged without a baseline.
+ssd_field() { sed -n "s/.* $2=\([^ ]*\).*/\1/p" <<< "$1"; }
+if [ -n "${SSD_BASELINE_MEDIA_ERRORS:-}${SSD_BASELINE_SPARE:-}${SSD_BASELINE_UNSAFE:-}" ]; then
+	if [ -s "$W/ssd" ]; then
+		first=$(head -1 "$W/ssd"); last=$(tail -1 "$W/ssd")
+		e1=$(ssd_field "$first" media_errors); e2=$(ssd_field "$last" media_errors)
+		s1=$(ssd_field "$first" spare); s2=$(ssd_field "$last" spare); thr=$(ssd_field "$last" spare_threshold)
+		c2=$(ssd_field "$last" critical_warning); u1=$(ssd_field "$first" unsafe_shutdowns); u2=$(ssd_field "$last" unsafe_shutdowns)
+		add "硬盘：Integrity Errors ${e2}（基线 ${SSD_BASELINE_MEDIA_ERRORS:-未设}），Available Spare ${s2}%（基线 ${SSD_BASELINE_SPARE:-未设}%），Critical Warning ${c2}；期间 Integrity Errors ${e1} → ${e2}，Available Spare ${s1}% → ${s2}%"
+		ssd_why=""
+		if [ -n "${SSD_BASELINE_MEDIA_ERRORS:-}" ] && [ -n "$e2" ] && [ "$e2" -gt "$SSD_BASELINE_MEDIA_ERRORS" ]; then ssd_why+="Integrity Errors ${e2}（基线 ${SSD_BASELINE_MEDIA_ERRORS}）；"; fi
+		if [ -n "${SSD_BASELINE_SPARE:-}" ] && [ -n "$s2" ] && [ "$s2" -lt "$SSD_BASELINE_SPARE" ]; then ssd_why+="Available Spare ${s2}%（基线 ${SSD_BASELINE_SPARE}%）；"; fi
+		if [ -n "$s2" ] && [ -n "$thr" ] && [ "$s2" -le "$thr" ]; then ssd_why+="Available Spare ${s2}% 已降到阈值 ${thr}%；"; fi
+		if [ -n "$c2" ] && [ "$c2" != 0x00 ]; then ssd_why+="Critical Warning ${c2}；"; fi
+		if [ -n "$ssd_why" ]; then
+			add "【红】5. 硬盘在恶化，需要换盘：${ssd_why}"; fails=$((fails + 1)); ssd_bad=1
+		else
+			add "5. 硬盘（Integrity Errors、Available Spare、Critical Warning 都没有比基线差）：合格"
+		fi
+		if [ -n "${SSD_BASELINE_UNSAFE:-}" ] && [ -n "$u2" ] && [ "$u2" -gt "$SSD_BASELINE_UNSAFE" ]; then
+			add "提示：发生过意外断电：意外断电 基线 ${SSD_BASELINE_UNSAFE} → 现在 ${u2}（报告期间 ${u1:-?} → ${u2}，共增加 $((u2 - SSD_BASELINE_UNSAFE)) 次）。"
+		fi
+	else
+		add "5. 硬盘：日志里没有硬盘的详细记录（旧日志，或这块盘不报这些读数），没有判断，不计入结论。"
+	fi
+fi
 # for reference (not a criterion): the slowest order and the orders over 2 seconds
 if [ "$n_orders" -gt 0 ]; then
 	add "参考：最慢一单 $(tail -1 "$W/orders") 秒，超过 2 秒的 $(awk '$1 > 2 {n++} END {print n + 0}' "$W/orders") 单"
@@ -118,10 +150,16 @@ if [ -n "$warnings" ]; then
 	[ "$mode" = preliminary ] && out+="→ 今晚决定要不要换机器（小型主机到货要 1～3 天，要赶在 12/18 之前）。"$'\n'
 fi
 if [ "$fails" -gt 0 ]; then code=1; summary="有 ${fails} 项不合格：最小配置不够，要换机器或减负载（docs/deploy/operations.md「最小配置的验证」）。"
+	[ "$ssd_bad" = 1 ] && summary+="（其中硬盘在恶化，需要换盘：docs/deploy/operations.md「硬盘基线和换盘」。）"
 elif [ "$mode" = conclusion ] && [ "$missing" -gt 0 ]; then code=2; summary="数据不足，现在下不了结论。"
 elif [ "$mode" = preliminary ]; then code=0; summary="初步：目前没有超过标准的项目${missing:+（有 $missing 项数据还不够）}。"
 else code=0; summary="全部合格：最小配置可以开店。"; fi
 out+=$'\n'"结论：${summary}"$'\n'
-printf '%s' "$out"
+# the red lines (【红】) are red on a terminal; in a file or a mail they only have the mark
+if [ "${STABILITY_COLOR:-}" = always ] || { [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; }; then
+	printf '%s' "$out" | awk '/^【红】/ { printf "\033[31m%s\033[0m\n", $0; next } { print }'
+else
+	printf '%s' "$out"
+fi
 [ -z "$MAIL" ] || notify "稳定性报告（${mode}）：${summary%%。*}" "$out"
 exit "$code"

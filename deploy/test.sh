@@ -48,7 +48,7 @@ S
 cat > "$T/bin/smartctl" <<'S'
 #!/usr/bin/env bash
 case "${FAKE_SSD:-nvme}" in
-	nvme) printf 'SMART overall-health self-assessment test result: PASSED\nPercentage Used:                    %s%%\nData Units Written:                 1,234,567 [632 GB]\n' "${SSD_USED:-3}" ;;
+	nvme) printf 'SMART overall-health self-assessment test result: PASSED\nCritical Warning:                   %s\nAvailable Spare:                    %s%%\nAvailable Spare Threshold:          %s%%\nPercentage Used:                    %s%%\nData Units Written:                 1,234,567 [632 GB]\nPower On Hours:                     15,216\nUnsafe Shutdowns:                   %s\nMedia and Data Integrity Errors:    %s\n' "${SSD_CRIT:-0x00}" "${SSD_SPARE:-75}" "${SSD_THRESHOLD:-50}" "${SSD_USED:-3}" "${SSD_UNSAFE:-46}" "${SSD_ERRORS:-7}" ;;
 	sata) printf 'SMART overall-health self-assessment test result: %s\nID# ATTRIBUTE_NAME FLAG VALUE WORST THRESH TYPE UPDATED WHEN_FAILED RAW_VALUE\n177 Wear_Leveling_Count 0x0013 094 094 000 Pre-fail Always - 61\n241 Total_LBAs_Written 0x0032 099 099 000 Old_age Always - 2000000000\n' "${SSD_HEALTH:-PASSED}" ;;
 	silent) echo "nothing useful" ;;
 esac
@@ -79,6 +79,10 @@ SLOW_SECONDS=2
 ALERT_REPEAT_HOURS=6
 SSD_DEVICE=/dev/fake
 MAX_SSD_USED_PERCENT=80
+SSD_BASELINE_MEDIA_ERRORS=7
+SSD_BASELINE_SPARE=75
+SSD_BASELINE_UNSAFE=46
+ALERT_CONSECUTIVE=2
 S
 export PATH="$T/bin:$PATH" URY_DEPLOY_CONF="$T/conf" FAKE_CONTAINER="$C" FAKE_R2="$T/r2" FAKE_MAIL="$T/mail" FAKE_LOG="$T/calls" MEMINFO="$T/meminfo"
 fails=0
@@ -112,12 +116,12 @@ export FAKE_NGINX_LOG='1.2.3.4 [t] "POST /api/method/ury.ury.api.self_ordering.a
 log_file=$(ls "$T"/log/health-*.log)
 ok "health: all well -> a block in the log, no mail" '[ $code = 0 ] && grep -q "available_mb=3000 swap_used_mb=100" "$log_file" && grep -q "backend 410MiB" "$log_file" && [ ! -s "$T/mail" ]'
 ok "health: the orders are timed (2 orders, 1 slower than 2 s; other requests are not counted)" 'grep -q "count=2 slow=1 p95=0.412s max=2.750s" "$log_file"'
-reset; now_stamp; meminfo 600 100; "$here/health.sh" record > "$T/out" 2>&1
-ok "health: little memory -> a mail" 'grep -q "内存不足" "$T/mail" && grep -q "600 MB" "$T/mail"'
+reset; now_stamp; meminfo 600 100; "$here/health.sh" record > "$T/out" 2>&1; "$here/health.sh" record > "$T/out" 2>&1
+ok "health: little memory in two checks in a row -> a mail" 'grep -q "内存不足" "$T/mail" && grep -q "600 MB" "$T/mail"'
 "$here/health.sh" record > "$T/out" 2>&1
 ok "health: the same alert is not mailed again within the hours set" '[ "$(grep -c "^Subject:" "$T/mail")" = 1 ]'
-reset; now_stamp; meminfo 3000 1500; "$here/health.sh" record > "$T/out" 2>&1
-ok "health: much swap -> a mail" 'grep -q "交换区" "$T/mail"'
+reset; now_stamp; meminfo 3000 1500; "$here/health.sh" record > "$T/out" 2>&1; "$here/health.sh" record > "$T/out" 2>&1
+ok "health: much swap in two checks in a row -> a mail" 'grep -q "交换区" "$T/mail"'
 reset; "$here/health.sh" record > "$T/out" 2>&1
 ok "health: no backup recorded -> a mail" 'grep -q "备份过期" "$T/mail"'
 reset; now_stamp; FAKE_PS='backend running\ndb exited\nconfigurator exited\n' "$here/health.sh" record > "$T/out" 2>&1
@@ -138,6 +142,71 @@ reset; now_stamp; "$here/health.sh" daily > "$T/out" 2>&1
 ok "health: the daily mail is sent when all is well, with the result of deploy_check" 'grep -q "每日报告" "$T/mail" && grep -q "0 failed" "$T/mail"'
 touch -d '9 days ago' "$T/log/health-2026-01-01.log"; "$here/health.sh" record > "$T/out" 2>&1
 ok "health: logs older than a week are removed" '[ ! -e "$T/log/health-2026-01-01.log" ]'
+
+# ------------------------------------------------------------------ health.sh: the drive that gets worse (2026-11-21)
+# Integrity Errors, Available Spare, Unsafe Shutdowns and Critical Warning only go one way: the first reading that is worse than
+# the baseline is a mail (no waiting for a second one); the same value is mailed once. Memory and swap go up and down: two checks in a row.
+conf_with() { sed "$1" "$T/conf" > "$T/conf2"; export URY_DEPLOY_CONF="$T/conf2"; }
+conf_back() { export URY_DEPLOY_CONF="$T/conf"; }
+reset; now_stamp; "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: at the baseline -> no mail; the log has what the drive says (critical warning, spare, threshold, errors, unsafe shutdowns, hours)" \
+	'[ ! -s "$T/mail" ] && grep -q "ssd: used_percent=3 written=632_GB health=PASSED critical_warning=0x00 spare=75 spare_threshold=50 media_errors=7 unsafe_shutdowns=46 power_on_hours=15216" "$T"/log/health-*.log'
+reset; now_stamp; SSD_ERRORS=8 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: one more Integrity Error than the baseline -> a mail at the first reading, with the values" 'grep -q "^Subject:.*硬盘在恶化，需要换盘" "$T/mail" && grep -q "Integrity Errors.*8.*基线.*7" "$T/mail"'
+SSD_ERRORS=8 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: the same worse value is mailed once" '[ "$(grep -c "^Subject:.*硬盘在恶化" "$T/mail")" = 1 ]'
+SSD_ERRORS=9 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: a still worse value is mailed again" '[ "$(grep -c "^Subject:.*硬盘在恶化" "$T/mail")" = 2 ]'
+reset; now_stamp; SSD_SPARE=74 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: Available Spare one below the baseline -> a mail" 'grep -q "^Subject:.*硬盘在恶化" "$T/mail" && grep -q "Available Spare.*74.*基线.*75" "$T/mail"'
+reset; now_stamp; conf_with 's/^SSD_BASELINE_SPARE=75/SSD_BASELINE_SPARE=40/'; SSD_SPARE=50 "$here/health.sh" record > "$T/out" 2>&1; conf_back
+ok "ssd: a spare that has come down to the threshold is a mail even when it is not below the baseline" 'grep -q "^Subject:.*硬盘在恶化" "$T/mail" && grep -q "阈值" "$T/mail"'
+reset; now_stamp; SSD_CRIT=0x01 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: a Critical Warning that is not 0x00 -> a mail" 'grep -q "^Subject:.*硬盘在恶化" "$T/mail" && grep -q "Critical Warning" "$T/mail"'
+reset; now_stamp; SSD_ERRORS=6 SSD_SPARE=76 SSD_UNSAFE=40 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: values better than the baseline (another drive, a reading that is lower) are not an alert" '[ ! -s "$T/mail" ]'
+reset; now_stamp; conf_with '/^SSD_BASELINE_/d'; SSD_ERRORS=99 SSD_SPARE=10 SSD_UNSAFE=999 "$here/health.sh" record > "$T/out" 2>&1; conf_back
+ok "ssd: without a baseline in the conf nothing is compared (a mail only for the life used and the self test)" '[ ! -s "$T/mail" ]'
+reset; now_stamp; FAKE_SSD=sata "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: a SATA drive has none of these values: no mail, and the log line has no empty fields" '[ ! -s "$T/mail" ] && ! grep -q "media_errors=" "$T"/log/health-*.log'
+reset; now_stamp; SSD_USED=85 SSD_ERRORS=8 "$here/health.sh" record > "$T/out" 2>&1
+ok "ssd: the life used and a worse drive are two alerts, not one" 'grep -q "SSD 寿命将尽" "$T/mail" && grep -q "硬盘在恶化" "$T/mail"'
+
+# an unsafe shutdown (the power went): a mail for each increase, once; without a mailbox only the log and the reports say it
+reset; now_stamp; conf_with 's/^MAIL_TO=.*/MAIL_TO=shop-owner@test.local/'
+SSD_UNSAFE=47 "$here/health.sh" record > "$T/out" 2>&1
+ok "unsafe: one more than the baseline -> one mail that says the server lost power; it is not the 'drive getting worse' alert" \
+	'[ "$(grep -c "^Subject:" "$T/mail")" = 1 ] && grep -q "^Subject:.*意外断电" "$T/mail" && ! grep -q "硬盘在恶化" "$T/mail" && grep -q "46.*47" "$T/mail"'
+SSD_UNSAFE=47 "$here/health.sh" record > "$T/out" 2>&1
+ok "unsafe: the same count is not mailed again" '[ "$(grep -c "^Subject:.*意外断电" "$T/mail")" = 1 ]'
+SSD_UNSAFE=48 "$here/health.sh" record > "$T/out" 2>&1
+ok "unsafe: the next increase is mailed once more" '[ "$(grep -c "^Subject:.*意外断电" "$T/mail")" = 2 ]'
+conf_back
+reset; now_stamp; SSD_UNSAFE=47 "$here/health.sh" record > "$T/out" 2>&1
+ok "unsafe: the mailbox is not set yet (the example address) -> no mail, the log says it" '[ ! -s "$T/mail" ] && grep -q "unsafe_shutdowns=47" "$T"/log/health-*.log'
+conf_with 's/^MAIL_TO=.*/MAIL_TO=shop-owner@test.local/'; SSD_UNSAFE=47 "$here/health.sh" record > "$T/out" 2>&1
+ok "unsafe: when the mailbox is set later, what was lost before is not mailed (only the next increase is)" '[ ! -s "$T/mail" ]'
+SSD_UNSAFE=48 "$here/health.sh" record > "$T/out" 2>&1; conf_back
+ok "unsafe: ... and the next increase is" 'grep -q "^Subject:.*意外断电" "$T/mail"'
+
+# memory and swap fluctuate: a single reading is not an alert; two checks in a row are; a good reading in between starts again
+reset; now_stamp; meminfo 600 100; "$here/health.sh" record > "$T/out" 2>&1
+ok "debounce: little memory at one check only -> no mail" '[ ! -s "$T/mail" ]'
+meminfo 3000 100; "$here/health.sh" record > "$T/out" 2>&1; meminfo 600 100; "$here/health.sh" record > "$T/out" 2>&1
+ok "debounce: low, good, low -> still no mail (the good reading started it again)" '[ ! -s "$T/mail" ]'
+"$here/health.sh" record > "$T/out" 2>&1
+ok "debounce: two low checks in a row -> the mail" 'grep -q "内存不足" "$T/mail"'
+reset; now_stamp; meminfo 3000 1500; "$here/health.sh" record > "$T/out" 2>&1
+ok "debounce: much swap at one check only -> no mail" '[ ! -s "$T/mail" ]'
+# what does not fluctuate, or must not wait, is mailed at the first check
+reset; now_stamp; FAKE_PS='backend exited\ndb running\nconfigurator exited\n' "$here/health.sh" record > "$T/out" 2>&1
+ok "no debounce: a service that is not running -> a mail at the first check (the POS may be down)" 'grep -q "backend(exited)" "$T/mail"'
+reset; "$here/health.sh" record > "$T/out" 2>&1
+ok "no debounce: the backup that is too old -> a mail at the first check" 'grep -q "备份过期" "$T/mail"'
+reset; now_stamp; conf_with 's/^MAX_DISK_PERCENT=.*/MAX_DISK_PERCENT=1/'; "$here/health.sh" record > "$T/out" 2>&1; conf_back
+ok "no debounce: the disk that is full -> a mail at the first check" 'grep -q "磁盘空间不足" "$T/mail"'
+reset; now_stamp; "$here/health.sh" daily > "$T/out" 2>&1
+ok "daily: the mail says the drive (Integrity Errors, Available Spare, unsafe shutdowns, each with its baseline)" 'grep -q "Integrity Errors 7（基线 7）" "$T/mail" && grep -q "Available Spare 75%（基线 75%）" "$T/mail" && grep -q "意外断电 46（基线 46）" "$T/mail"'
 
 # ------------------------------------------------------------------ health.sh: what the stability report needs
 reset; now_stamp
@@ -263,5 +332,45 @@ STABILITY_FROM="$START" "$here/stability_report.sh" conclusion --to "2026-12-18 
 ok "report: --mail sends the report once, with the verdict in the subject" '[ "$(grep -c "^Subject:" "$T/mail")" = 1 ] && grep -q "^Subject:.*稳定性" "$T/mail" && grep -q "全部合格" "$T/mail"'
 reset; code=$(report conclusion --to "2026-12-18 08:00:00")
 ok "report: no log at all -> not enough data (exit 2), never a pass" '[ "$code" = 2 ] && ! grep -q "全部合格" "$T/rep"'
+
+# the drive in the report (2026-11-21): worse than the baseline = a failed criterion, in red; an unsafe shutdown is a note
+mkssd() { # start, hours, "key=value ..." the ssd fields of every block (written after the block of each hour)
+	local start=$1 hours=$2 fields=$3 h t
+	for h in $(seq 0 "$hours"); do
+		t=$(addsec "$start" $((h * 3600)))
+		echo "ssd: used_percent=4 written=19.5_TB health=PASSED $fields" >> "$T/log/health-${t%% *}.log"
+	done
+}
+BASE="critical_warning=0x00 spare=75 spare_threshold=50 media_errors=7 unsafe_shutdowns=46 power_on_hours=15216"
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 96 "$BASE"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: at the baseline -> the drive is listed with the baseline and passes" '[ "$code" = 0 ] && grep -q "硬盘" "$T/rep" && grep -q "Integrity Errors 7（基线 7）" "$T/rep" && grep -q "Available Spare 75%（基线 75%）" "$T/rep" && ! grep -q "硬盘在恶化" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 90 "$BASE"; mkssd "2026-12-18 03:00:00" 5 "${BASE/media_errors=7/media_errors=8}"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: Integrity Errors above the baseline at the end -> not passed, exit 1, '硬盘在恶化，需要换盘', first and last value shown" \
+	'[ "$code" = 1 ] && grep -q "【红】.*硬盘在恶化，需要换盘" "$T/rep" && grep -q "Integrity Errors.*7.*8" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 96 "${BASE/spare=75/spare=74}"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: Available Spare below the baseline -> not passed" '[ "$code" = 1 ] && grep -q "硬盘在恶化，需要换盘" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 96 "${BASE/critical_warning=0x00/critical_warning=0x04}"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: a Critical Warning -> not passed" '[ "$code" = 1 ] && grep -q "硬盘在恶化，需要换盘" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 96 "${BASE/media_errors=7/media_errors=8}"
+STABILITY_COLOR=always STABILITY_FROM="$START" "$here/stability_report.sh" conclusion --to "2026-12-18 08:00:00" > "$T/rep" 2>&1
+ESC=$(printf '\033')
+ok "report/ssd: on a terminal the line is red (escape code), and not the other lines" 'grep -q "${ESC}\[31m.*硬盘在恶化" "$T/rep" && ! grep -q "${ESC}\[31m.*可用内存" "$T/rep"'
+STABILITY_FROM="$START" "$here/stability_report.sh" conclusion --to "2026-12-18 08:00:00" > "$T/rep" 2>&1
+ok "report/ssd: into a file or a mail there is no escape code, the line starts with the red mark" '! grep -q "$ESC" "$T/rep" && grep -q "^【红】" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 90 "$BASE"; mkssd "2026-12-18 03:00:00" 5 "${BASE/unsafe_shutdowns=46/unsafe_shutdowns=48}"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: an unsafe shutdown is a note ('the server lost power', 46 -> 48), not a failed criterion; exit 0" '[ "$code" = 0 ] && grep -q "发生过意外断电" "$T/rep" && grep -q "46.*48" "$T/rep" && ! grep -q "硬盘在恶化" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: a log from before these fields -> a note that there is no record, never a failure and not a reason for 'not enough data'" '[ "$code" = 0 ] && grep -q "硬盘.*没有.*记录" "$T/rep"'
+reset; mkhealth "$START" 96 "" "100" "4000"; mkorders "2026-12-14 09:00:00" 300 0.6 0 0; mkssd "$START" 96 "${BASE/media_errors=7/media_errors=9}"
+sed -i '/^SSD_BASELINE_/d' "$T/conf"
+code=$(report conclusion --to "2026-12-18 08:00:00")
+ok "report/ssd: no baseline in the conf -> the drive is not judged" '[ "$code" = 0 ] && ! grep -q "硬盘在恶化" "$T/rep"'
+sed -i 's/^SSD_DEVICE=.*/&\nSSD_BASELINE_MEDIA_ERRORS=7\nSSD_BASELINE_SPARE=75\nSSD_BASELINE_UNSAFE=46/' "$T/conf"
 
 echo; [ $fails = 0 ] && echo "ALL PASSED" || { echo "$fails FAILED"; exit 1; }

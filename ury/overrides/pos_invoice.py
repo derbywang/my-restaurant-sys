@@ -2,6 +2,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import POSInvoice
 from erpnext.controllers.taxes_and_totals import calculate_taxes_and_totals
 from erpnext.stock.get_item_details import NOT_APPLICABLE_TAX
@@ -148,6 +149,9 @@ class URYTaxesAndTotals(calculate_taxes_and_totals):
 			float(rate): float(net) for rate, net in net_by_rate.items()
 		}
 
+		if doc.get("is_return"):
+			return self.tax_of_return(tax, net_by_rate, quantum, mode)
+
 		total = sum(
 			((net * rate / 100).quantize(quantum, rounding=mode) for rate, net in net_by_rate.items()),
 			Decimal(0),
@@ -158,6 +162,50 @@ class URYTaxesAndTotals(calculate_taxes_and_totals):
 		if tax.account_head in override:
 			return float(override[tax.account_head])
 		return float(total)
+
+	def tax_of_return(self, tax, net_by_rate, quantum, mode):
+		"""The tax of a return (Credit Note), which has negative amounts. ERPNext would cut the NEGATIVE tax, -150.5 down to
+		-151, a yen more than the 150 of the original, and the cash paid back would be a yen more than was paid.
+
+		* the whole invoice: exactly the tax of the original, row by row (also the bill made later of a merged pair, whose
+		  tax is its part of the tax of the merged bill);
+		* a part: the tax of the absolute amount, cut once per rate as the shop configured, then made negative."""
+		original = self.original_returned_whole()
+		if original:
+			rows = [row for row in original.taxes if row.account_head == tax.account_head]
+			if rows:
+				return -float(sum(Decimal(str(row.tax_amount)) for row in rows))
+		total = sum(
+			((abs(net) * rate / 100).quantize(quantum, rounding=mode) for rate, net in net_by_rate.items()),
+			Decimal(0),
+		)
+		return -float(total)
+
+	def original_returned_whole(self):
+		"""The invoice this return gives back as a whole (every dish and quantity, the same discount, nothing returned before),
+		or None: a part of an invoice, or a return of what is left after a part."""
+		doc = self.doc
+		against = doc.get("return_against")
+		if not against:
+			return None
+		original = frappe.get_doc("POS Invoice", against)
+		if original.docstatus != 1:
+			return None
+		sold, given_back = {}, {}
+		for row in original.items:
+			sold[row.item_code] = sold.get(row.item_code, 0) + row.qty
+		for row in doc.items:
+			given_back[row.item_code] = given_back.get(row.item_code, 0) - row.qty
+		if sold != given_back:
+			return None
+		if abs(flt(doc.get("discount_amount"))) != flt(original.get("discount_amount")) or flt(
+			doc.get("additional_discount_percentage")
+		) != flt(original.get("additional_discount_percentage")):
+			return None
+		earlier = frappe.db.exists(
+			"POS Invoice", {"return_against": against, "docstatus": 1, "name": ("!=", doc.get("name") or "")}
+		)
+		return None if earlier else original
 
 	def rounding_mode(self):
 		profile = self.doc.get("pos_profile")

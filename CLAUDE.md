@@ -52,6 +52,7 @@ URY 覆盖了 ERPNext 的类和方法。升级后先把下面的覆盖和 ERPNex
   `bench --site ury-test.localhost run-tests --module ury.overrides.test_pos_invoice`
 - **小票格式 `URY JP Receipt`**：模板是 `ury/templates/print_formats/ury_jp_receipt.html`，数据来自 `ury/ury/api/receipt.py`；`bench migrate` 会把模板写回站点（不要直接在站点上改打印格式）。**改了模板或 `receipt.py` 的数据结构后，浏览器验证前必须先 `bench --site ury.localhost migrate`**（在开发站点 migrate 之前，先执行 `bench --site ury.localhost backup`；migrate 不会自动备份），否则站点里还是旧模板，新旧数据对不上（印出 `{{ no such element ... }}`）。`jp_receipt_data` 返回 `ReceiptData`，模板里缺失的字段按空字符串打印；新增字段时仍要这样写，不要把模板错误印到小票上。改了模板或 `receipt.py` 后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_receipt`
+- **退货单（Credit Note）的税**：`URYTaxesAndTotals.tax_of_return`（`pos_invoice.py`，只对 `is_return`）：整张退货的税额取原伝票的税额，部分退货对绝对值切舍一次再取负；设计见 `docs/design/jp-tax-design.md` 的“退货单的税”。升级 ERPNext 后对比 `make_return_doc` 和 `validate_return`，并运行 `bench --site ury-test.localhost run-tests --module ury.overrides.test_return_tax`（会写数据，先走临时站点）。
 - **合并账单（会計合算）**：改了 `merge_bills` / `make_invoice` / `cancel_order` / `preview_order_totals` 或列表接口后运行：
   `bench --site ury-test.localhost run-tests --module ury.ury.api.test_merged_bill`
 - **交班对话框的金额计算**（`pos/src/lib/closing-rows.ts`：Expected = 开班金额 + 当班收款 − 找零）：改了之后运行 `cd pos && yarn test`（Vitest，只运行 `*.spec.ts`），并运行 `bench --site ury-test.localhost run-tests --module ury.ury.api.test_pos_closing`。
